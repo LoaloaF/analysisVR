@@ -15,8 +15,8 @@ class TrialWiseVelocity:
         self.data = data
 
 def get_data(with_lick = False):
-    fullfname = "/Users/loaloa/local_data/2024-07-26_14-57_rYL003_P0800_LinearTrack_27min/behavior_2024-07-26_14-57_rYL003_P0800_LinearTrack_27min.hdf5"
-    # fullfname = "/Users/loaloa/local_data/2024-07-26_15-33_rYL002_P0800_LinearTrack_34min/behavior_2024-07-26_15-33_rYL002_P0800_LinearTrack_34min.hdf5"
+    # fullfname = "/Users/loaloa/local_data/2024-07-26_14-57_rYL003_P0800_LinearTrack_27min/behavior_2024-07-26_14-57_rYL003_P0800_LinearTrack_27min.hdf5"
+    fullfname = "/Users/loaloa/local_data/2024-07-26_15-33_rYL002_P0800_LinearTrack_34min/behavior_2024-07-26_15-33_rYL002_P0800_LinearTrack_34min.hdf5"
     data = pd.read_hdf(fullfname, key="unity_frame")
     if  with_lick:
         eventdata = pd.read_hdf(fullfname, key="event")
@@ -54,6 +54,7 @@ def make_trialwise_position_overtime_plot():
         plot.ax.plot(t, x)
     plt.xlabel("Time from trial start (s)")
     plt.ylabel("Position (a.u.)")
+    plt.savefig("position_overtime.png")
     plt.show()
     
 def make_trialwise_volocity_plot():
@@ -93,11 +94,12 @@ def make_trialwise_volocity_plot():
 
         #     break
         # break
-    plt.show()
+    # plt.show()
     im = plt.imshow(velocities, aspect='auto', cmap='coolwarm')
     plt.xlabel("Position (a.u.)")
     plt.ylabel("Trial ID")
     plt.colorbar(im)
+    plt.savefig("velocity.png")
     plt.show()
     
 def make_trialwise_lick_plot():
@@ -134,6 +136,8 @@ def make_trialwise_lick_plot():
     plt.xlabel("Position (a.u.)")
     plt.title("Lick events")
     plt.ylim(len(trials), 0)
+    
+    plt.savefig("licks.png")
     plt.show()
     
     

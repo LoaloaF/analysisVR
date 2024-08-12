@@ -210,10 +210,10 @@ def make_trialwise_velocity_plot(data, check_after_data, metadata, cue_number):
     # mean_velocities = velocities.mean(axis=0)
     # std_velocities = velocities.std(axis=0)
 
-    im = plt.imshow(velocities, aspect='auto', cmap='coolwarm', vmin=0, vmax=100)
+    # im = plt.imshow(velocities, aspect='auto', cmap='coolwarm', vmin=0, vmax=100)
     plt.xlabel("Position (a.u.)")
     plt.ylabel("Trial ID")
-    plt.colorbar(im)
+    # plt.colorbar(im)
     plt.ylim(len(trials), 0)
 
     plt.axvline(x=cue_enter_pos, color='k', linestyle='--', label='Enter Cue')

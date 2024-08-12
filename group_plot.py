@@ -9,9 +9,10 @@ import textwrap
 import json
 
 class LinearTrackPlot:
-    def __init__(self, data, event_data, metadata, animal_id, check_after_data):
+    def __init__(self, data, event_data, variable_data, metadata, animal_id, check_after_data):
         self.data = data
         self.event_data = event_data
+        self.variable_data = variable_data
         self.metadata = metadata
         self.animal_id = animal_id
         self.data_date = "Late" if check_after_data else "Early"
@@ -50,20 +51,20 @@ class LinearTrackPlot:
             start_pos = 160
             step = (2 * start_pos + 100) /res
             bins = np.arange(-start_pos, start_pos + 100, step)
-            cue_enter_pos = (self.metadata[0]["size"]/2 - self.metadata[0]["pillar7_y"] + start_pos)/step
-            cue_pos = (self.metadata[0]["size"]/2 - self.metadata[0]["pillar2_y"] + start_pos)/step
-            cue_exit_pos = (self.metadata[0]["size"]/2 - self.metadata[0]["pillar8_y"] + start_pos)/step
+            cue_enter_pos = (self.metadata[0]["size"]/2 - self.metadata[0]["pillar7_y"] + start_pos)
+            cue_pos = (self.metadata[0]["size"]/2 - self.metadata[0]["pillar2_y"] + start_pos)
+            cue_exit_pos = (self.metadata[0]["size"]/2 - self.metadata[0]["pillar8_y"] + start_pos)
 
         else:
             start_pos = 230
             step = 2 * start_pos / res
             bins = np.arange(-start_pos, start_pos, step)
-            cue_enter_pos = (self.metadata[0]["size"]/2 - self.metadata[0]["pillar5_y"] + start_pos)/step
-            cue_pos = (self.metadata[0]["size"]/2 - self.metadata[0]["pillar1_y"] + start_pos)/step
-            cue_exit_pos = (self.metadata[0]["size"]/2 - self.metadata[0]["pillar6_y"] + start_pos)/step
+            cue_enter_pos = (self.metadata[0]["size"]/2 - self.metadata[0]["pillar5_y"] + start_pos)
+            cue_pos = (self.metadata[0]["size"]/2 - self.metadata[0]["pillar1_y"] + start_pos)
+            cue_exit_pos = (self.metadata[0]["size"]/2 - self.metadata[0]["pillar6_y"] + start_pos)
 
-        reward1_pos = (self.metadata[0]["size"]/2 - self.metadata[0]["pillar3_y"] + start_pos)/step
-        reward2_pos = (self.metadata[0]["size"]/2 - self.metadata[0]["pillar4_y"] + start_pos)/step
+        reward1_pos = (self.metadata[0]["size"]/2 - self.metadata[0]["pillar3_y"] + start_pos)
+        reward2_pos = (self.metadata[0]["size"]/2 - self.metadata[0]["pillar4_y"] + start_pos)
 
 
         # plot for 2 cues
@@ -94,49 +95,69 @@ class LinearTrackPlot:
                 mean_velocities = velocities.mean(axis=0)
                 std_velocities = velocities.std(axis=0)
 
-                x = np.arange(mean_velocities.shape[0])
+                x = np.arange(0, mean_velocities.shape[0]*step, step)
                 
                 if cue_idx == 0:
-                    main_ax.plot(x, mean_velocities, color="purple", label='Mean_1')
-                    main_ax.fill_between(x, mean_velocities - std_velocities, mean_velocities + std_velocities, color='purple', alpha=0.2, label='Std_1')
+                    main_ax.plot(x, mean_velocities, color="purple", label='Velocity Cue 1')
+                    main_ax.fill_between(x, mean_velocities - std_velocities, mean_velocities + std_velocities, color='purple', alpha=0.2)
                 elif cue_idx == 1:
-                    main_ax.plot(x, mean_velocities, color="green", label='Mean_2')
-                    main_ax.fill_between(x, mean_velocities - std_velocities, mean_velocities + std_velocities, color='green', alpha=0.2, label='Std_2')
+                    main_ax.plot(x, mean_velocities, color="green", label='Velocity Cue 2')
+                    main_ax.fill_between(x, mean_velocities - std_velocities, mean_velocities + std_velocities, color='green', alpha=0.2)
 
-            main_ax.set_xlabel("Position (a.u.)")
-            main_ax.set_ylabel("Velocity")
-            main_ax.set_xlim(0, res)
-            main_ax.set_ylim(bottom=0)
+            main_ax.set_xlabel("Position (cm)")
+            main_ax.set_ylabel("Velocity (cm/s)")
+            main_ax.set_xlim(0, mean_velocities.shape[0]*step)
+            main_ax.set_ylim(0, 100)
 
             wrapped_text = "\n".join(textwrap.wrap(self.metadata[plot_id]["session_notes"], width=24))
-            main_ax.text(-15, 0, wrapped_text, fontsize=8, ha='left')
+            main_ax.text(-60, 0, wrapped_text, fontsize=8, ha='left')
 
             ymin, ymax = main_ax.get_ylim()
 
-            main_ax.axvline(x=cue_enter_pos, color='k', linestyle='--', label='Enter Cue')
+            main_ax.axvline(x=cue_enter_pos, color='k', linestyle='--', label='Enter Cue Zone')
             # plt.axvline(x=cue_pos, color='b', linestyle='--', label='Cue')
-            main_ax.fill_betweenx(y=[0, ymax], x1=cue_pos- (20/step), x2=cue_pos+(20/step), color='k', alpha=0.6, label='Cue')
-            main_ax.axvline(x=cue_exit_pos, color='k', linestyle='--', label='Exit Cue')
+            main_ax.fill_betweenx(y=[0, ymax], x1=cue_pos-20, x2=cue_pos+20, color='k', alpha=0.1, label='Cue Zone')
+            main_ax.axvline(x=cue_exit_pos, color='k', linestyle='--', label='Exit Cue Zone')
 
-            main_ax.fill_betweenx(y=[0, ymax], x1=reward1_pos-20/step, x2=reward1_pos+20/step, color='pink', alpha=0.6, label='Reward 1')
-            main_ax.fill_betweenx(y=[0, ymax], x1=reward2_pos-20/step, x2=reward2_pos+20/step, color='lightblue', alpha=0.6, label='Reward 2')
+            main_ax.fill_betweenx(y=[0, ymax], x1=reward1_pos-20, x2=reward1_pos+20, color='pink', alpha=0.2, label='Reward 1 Zone')
+            main_ax.fill_betweenx(y=[0, ymax], x1=reward2_pos-20, x2=reward2_pos+20, color='lightblue', alpha=0.2, label='Reward 2 Zone')
 
             main_ax.legend(loc='upper left')
         
         fig.savefig(f"Velocity_Animal{self.animal_id}_{self.data_date}", dpi=300)
 
-
     def make_trialwise_velocity_heatmap(self):
 
-        fig = plt.figure(figsize=(15, 10 * self.session_number))
-        gs = fig.add_gridspec(self.session_number, 3, hspace=0.5, wspace=0.2)
+        fig = plt.figure(figsize=(24, 4 * len(self.sessions)))
+        gs = fig.add_gridspec(1, 2)
             
+        res = 100
+        if self.data_date == "Late":
+            start_pos = 160
+            step = (2 * start_pos + 100) /res
+            bins = np.arange(-start_pos, start_pos + 100, step)
+            cue_enter_pos = (self.metadata[0]["size"]/2 - self.metadata[0]["pillar7_y"] + start_pos)/step
+            cue_pos = (self.metadata[0]["size"]/2 - self.metadata[0]["pillar2_y"] + start_pos)/step
+            cue_exit_pos = (self.metadata[0]["size"]/2 - self.metadata[0]["pillar8_y"] + start_pos)/step
 
-        for i in range(2):
-            data = self.data[i]
+        else:
+            start_pos = 230
+            step = 2 * start_pos / res
+            bins = np.arange(-start_pos, start_pos, step)
+            cue_enter_pos = (self.metadata[0]["size"]/2 - self.metadata[0]["pillar5_y"] + start_pos)/step
+            cue_pos = (self.metadata[0]["size"]/2 - self.metadata[0]["pillar1_y"] + start_pos)/step
+            cue_exit_pos = (self.metadata[0]["size"]/2 - self.metadata[0]["pillar6_y"] + start_pos)/step
+
+        reward1_pos = (self.metadata[0]["size"]/2 - self.metadata[0]["pillar3_y"] + start_pos)/step
+        reward2_pos = (self.metadata[0]["size"]/2 - self.metadata[0]["pillar4_y"] + start_pos)/step
+
+
+        # plot for 2 cues
+        for cue_idx in range(2):
+            main_ax = fig.add_subplot(gs[0, cue_idx])
+            data = self.data[cue_idx]
 
             trials = data["trial_id"].unique()
-
             session_end_trial_list = []
             sessions = data["session_name"].unique()
             for each_session in sessions:
@@ -144,42 +165,20 @@ class LinearTrackPlot:
                 session_end_trial_list.append(session_data["trial_id"].max())
 
 
-
-            plt.subplots(figsize=(9.6, 3.2* len(sessions)))
-            plt.subplots_adjust(left=0.3)
-
-            res = 100
-            if self.data_date == "Late":
-                start_pos = 160
-                step = (2 * start_pos + 100) /res
-                bins = np.arange(-start_pos, start_pos + 100, step)
-                cue_enter_pos = (self.metadata[0]["size"]/2 - self.metadata[0]["pillar7_y"] + start_pos)/step
-                cue_pos = (self.metadata[0]["size"]/2 - self.metadata[0]["pillar2_y"] + start_pos)/step
-                cue_exit_pos = (self.metadata[0]["size"]/2 - self.metadata[0]["pillar8_y"] + start_pos)/step
-
-            else:
-                start_pos = 230
-                step = 2 * start_pos / res
-                bins = np.arange(-start_pos, start_pos, step)
-                cue_enter_pos = (self.metadata[0]["size"]/2 - self.metadata[0]["pillar5_y"] + start_pos)/step
-                cue_pos = (self.metadata[0]["size"]/2 - self.metadata[0]["pillar1_y"] + start_pos)/step
-                cue_exit_pos = (self.metadata[0]["size"]/2 - self.metadata[0]["pillar6_y"] + start_pos)/step
-
-            reward1_pos = (self.metadata[0]["size"]/2 - self.metadata[0]["pillar3_y"] + start_pos)/step
-            reward2_pos = (self.metadata[0]["size"]/2 - self.metadata[0]["pillar4_y"] + start_pos)/step
-
             velocities = np.zeros((len(trials), res))
-            
+    
             row_idx = 0
             note_idx = 0
             for trial_id in trials:
+                print("Processing trial ", trial_id)
                 if trial_id in session_end_trial_list and trial_id != session_end_trial_list[-1]:
-                    plt.axhline(y=row_idx, color='k', linestyle='--')
-                    wrapped_text = "\n".join(textwrap.wrap(self.metadata[note_idx]["session_notes"], width=24))
-                    plt.text(-60, row_idx, wrapped_text, fontsize=8, ha='left')
-                    note_idx += 1
-                    
+                    main_ax.axhline(y=row_idx, color='k', linestyle='--')
 
+                    if cue_idx == 0:
+                        wrapped_text = "\n".join(textwrap.wrap(self.metadata[note_idx]["session_notes"], width=48))
+                        main_ax.text(-32, row_idx, wrapped_text, fontsize=8, ha='left')
+                        note_idx += 1
+                    
                 data_trial = data[data["trial_id"] == trial_id]
                 t = data_trial['frame_pc_timestamp'].values /1e6
                 x = data_trial['frame_z_position'].values
@@ -191,44 +190,243 @@ class LinearTrackPlot:
                     velocities[row_idx, i] = v
                 row_idx += 1
 
-            wrapped_text = "\n".join(textwrap.wrap(self.metadata[note_idx]["session_notes"], width=24))
-            plt.text(-60, row_idx, wrapped_text, fontsize=8, ha='left')
+            if cue_idx == 0:
+                wrapped_text = "\n".join(textwrap.wrap(self.metadata[note_idx]["session_notes"], width=48))
+                main_ax.text(-32, row_idx, wrapped_text, fontsize=8, ha='left')
             
-            # min_vals = velocities.min(axis=0)
-            # max_vals = velocities.max(axis=0)
-            # normalized_velocities = (velocities - min_vals) / (max_vals - min_vals)
-            mean_velocities = velocities.mean(axis=0)
-            std_velocities = velocities.std(axis=0)
 
-            # im = plt.imshow(velocities, aspect='auto', cmap='coolwarm', vmin=0, vmax=100)
-            x = np.arange(mean_velocities.shape[0])
-            plt.plot(x, mean_velocities, label='Mean Velocity')
-            plt.fill_between(x, mean_velocities - std_velocities, mean_velocities + std_velocities, color='b', alpha=0.2, label='Standard Deviation')
+            im = main_ax.imshow(velocities, aspect='auto', cmap='coolwarm', vmin=0, vmax=100)
+
+            if cue_idx == 1:
+                plt.colorbar(im, ax=main_ax)
+            main_ax.set_xlabel("Position (a.u.)")
+            main_ax.set_xlim(0, res)
+            main_ax.set_ylim(len(trials), 0)
+
+            main_ax.axvline(x=cue_enter_pos, color='k', linestyle='--', label='Enter Cue')
+            main_ax.axvline(x=cue_pos, color='k', linestyle='--', label='Cue')
+            main_ax.axvline(x=cue_exit_pos, color='k', linestyle='--', label='Exit Cue')
+            main_ax.axvline(x=reward1_pos, color='purple', linestyle='--', label='Reward 1')
+            main_ax.axvline(x=reward2_pos, color='blue', linestyle='--', label='Reward 2')
+
+            main_ax.set_title(f"Velocity Heatmap Cue {cue_idx+1}")
+            main_ax.legend(loc='upper left')
+        
+        fig.savefig(f"Velocity_Heatmap_Animal{self.animal_id}_{self.data_date}", dpi=300)
+
+    def make_trialwise_lick_plot(self):
+
+        fig = plt.figure(figsize=(24, 4 * len(self.sessions)))
+        gs = fig.add_gridspec(1, 7, width_ratios=[4, 0.5, 0.5, 0.5, 4, 0.5, 0.5])
+
+        if self.data_date == "Late":
+            plt.xlim(-160, 260)
+            text_pos = -400
+            cue_enter_pos = self.metadata[0]["size"]/2 - self.metadata[0]["pillar7_y"]
+            cue_pos = self.metadata[0]["size"]/2 - self.metadata[0]["pillar2_y"]
+            cue_exit_pos = self.metadata[0]["size"]/2 - self.metadata[0]["pillar8_y"]
+        else:
+            plt.xlim(-230, 230)
+            text_pos = -480
+            cue_enter_pos = self.metadata[0]["size"]/2 - self.metadata[0]["pillar5_y"]
+            cue_pos = self.metadata[0]["size"]/2 - self.metadata[0]["pillar1_y"]
+            cue_exit_pos = self.metadata[0]["size"]/2 - self.metadata[0]["pillar6_y"]
+
+        reward1_pos = self.metadata[0]["size"]/2 - self.metadata[0]["pillar3_y"]
+        reward2_pos = self.metadata[0]["size"]/2 - self.metadata[0]["pillar4_y"]
+
+        inter_white_space = fig.add_subplot(gs[0, 3])
+        inter_white_space.set_axis_off()
 
 
-            plt.xlabel("Position (a.u.)")
-            plt.ylabel("Trial ID")
-            # plt.colorbar(im)
-            plt.ylim(len(trials), 0)
+        for cue_idx in range(2):
+            if cue_idx == 0:
+                dot_color = 'purple'
+                lick_plot_ax = fig.add_subplot(gs[0, 0])
+                WT_plot_ax = fig.add_subplot(gs[0, 1])
+                outcome_plot_ax = fig.add_subplot(gs[0, 2])
+            elif cue_idx == 1:
+                dot_color = 'green'
+                lick_plot_ax = fig.add_subplot(gs[0, 4])
+                WT_plot_ax = fig.add_subplot(gs[0, 5])
+                outcome_plot_ax = fig.add_subplot(gs[0, 6])
 
-            plt.axvline(x=cue_enter_pos, color='k', linestyle='--', label='Enter Cue')
+            data = self.data[cue_idx]
+            lick_data = self.event_data[cue_idx]
+            trials = data["trial_id"].unique()
+            trials_variable = self.variable_data[self.variable_data["trial_id"].isin(trials)]
+
+            session_end_trial_list = []
+            sessions = data["session_name"].unique()
+            for each_session in sessions:
+                session_data = data[data["session_name"] == each_session]
+                session_end_trial_list.append(session_data["trial_id"].max())
+
+            row_idx = 0
+            note_idx = 0
+            for trial_id in trials:
+                if trial_id in session_end_trial_list and trial_id != session_end_trial_list[-1]:
+                    lick_plot_ax.axhline(y=row_idx, color='k', linestyle='--')
+
+                    if cue_idx == 0:
+                        wrapped_text = "\n".join(textwrap.wrap(self.metadata[note_idx]["session_notes"], width=32))
+                        lick_plot_ax.text(text_pos, row_idx, wrapped_text, fontsize=10, ha='left')
+                        note_idx += 1
+
+                data_trial = data[data["trial_id"] == trial_id]
+                trial_licks = lick_data[lick_data["trial_id"] == trial_id].event_pc_timestamp.values
+                frame_timestamps = data_trial.frame_pc_timestamp.values
+                frame_z_positions = data_trial.frame_z_position.values
+
+                abs_diff = np.abs(frame_timestamps[:, np.newaxis] - trial_licks)
+
+                closest_unity_indices = np.argmin(abs_diff, axis=0)
+                x_positions = frame_z_positions[closest_unity_indices]
+                lick_plot_ax.scatter(x_positions, np.full_like(x_positions, row_idx), s=4, color=dot_color, alpha=0.6)
+                row_idx += 1
+
+            lick_plot_ax.set_xlabel("Position (a.u.)")
+            lick_plot_ax.set_ylim(len(trials), 0)
+
+            if cue_idx == 0:
+                wrapped_text = "\n".join(textwrap.wrap(self.metadata[note_idx]["session_notes"], width=32))
+                lick_plot_ax.text(text_pos, row_idx, wrapped_text, fontsize=10, ha='left')
+            
+            lick_plot_ax.axvline(x=cue_enter_pos, color='k', linestyle='--', label='Enter Cue')
+            
             # plt.axvline(x=cue_pos, color='b', linestyle='--', label='Cue')
-            plt.fill_betweenx(y=[0, len(trials)], x1=cue_pos-20, x2=cue_pos+20, color='pink', alpha=0.6, label='Cue')
-            plt.axvline(x=cue_exit_pos, color='k', linestyle='--', label='Exit Cue')
+            lick_plot_ax.axvline(x=cue_exit_pos, color='k', linestyle='--', label='Exit Cue')
 
-            if i == 1:
-                plt.fill_betweenx(y=[0, len(trials)], x1=reward1_pos-20, x2=reward1_pos+20, color='pink', alpha=0.6, label='Reward 1')
+            lick_plot_ax.fill_betweenx(y=[0, len(trials)], x1=reward1_pos-20, x2=reward1_pos+20, color='pink', alpha=0.6, label='Reward 1')
+            lick_plot_ax.fill_betweenx(y=[0, len(trials)], x1=reward2_pos-20, x2=reward2_pos+20, color='lightblue', alpha=0.6, label='Reward 2')
+            
+            if cue_idx == 0:
+                lick_plot_ax.fill_betweenx(y=[0, len(trials)], x1=cue_pos-20, x2=cue_pos+20, color='pink', alpha=0.6, label='Cue')
+            elif cue_idx == 1:
+                lick_plot_ax.fill_betweenx(y=[0, len(trials)], x1=cue_pos-20, x2=cue_pos+20, color='lightblue', alpha=0.6, label='Cue')
 
-                plt.axvline(x=reward2_pos-20, color='lightblue', linestyle='--')
-                plt.axvline(x=reward2_pos+20, color='lightblue', linestyle='--')
-            elif i == 2:
-                plt.axvline(x=reward1_pos-20, color='lightblue', linestyle='--')
-                plt.axvline(x=reward1_pos+20, color='lightblue', linestyle='--')
-                plt.fill_betweenx(y=[0, len(trials)], x1=reward2_pos-20, x2=reward2_pos+20, color='pink', alpha=0.6, label='Reward 2')
+            lick_plot_ax.legend(loc='upper left')
+            lick_plot_ax.set_axis_off()
 
-            plt.legend(loc='upper left')
+            # WT plot
+            stay_times = trials_variable["stay_time"].values
+            trial_ids = np.arange(len(stay_times))
+            WT_plot_ax.plot(stay_times, trial_ids, color="k")
+            WT_plot_ax.set_xlabel("ST (s)")
+            WT_plot_ax.set_ylim(len(trials), 0)
+            WT_plot_ax.set_axis_off()
 
-    
+            
+            # outcome plot
+            trial_outcomes = trials_variable["trial_outcome"].values
+            trial_outcomes = trial_outcomes.reshape([-1, 1])
+            outcome_plot_ax.imshow(trial_outcomes, aspect='auto', cmap='afmhot', vmin=0, vmax=5)
+            outcome_plot_ax.set_axis_off()
+            
+
+
+        fig.savefig(f"Lick_Animal{self.animal_id}_{self.data_date}", dpi=300)
+
+    def make_sessionwise_timeratio_plot(self):
+
+        fig = plt.figure(figsize=(12, 12))
+        gs = fig.add_gridspec(2, 1)
+
+        if self.data_date == "Late":
+            cue_pos = self.metadata[0]["size"]/2 - self.metadata[0]["pillar2_y"]
+        else:
+            cue_pos = self.metadata[0]["size"]/2 - self.metadata[0]["pillar1_y"]
+
+        reward1_pos = self.metadata[0]["size"]/2 - self.metadata[0]["pillar3_y"]
+        reward2_pos = self.metadata[0]["size"]/2 - self.metadata[0]["pillar4_y"]
+
+        for cue_idx in range(2):
+            main_ax = fig.add_subplot(gs[cue_idx, 0])
+
+            other_ratio_mean = []
+            other_ratio_std = []
+            cue_ratio_mean = []
+            cue_ratio_std = []
+            reward1_ratio_mean = []
+            reward1_ratio_std = []
+            reward2_ratio_mean = []
+            reward2_ratio_std = []
+
+            for each_session in self.sessions:
+                
+                data_cue = self.data[cue_idx]
+
+                data_session = data_cue[data_cue["session_name"] == each_session]
+                trials = data_session["trial_id"].unique()
+
+                other_ratio_session = []
+                cue_ratio_session = []
+                reward1_ratio_session = []
+                reward2_ratio_session = []
+                
+                for trial_id in trials:
+                    data_trial = data_session[data_session["trial_id"] == trial_id]
+                    total_time = data_trial["frame_pc_timestamp"].max() - data_trial["frame_pc_timestamp"].min()
+
+                    data_cue = data_trial[(data_trial["frame_z_position"] > cue_pos-20) & (data_trial["frame_z_position"] < cue_pos+20)]
+                    data_reward1 = data_trial[(data_trial["frame_z_position"] > reward1_pos-20) & (data_trial["frame_z_position"] < reward1_pos+20)]
+                    data_reward2 = data_trial[(data_trial["frame_z_position"] > reward2_pos-20) & (data_trial["frame_z_position"] < reward2_pos+20)]
+
+
+                    cue_time = data_cue["frame_pc_timestamp"].max() - data_cue["frame_pc_timestamp"].min()
+                    reward1_time = data_reward1["frame_pc_timestamp"].max() - data_reward1["frame_pc_timestamp"].min()
+                    reward2_time = data_reward2["frame_pc_timestamp"].max() - data_reward2["frame_pc_timestamp"].min()
+                    
+                    cue_ratio_session.append(cue_time / total_time)
+                    reward1_ratio_session.append(reward1_time / total_time)
+                    reward2_ratio_session.append(reward2_time / total_time)
+                    other_ratio_session.append(1 - cue_time/total_time - reward1_time/total_time - reward2_time/total_time)
+                
+                cleaned_other_ratio_session = [x for x in other_ratio_session if not np.isnan(x)]
+                other_ratio_mean.append(np.mean(cleaned_other_ratio_session))
+                other_ratio_std.append(np.std(cleaned_other_ratio_session))
+
+                cleaned_cue_ratio_session = [x for x in cue_ratio_session if not np.isnan(x)]
+                cue_ratio_mean.append(np.mean(cleaned_cue_ratio_session))
+                cue_ratio_std.append(np.std(cleaned_cue_ratio_session))
+
+                cleaned_reward1_ratio_session = [x for x in reward1_ratio_session if not np.isnan(x)]
+                reward1_ratio_mean.append(np.mean(cleaned_reward1_ratio_session))
+                reward1_ratio_std.append(np.std(cleaned_reward1_ratio_session))
+
+                cleaned_reward2_ratio_session = [x for x in reward2_ratio_session if not np.isnan(x)]
+                reward2_ratio_mean.append(np.mean(cleaned_reward2_ratio_session))
+                reward2_ratio_std.append(np.std(cleaned_reward2_ratio_session))
+
+            cue_ratio_mean = np.array(cue_ratio_mean)
+            cue_ratio_std = np.array(cue_ratio_std)
+            reward1_ratio_mean = np.array(reward1_ratio_mean)
+            reward1_ratio_std = np.array(reward1_ratio_std)
+            reward2_ratio_mean = np.array(reward2_ratio_mean)
+            reward2_ratio_std = np.array(reward2_ratio_std)
+            other_ratio_mean = np.array(other_ratio_mean)
+            other_ratio_std = np.array(other_ratio_std)
+
+            main_ax.plot(cue_ratio_mean, label="Cue", color="gray")
+            main_ax.plot(reward1_ratio_mean, label="Reward1", color="pink")
+            main_ax.plot(reward2_ratio_mean, label="Reward2", color="lightblue")
+            main_ax.plot(other_ratio_mean, label="Other", color='black')
+
+            main_ax.fill_between(range(len(cue_ratio_mean)), cue_ratio_mean - cue_ratio_std, cue_ratio_mean + cue_ratio_std, color="gray", alpha=0.3)
+            main_ax.fill_between(range(len(reward1_ratio_mean)), reward1_ratio_mean - reward1_ratio_std, reward1_ratio_mean + reward1_ratio_std, color="pink", alpha=0.3)
+            main_ax.fill_between(range(len(reward2_ratio_mean)), reward2_ratio_mean - reward2_ratio_std, reward2_ratio_mean + reward2_ratio_std, color="lightblue", alpha=0.3)
+            main_ax.fill_between(range(len(other_ratio_mean)), other_ratio_mean - other_ratio_std, other_ratio_mean + other_ratio_std, color='black', alpha=0.3)
+
+            main_ax.set_xlabel("Session")
+            main_ax.set_ylabel("Time Ratio")
+            main_ax.set_ylim(0, 1)
+            main_ax.set_title(f"Time Ratio Cue {cue_idx+1}")
+            main_ax.legend(loc='upper left')
+
+        fig.savefig(f"Time_Ratio_Animal{self.animal_id}_{self.data_date}", dpi=300)
+
+
+
 
 def refractor_data(data, data_folder, last_trial_id):
     data["session_name"] =  data_folder.split("/")[-1]
@@ -281,7 +479,11 @@ def get_data(data_folder, last_trial_id):
             break
     
     data = pd.read_hdf(fullfname, key="unity_frame")
+
     variable_data = pd.read_hdf(fullfname, key="paradigm_variable")
+    trial_data = pd.read_hdf(fullfname, key="unity_trial")
+    variable_data["trial_outcome"] = trial_data["trial_outcome"]
+
     event_data = pd.read_hdf(fullfname, key="event")
     event_data = event_data[event_data["event_name"] == "L"]
 
@@ -441,88 +643,10 @@ def selected_data_by_cue(data, event_data, trial_selected):
 
 #     plt.legend(loc='upper left')
 
-    
-def make_trialwise_lick_plot(data, lickdata, check_after_data, metadata, cue_number):
-
-    trials = data["trial_id"].unique()
-    session_end_trial_list = []
-    sessions = data["session_name"].unique()
-    for each_session in sessions:
-        session_data = data[data["session_name"] == each_session]
-        session_end_trial_list.append(session_data["trial_id"].max())
-
-    plt.subplots(figsize=(13, 4 * len(sessions)))
-    plt.subplots_adjust(left=0.25)
-
-    if check_after_data:
-        plt.xlim(-160, 260)
-        text_pos = -310
-        cue_enter_pos = metadata[0]["size"]/2 - metadata[0]["pillar7_y"]
-        cue_pos = metadata[0]["size"]/2 - metadata[0]["pillar2_y"]
-        cue_exit_pos = metadata[0]["size"]/2 - metadata[0]["pillar8_y"]
-    else:
-        plt.xlim(-230, 230)
-        text_pos = -380
-        cue_enter_pos = metadata[0]["size"]/2 - metadata[0]["pillar5_y"]
-        cue_pos = metadata[0]["size"]/2 - metadata[0]["pillar1_y"]
-        cue_exit_pos = metadata[0]["size"]/2 - metadata[0]["pillar6_y"]
-    
-    if cue_number == 1:
-        dot_color = 'purple'
-    elif cue_number == 2:
-        dot_color = 'green'
-
-
-    reward1_pos = metadata[0]["size"]/2 - metadata[0]["pillar3_y"]
-    reward2_pos = metadata[0]["size"]/2 - metadata[0]["pillar4_y"]
-
-    row_idx = 0
-    note_idx = 0
-    for trial_id in trials:
-        if trial_id in session_end_trial_list and trial_id != session_end_trial_list[-1]:
-            plt.axhline(y=row_idx, color='k', linestyle='--')
-            wrapped_text = "\n".join(textwrap.wrap(metadata[note_idx]["session_notes"], width=32))
-            plt.text(text_pos, row_idx, wrapped_text, fontsize=10, ha='left')
-            note_idx += 1
-
-        data_trial = data[data["trial_id"] == trial_id]
-        trial_licks = lickdata[lickdata["trial_id"] == trial_id].event_pc_timestamp.values
-        for l in trial_licks:
-            clostest_unity_idx = np.argsort(np.abs(data_trial.frame_pc_timestamp.values - l))[0]
-            try:
-                x = data_trial.iloc[clostest_unity_idx].loc["frame_z_position"]
-                # print(x)
-                plt.scatter(x, row_idx, s = 4, color=dot_color, alpha=.6)
-            except Exception as e:
-                print(e)
-                continue
-        row_idx += 1
-
-    plt.ylabel("Trial ID")
-    plt.xlabel("Position (a.u.)")
-    plt.ylim(len(trials), 0)
-
-    wrapped_text = "\n".join(textwrap.wrap(metadata[note_idx]["session_notes"], width=32))
-    plt.text(text_pos, row_idx, wrapped_text, fontsize=10, ha='left')
-    
-    plt.axvline(x=cue_enter_pos, color='k', linestyle='--', label='Enter Cue')
-    plt.fill_betweenx(y=[0, len(trials)], x1=cue_pos-20, x2=cue_pos+20, color='pink', alpha=0.6, label='Cue')
-    # plt.axvline(x=cue_pos, color='b', linestyle='--', label='Cue')
-    plt.axvline(x=cue_exit_pos, color='k', linestyle='--', label='Exit Cue')
-
-
-    if cue_number == 1:
-        plt.fill_betweenx(y=[0, len(trials)], x1=reward1_pos-20, x2=reward1_pos+20, color='pink', alpha=0.6, label='Reward 1')
-        plt.fill_betweenx(y=[0, len(trials)], x1=reward2_pos-20, x2=reward2_pos+20, color='lightblue', alpha=0.6, label='Reward 2')
-    elif cue_number == 2:
-        plt.fill_betweenx(y=[0, len(trials)], x1=reward1_pos-20, x2=reward1_pos+20, color='lightblue', alpha=0.6, label='Reward 1')
-        plt.fill_betweenx(y=[0, len(trials)], x1=reward2_pos-20, x2=reward2_pos+20, color='pink', alpha=0.6, label='Reward 2')
-
-    plt.legend(loc='upper left')
 
 
 def generate_all_figures(animal_id, check_after_data):
-    parent_folder = f"/mnt/NTnas/nas_vrdata/RUN_rYLI00{animal_id}/rYL00{animal_id}_P0800/"
+    parent_folder = f"/mnt/NTnas/nas_vrdata/RUN_rYL00{animal_id}/rYL00{animal_id}_P0800/"
     real_start_date = datetime.strptime("2024-07-30", '%Y-%m-%d')
 
     data_folders = []
@@ -543,9 +667,12 @@ def generate_all_figures(animal_id, check_after_data):
     data_1, event_data_1 = selected_data_by_cue(data, event_data, trial_1)
     data_2, event_data_2 = selected_data_by_cue(data, event_data, trial_2)
 
-    plot = LinearTrackPlot([data_1, data_2], [event_data_1, event_data_2], metadata, animal_id, check_after_data)
+    plot = LinearTrackPlot([data_1, data_2], [event_data_1, event_data_2], variable_data, metadata, animal_id, check_after_data)
 
     plot.make_trialwise_velocity_plot()
+    plot.make_trialwise_velocity_heatmap()
+    plot.make_trialwise_lick_plot()
+    plot.make_sessionwise_timeratio_plot()
 
     # if cue_number != 0:
     #     trial_selected = variable_data[variable_data["cue"] == cue_number]["trial_id"]
@@ -590,3 +717,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

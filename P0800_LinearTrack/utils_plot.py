@@ -2,6 +2,8 @@ import pandas as pd
 from scipy.signal import decimate
 import os
 import json
+from datetime import datetime
+
 
 def exclude_inproper_data(data_folder, data, event_data, variable_data, metadata):
 
@@ -42,13 +44,27 @@ def extract_useful_metadata(session_parameters):
     else:
         extracted_metadata["session_notes"] = session_parameters["start_time"][0]
 
+    late_start_time = datetime.strptime("2024-07-30", '%Y-%m-%d')
+    late_16pillars_start_time = datetime.strptime("2024-08-13", '%Y-%m-%d')
+    extracted_metadata["session_time"] = datetime.strptime(session_parameters["start_time"][0][:10], '%Y-%m-%d')
+
+    if extracted_metadata["session_time"] < late_start_time:
+        extracted_metadata["session_group"] = "Early"
+    elif extracted_metadata["session_time"] < late_16pillars_start_time:
+        extracted_metadata["session_group"] = "Late"
+    else:
+        extracted_metadata["session_group"] = "16pillars"
+
     session_metadata = json.loads(session_parameters["metadata"][0])
     pillar_info = session_metadata["pillars"]
 
     # TODO: accommodate the newest 16-pillar adaptation
-    for i in range(1, 11):
-        extracted_metadata[f"pillar{i}_y"] = [value["y"] for key, value in pillar_info.items() if value['id'] == i][0]
-
+    if extracted_metadata["session_group"] == "16pillars":
+        for i in range(1, 17):
+            extracted_metadata[f"pillar{i}_y"] = [value["y"] for key, value in pillar_info.items() if value['id'] == i][0]
+    else:
+        for i in range(1, 12):
+            extracted_metadata[f"pillar{i}_y"] = [value["y"] for key, value in pillar_info.items() if value['id'] == i][0]
     extracted_metadata["size"] = session_metadata["envX_size"]
     return extracted_metadata
 
@@ -58,7 +74,7 @@ def get_data(data_folder, last_trial_id):
     for filename in os.listdir(data_folder):
         # Check if the file name starts with the "behavior" prefix
         # TODO: accommodate the new changes without "behavior" prefix
-        if filename.startswith("behavior"):
+        if filename.startswith("behavior") or filename.startswith("2024"):
             fullfname = os.path.join(data_folder, filename)
             break
     
@@ -120,10 +136,13 @@ def get_all_data(parent_folder, data_folders):
 
     return data, event_data, variable_data, metadata
 
-def selected_data_by_cue(data, event_data, trial_selected):
-    # select the data and event data by the trial id of specific cue
-    data = data[data["trial_id"].isin(trial_selected)]
-    data.reset_index(drop=True, inplace=True)
-    event_data = event_data[event_data["trial_id"].isin(trial_selected)]
-    event_data.reset_index(drop=True, inplace=True)
+def add_cue_2data(data, event_data, variable_data):
+
+    # add the cue information to the data df
+    for cue_id in range(1,3):
+
+        trial_id = variable_data[variable_data["cue"] == cue_id]["trial_id"]
+        data.loc[data["trial_id"].isin(trial_id), "cue_id"] = cue_id
+        event_data.loc[event_data["trial_id"].isin(trial_id), "cue_id"] = cue_id
+
     return data, event_data

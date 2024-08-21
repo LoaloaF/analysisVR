@@ -9,14 +9,14 @@ import textwrap
 from utils_plot import *
 
 class LinearTrackPlot:
-    def __init__(self, data, event_data, variable_data, metadata, animal_id, check_after_data):
+    def __init__(self, data, event_data, variable_data, metadata, animal_id, data_group):
         self.data = data
         self.event_data = event_data
         self.variable_data = variable_data
         self.metadata = metadata
         self.animal_id = animal_id
-        self.data_date = "Late" if check_after_data else "Early"
-        self.sessions = data[0]["session_name"].unique().tolist()
+        self.data_group = data_group
+        self.sessions = data["session_name"].unique().tolist()
         self.sessions.sort()
 
     def make_trialwise_position_overtime_plot(self):
@@ -47,7 +47,7 @@ class LinearTrackPlot:
         gs = fig.add_gridspec(len(self.sessions), 1)
             
         res = 100
-        if self.data_date == "Late":
+        if self.data_group == "Late":
             # the start position of the track (-160 in the unity coordinate, so we should add 160 later)
             start_pos = 160 
             step = (start_pos + 260) /res
@@ -78,7 +78,8 @@ class LinearTrackPlot:
 
             for cue_idx in range(2):
                 # get data and trial information
-                data = self.data[cue_idx]
+                data = self.data[self.data["cue_id"] == cue_idx+1]
+                data.reset_index(drop=True, inplace=True)
                 data_session = data[data["session_name"] == each_session]
                 trials = data_session["trial_id"].unique()
 
@@ -115,8 +116,8 @@ class LinearTrackPlot:
             main_ax.set_xlim(0, mean_velocities.shape[0]*step)
             main_ax.set_ylim(0, 100)
 
-            wrapped_text = "\n".join(textwrap.wrap(self.metadata[plot_id]["session_notes"], width=24))
-            main_ax.text(-60, 0, wrapped_text, fontsize=8, ha='left')
+            # wrapped_text = "\n".join(textwrap.wrap(self.metadata[plot_id]["session_notes"], width=24))
+            # main_ax.text(-60, 0, wrapped_text, fontsize=8, ha='left')
 
             ymin, ymax = main_ax.get_ylim()
 
@@ -128,7 +129,7 @@ class LinearTrackPlot:
 
             main_ax.legend(loc='upper left')
         
-        fig.savefig(f"Velocity_Animal{self.animal_id}_{self.data_date}.svg", dpi=300)
+        fig.savefig(f"Velocity_Animal{self.animal_id}_{self.data_group}.png", dpi=300)
 
 
     def make_trialwise_velocity_heatmap(self):
@@ -138,9 +139,10 @@ class LinearTrackPlot:
         
         
         res = 100
-        if self.data_date == "Late":
+        if self.data_group == "Late":
             # the start position of the track (-160 in the unity coordinate, so we should add 160 later)
             start_pos = 160
+            dist = 420
             step = (2 * start_pos + 100) /res
             bins = np.arange(-start_pos, start_pos + 100, step)
             # get the position of each zone by the pillar y position
@@ -152,6 +154,7 @@ class LinearTrackPlot:
         else:
             # the start position of the track (-230 in the unity coordinate, so we should add 230 later)
             start_pos = 230
+            dist = 460
             step = 2 * start_pos / res
             bins = np.arange(-start_pos, start_pos, step)
             # get the position of each zone by the pillar y position
@@ -167,7 +170,8 @@ class LinearTrackPlot:
         for cue_idx in range(2):
             main_ax = fig.add_subplot(gs[0, cue_idx])
             # get thy data and trial information
-            data = self.data[cue_idx]
+            data = self.data[self.data["cue_id"] == cue_idx+1]
+            data.reset_index(drop=True, inplace=True)
             trials = data["trial_id"].unique()
             session_end_trial_list = []
             sessions = data["session_name"].unique()
@@ -185,10 +189,10 @@ class LinearTrackPlot:
                     # print the lines horizontally to separate the sessions
                     main_ax.axhline(y=row_idx, color='k', linestyle='--')
                     # print the notes of the session at the end position of the session (only print in the left plot)
-                    if cue_idx == 0:
-                        wrapped_text = "\n".join(textwrap.wrap(self.metadata[note_idx]["session_notes"], width=48))
-                        main_ax.text(-32, row_idx, wrapped_text, fontsize=8, ha='left')
-                        note_idx += 1
+                    # if cue_idx == 0:
+                    #     wrapped_text = "\n".join(textwrap.wrap(self.metadata[note_idx]["session_notes"], width=48))
+                    #     main_ax.text(-32, row_idx, wrapped_text, fontsize=8, ha='left')
+                    #     note_idx += 1
                     
                 data_trial = data[data["trial_id"] == trial_id]
                 t = data_trial['frame_pc_timestamp'].values /1e6
@@ -202,11 +206,19 @@ class LinearTrackPlot:
                 row_idx += 1
 
             # print the last session notes
-            if cue_idx == 0:
-                wrapped_text = "\n".join(textwrap.wrap(self.metadata[note_idx]["session_notes"], width=48))
-                main_ax.text(-32, row_idx, wrapped_text, fontsize=8, ha='left')
+            # if cue_idx == 0:
+            #     wrapped_text = "\n".join(textwrap.wrap(self.metadata[note_idx]["session_notes"], width=48))
+            #     main_ax.text(-32, row_idx, wrapped_text, fontsize=8, ha='left')
             
             im = main_ax.imshow(velocities, aspect='auto', cmap='coolwarm', vmin=0, vmax=100)
+
+            x_ticks = np.linspace(0, velocities.shape[1] - 1, num=5)  # Adjust the number of ticks as needed
+            # Map these x-ticks to labels ranging from 0 to 420
+            x_tick_labels = np.linspace(0, dist, num=5)
+
+            # Set the x-ticks and x-tick labels
+            main_ax.set_xticks(x_ticks)
+            main_ax.set_xticklabels([f'{int(label)}' for label in x_tick_labels])
 
             # Only show the colorbar in the right plot
             if cue_idx == 1:
@@ -225,7 +237,7 @@ class LinearTrackPlot:
             main_ax.set_title(f"Velocity Heatmap Cue {cue_idx+1}")
             main_ax.legend(loc='upper left')
         
-        fig.savefig(f"Velocity_Heatmap_Animal{self.animal_id}_{self.data_date}.svg", dpi=300)
+        fig.savefig(f"Velocity_Heatmap_Animal{self.animal_id}_{self.data_group}.png", dpi=300)
 
 
     def make_trialwise_lick_plot(self):
@@ -237,8 +249,10 @@ class LinearTrackPlot:
         # 1 in the middle for the white space
         gs = fig.add_gridspec(1, 7, width_ratios=[4, 0.5, 0.5, 0.5, 4, 0.5, 0.5])
 
-        if self.data_date == "Late":
-            plt.xlim(-160, 260)
+        if self.data_group == "Late":
+            start_pos = -160
+            end_pos = 260
+            plt.xlim(-start_pos, end_pos)
             text_pos = -400 # Where to put the session notes
             # get the position of each zone by the pillar y position
             # TODO: accommodate the newest 16-pillar adaptation
@@ -246,7 +260,9 @@ class LinearTrackPlot:
             cue_pos = self.metadata[0]["size"]/2 - self.metadata[0]["pillar2_y"]
             cue_exit_pos = self.metadata[0]["size"]/2 - self.metadata[0]["pillar8_y"]
         else:
-            plt.xlim(-230, 230)
+            start_pos = -230
+            end_pos = 230
+            plt.xlim(start_pos, end_pos)
             text_pos = -480 # Where to put the session notes
             # get the position of each zone by the pillar y position
             # TODO: accommodate the newest 16-pillar adaptation
@@ -274,8 +290,11 @@ class LinearTrackPlot:
                 outcome_plot_ax = fig.add_subplot(gs[0, 6])
             
             # get the data and trial information
-            data = self.data[cue_idx]
-            lick_data = self.event_data[cue_idx]
+            data = self.data[self.data["cue_id"] == cue_idx+1]
+            data.reset_index(drop=True, inplace=True)
+            lick_data = self.event_data[self.event_data["cue_id"] == cue_idx+1]
+            lick_data.reset_index(drop=True, inplace=True)
+
             trials = data["trial_id"].unique()
             trials_variable = self.variable_data[self.variable_data["trial_id"].isin(trials)]
 
@@ -306,10 +325,10 @@ class LinearTrackPlot:
                 if trial_id in session_end_trial_list and trial_id != session_end_trial_list[-1]:
                     lick_plot_ax.axhline(y=row_idx, color='k', linestyle='--')
                     # plot the notes of the session at the end position of the session (only plot in the left plot)
-                    if cue_idx == 0:
-                        wrapped_text = "\n".join(textwrap.wrap(self.metadata[note_idx]["session_notes"], width=32))
-                        lick_plot_ax.text(text_pos, row_idx, wrapped_text, fontsize=10, ha='left')
-                        note_idx += 1
+                    # if cue_idx == 0:
+                    #     wrapped_text = "\n".join(textwrap.wrap(self.metadata[note_idx]["session_notes"], width=32))
+                    #     lick_plot_ax.text(text_pos, row_idx, wrapped_text, fontsize=10, ha='left')
+                    #     note_idx += 1
 
                 data_trial = data[data["trial_id"] == trial_id]
                 trial_licks = lick_data[lick_data["trial_id"] == trial_id].event_pc_timestamp.values
@@ -325,11 +344,19 @@ class LinearTrackPlot:
 
             lick_plot_ax.set_xlabel("Position (a.u.)")
             lick_plot_ax.set_ylim(len(trials), 0)
+            x_ticks = np.linspace(start_pos, end_pos, num=5)  # Adjust the number of ticks as needed
+
+            # Map these x-ticks to labels ranging from 0 to 460
+            x_tick_labels = np.linspace(0, end_pos-start_pos, num=5)
+
+            # Set the x-ticks and x-tick labels
+            lick_plot_ax.set_xticks(x_ticks)
+            lick_plot_ax.set_xticklabels([f'{int(label)}' for label in x_tick_labels])
 
             # plot the notes of the last session
-            if cue_idx == 0:
-                wrapped_text = "\n".join(textwrap.wrap(self.metadata[note_idx]["session_notes"], width=32))
-                lick_plot_ax.text(text_pos, row_idx, wrapped_text, fontsize=10, ha='left')
+            # if cue_idx == 0:
+            #     wrapped_text = "\n".join(textwrap.wrap(self.metadata[note_idx]["session_notes"], width=32))
+            #     lick_plot_ax.text(text_pos, row_idx, wrapped_text, fontsize=10, ha='left')
             
             lick_plot_ax.legend(loc='upper left')
 
@@ -349,7 +376,7 @@ class LinearTrackPlot:
             outcome_plot_ax.imshow(trial_outcomes, aspect='auto', cmap=custom_cmap, interpolation='nearest', vmin=0, vmax=5)
             outcome_plot_ax.set_axis_off()
             
-        fig.savefig(f"Lick_Animal{self.animal_id}_{self.data_date}.svg", dpi=300)
+        fig.savefig(f"Lick_Animal{self.animal_id}_{self.data_group}.png", dpi=300)
 
 
     def make_sessionwise_timeratio_plot(self):
@@ -359,7 +386,7 @@ class LinearTrackPlot:
 
         # get the position of each zone by the pillar y position
         # TODO: accommodate the newest 16-pillar adaptation
-        if self.data_date == "Late":
+        if self.data_group == "Late":
             cue_pos = self.metadata[0]["size"]/2 - self.metadata[0]["pillar2_y"]
             track_length = 430
         else:
@@ -384,7 +411,9 @@ class LinearTrackPlot:
 
             for each_session in self.sessions:
                 # get the data and trial information
-                data_cue = self.data[cue_idx]
+                data_cue = self.data[self.data["cue_id"] == cue_idx+1]
+                data_cue.reset_index(drop=True, inplace=True)
+
                 data_session = data_cue[data_cue["session_name"] == each_session]
                 trials = data_session["trial_id"].unique()
 
@@ -467,21 +496,112 @@ class LinearTrackPlot:
             main_ax.set_title(f"Time Ratio Cue {cue_idx+1}")
             main_ax.legend(loc='upper left')
 
-        fig.savefig(f"Time_Ratio_Animal{self.animal_id}_{self.data_date}.svg", dpi=300)
+        fig.savefig(f"Time_Ratio_Animal{self.animal_id}_{self.data_group}.png", dpi=300)
 
 
-def generate_all_figures(animal_id, check_after_data):
+    def make_reward_time_plot(self):
+        
+        reward_time_sessions = []
+        stay_time_sessions = []
+
+        for session_idx, each_session in enumerate(self.sessions):
+            # get the data and trial information
+            data = self.data
+
+            data_session = data[data["session_name"] == each_session]
+
+            reward1_pos = self.metadata[session_idx]["size"]/2 - self.metadata[session_idx]["pillar3_y"]
+            reward2_pos = self.metadata[session_idx]["size"]/2 - self.metadata[session_idx]["pillar4_y"]
+
+
+            trials = data_session["trial_id"].unique()
+
+            reward_time_trials = []
+            
+            for trial_id in trials:
+                data_trial = data_session[data_session["trial_id"] == trial_id]
+                # get the total time of the trial
+                if data_trial["cue_id"].values[0] == 1:
+                # get the data of each zone
+                    data_reward = data_trial[(data_trial["frame_z_position"] > reward1_pos-20) & (data_trial["frame_z_position"] < reward1_pos+20)]
+                else:
+                    data_reward = data_trial[(data_trial["frame_z_position"] > reward2_pos-20) & (data_trial["frame_z_position"] < reward2_pos+20)]
+                # get the time ratio of each zone
+                reward_time = data_reward["frame_pc_timestamp"].max() - data_reward["frame_pc_timestamp"].min()
+                reward_time_trials.append(reward_time/1e6)
+            
+            reward_time_sessions.append(reward_time_trials)
+
+            trials_variable = self.variable_data[self.variable_data["trial_id"].isin(trials)]
+            stay_times = trials_variable["stay_time"].values
+            stay_time_sessions.append(stay_times)
+
+
+        fig, ax = plt.subplots(figsize=(15, 5))
+
+        # Flatten the reward_time_sessions and stay_time_sessions lists
+        reward_times_flat = [time for session in reward_time_sessions for time in session]
+        stay_times_flat = [time for session in stay_time_sessions for time in session]
+
+        # Create a list of trial indices with gaps between sessions
+        trial_indices = []
+        gap = 40  # Define a gap between sessions
+        current_index = 0
+
+        for session in reward_time_sessions:
+            trial_indices.extend(list(range(current_index, current_index + len(session))))
+            current_index += len(session) + gap
+
+        # Determine the colors for the scatter points
+        colors = ['red' if reward_time < stay_time else '#66BB66' 
+                for reward_time, stay_time in zip(reward_times_flat, stay_times_flat)]
+
+        # Plot the reward times as scatter plot with conditional colors
+        ax.scatter(trial_indices, reward_times_flat, label='Reward Time', color=colors, s=3)
+
+        # Plot the stay times as a line plot
+        ax.plot(trial_indices, stay_times_flat, label='Stay Time', color="k", linestyle='--', linewidth=2)
+
+        # Set x-axis labels to show session_id for a group of trials
+        session_labels = []
+        for session_idx, session in enumerate(reward_time_sessions):
+            session_labels.extend([f'{session_idx + 1}'] * len(session))
+
+        # Set x-ticks at the start of each session
+        session_ticks = [sum(len(session) for session in reward_time_sessions[:i]) + i * gap for i in range(len(reward_time_sessions))]
+        ax.set_xticks(session_ticks)
+        ax.set_xticklabels([f'{i + 1}' for i in range(len(reward_time_sessions))])
+
+        ax.set_ylim(0, 5)
+        ax.set_xlabel('Sessions')
+        ax.set_ylabel('Time')
+        ax.set_title('Reward Time and Stay Time Across Trials')
+        ax.legend()
+
+        fig.savefig(f"Reward_Time_Animal{self.animal_id}_{self.data_group}.png", dpi=300)
+
+
+
+
+
+def generate_all_figures(animal_id, data_group):
     parent_folder = f"/mnt/NTnas/nas_vrdata/RUN_rYL00{animal_id}/rYL00{animal_id}_P0800/"
-    real_start_date = datetime.strptime("2024-07-30", '%Y-%m-%d')
+
+    late_start_time = datetime.strptime("2024-07-30", '%Y-%m-%d')
 
     data_folders = []
     for data_folder in os.listdir(parent_folder):
-        data_date = datetime.strptime(data_folder[:10], '%Y-%m-%d')
-        if data_date < real_start_date and check_after_data:
+        if data_folder[:4] != "2024":
             continue
-        elif data_date >= real_start_date and not check_after_data:
-            continue
-        data_folders.append(data_folder)
+
+        data_time = datetime.strptime(data_folder[:10], '%Y-%m-%d')
+
+        if data_group == "Early" and data_time < late_start_time:
+            data_folders.append(data_folder)
+        elif data_group == "Late" and data_time >= late_start_time:
+            data_folders.append(data_folder)
+        elif data_group == "All":
+            data_folders.append(data_folder)
     
     # sort the data folders by date
     data_folders.sort()
@@ -489,29 +609,29 @@ def generate_all_figures(animal_id, check_after_data):
     # get all data across sessions
     data, event_data, variable_data, metadata = get_all_data(parent_folder, data_folders)
 
-    trial_1= variable_data[variable_data["cue"] == 1]["trial_id"]
-    trial_2= variable_data[variable_data["cue"] == 2]["trial_id"]
-    data_1, event_data_1 = selected_data_by_cue(data, event_data, trial_1)
-    data_2, event_data_2 = selected_data_by_cue(data, event_data, trial_2)
+    data, event_data = add_cue_2data(data, event_data, variable_data)
 
     # generate the plot object
-    plot = LinearTrackPlot([data_1, data_2], [event_data_1, event_data_2], variable_data, metadata, animal_id, check_after_data)
+    plot = LinearTrackPlot(data, event_data, variable_data, metadata, animal_id, data_group)
 
     # 4 types of plots we have now
-    plot.make_trialwise_velocity_plot()
-    plot.make_trialwise_velocity_heatmap()
-    plot.make_trialwise_lick_plot()
-    plot.make_sessionwise_timeratio_plot()
+    if data_group != "All":
+        plot.make_trialwise_velocity_plot()
+        plot.make_trialwise_velocity_heatmap()
+        plot.make_trialwise_lick_plot()
+        # plot.make_sessionwise_timeratio_plot()
+    else:
+        plot.make_reward_time_plot()
 
 def main():
     # specify the animal ids and the date to generate the figures
-    animal_ids = [1,2,3]
-    check_after_datas = [True,False] # True for after 2024-07-30, False for before 2024-07-30
+    animal_ids = [1]
+    data_groups = ["Late", "All"] # True for after 2024-07-30, False for before 2024-07-30
 
     for animal_id in animal_ids:
-        for check_after_data in check_after_datas:
+        for data_group in data_groups:
             # generate all types of figures for this setting
-            generate_all_figures(animal_id, check_after_data)
+            generate_all_figures(animal_id, data_group)
 
 
 if __name__ == "__main__":

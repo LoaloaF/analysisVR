@@ -52,12 +52,18 @@ class LinearTrackPlot:
             start_pos = 160 
             step = (start_pos + 260) /res
             bins = np.arange(-start_pos, start_pos + 100, step)
-            # get the posiiton of each zone by the pillar y position
-            # TODO: accommodate the newest 16-pillar adaptation
+
             cue_enter_pos = (self.metadata[0]["size"]/2 - self.metadata[0]["pillar7_y"] + start_pos)
             cue_pos = (self.metadata[0]["size"]/2 - self.metadata[0]["pillar2_y"] + start_pos)
             cue_exit_pos = (self.metadata[0]["size"]/2 - self.metadata[0]["pillar8_y"] + start_pos)
 
+        elif self.data_group == "16pillars":
+            start_pos = 160 
+            step = (start_pos + 260) /res
+            bins = np.arange(-start_pos, start_pos + 100, step)
+            cue_enter_pos = (self.metadata[0]["size"]/2 - self.metadata[0]["pillar9_y"] + start_pos)
+            cue_pos = (self.metadata[0]["size"]/2 - self.metadata[0]["pillar2_y"] + start_pos)
+            cue_exit_pos = (self.metadata[0]["size"]/2 - self.metadata[0]["pillar12_y"] + start_pos)
         else:
             # the start position of the track (-230 in the unity coordinate, so we should add 230 later)
             start_pos = 230
@@ -116,8 +122,8 @@ class LinearTrackPlot:
             main_ax.set_xlim(0, mean_velocities.shape[0]*step)
             main_ax.set_ylim(0, 100)
 
-            # wrapped_text = "\n".join(textwrap.wrap(self.metadata[plot_id]["session_notes"], width=24))
-            # main_ax.text(-60, 0, wrapped_text, fontsize=8, ha='left')
+            wrapped_text = "\n".join(textwrap.wrap(self.metadata[plot_id]["session_notes"], width=24))
+            main_ax.text(-60, 0, wrapped_text, fontsize=8, ha='left')
 
             ymin, ymax = main_ax.get_ylim()
 
@@ -145,12 +151,18 @@ class LinearTrackPlot:
             dist = 420
             step = (2 * start_pos + 100) /res
             bins = np.arange(-start_pos, start_pos + 100, step)
-            # get the position of each zone by the pillar y position
-            # TODO: accommodate the newest 16-pillar adaptation
             cue_enter_pos = (self.metadata[0]["size"]/2 - self.metadata[0]["pillar7_y"] + start_pos)/step
             cue_pos = (self.metadata[0]["size"]/2 - self.metadata[0]["pillar2_y"] + start_pos)/step
             cue_exit_pos = (self.metadata[0]["size"]/2 - self.metadata[0]["pillar8_y"] + start_pos)/step
 
+        elif self.data_group == "16pillars":
+            start_pos = 160 
+            dist = 420
+            step = (2 * start_pos + 100) /res
+            bins = np.arange(-start_pos, start_pos + 100, step)
+            cue_enter_pos = (self.metadata[0]["size"]/2 - self.metadata[0]["pillar9_y"] + start_pos)
+            cue_pos = (self.metadata[0]["size"]/2 - self.metadata[0]["pillar2_y"] + start_pos)
+            cue_exit_pos = (self.metadata[0]["size"]/2 - self.metadata[0]["pillar12_y"] + start_pos)
         else:
             # the start position of the track (-230 in the unity coordinate, so we should add 230 later)
             start_pos = 230
@@ -189,10 +201,10 @@ class LinearTrackPlot:
                     # print the lines horizontally to separate the sessions
                     main_ax.axhline(y=row_idx, color='k', linestyle='--')
                     # print the notes of the session at the end position of the session (only print in the left plot)
-                    # if cue_idx == 0:
-                    #     wrapped_text = "\n".join(textwrap.wrap(self.metadata[note_idx]["session_notes"], width=48))
-                    #     main_ax.text(-32, row_idx, wrapped_text, fontsize=8, ha='left')
-                    #     note_idx += 1
+                    if cue_idx == 0:
+                        wrapped_text = "\n".join(textwrap.wrap(self.metadata[note_idx]["session_notes"], width=48))
+                        main_ax.text(-32, row_idx, wrapped_text, fontsize=8, ha='left')
+                        note_idx += 1
                     
                 data_trial = data[data["trial_id"] == trial_id]
                 t = data_trial['frame_pc_timestamp'].values /1e6
@@ -206,9 +218,9 @@ class LinearTrackPlot:
                 row_idx += 1
 
             # print the last session notes
-            # if cue_idx == 0:
-            #     wrapped_text = "\n".join(textwrap.wrap(self.metadata[note_idx]["session_notes"], width=48))
-            #     main_ax.text(-32, row_idx, wrapped_text, fontsize=8, ha='left')
+            if cue_idx == 0:
+                wrapped_text = "\n".join(textwrap.wrap(self.metadata[note_idx]["session_notes"], width=48))
+                main_ax.text(-32, row_idx, wrapped_text, fontsize=8, ha='left')
             
             im = main_ax.imshow(velocities, aspect='auto', cmap='coolwarm', vmin=0, vmax=100)
 
@@ -255,10 +267,17 @@ class LinearTrackPlot:
             plt.xlim(-start_pos, end_pos)
             text_pos = -400 # Where to put the session notes
             # get the position of each zone by the pillar y position
-            # TODO: accommodate the newest 16-pillar adaptation
             cue_enter_pos = self.metadata[0]["size"]/2 - self.metadata[0]["pillar7_y"]
             cue_pos = self.metadata[0]["size"]/2 - self.metadata[0]["pillar2_y"]
             cue_exit_pos = self.metadata[0]["size"]/2 - self.metadata[0]["pillar8_y"]
+        elif self.data_group == "16pillars":
+            start_pos = -160
+            end_pos = 260
+            plt.xlim(-start_pos, end_pos)
+            text_pos = -400 # Where to put the session notes
+            cue_enter_pos = (self.metadata[0]["size"]/2 - self.metadata[0]["pillar9_y"] + start_pos)
+            cue_pos = (self.metadata[0]["size"]/2 - self.metadata[0]["pillar2_y"] + start_pos)
+            cue_exit_pos = (self.metadata[0]["size"]/2 - self.metadata[0]["pillar12_y"] + start_pos)
         else:
             start_pos = -230
             end_pos = 230
@@ -325,10 +344,10 @@ class LinearTrackPlot:
                 if trial_id in session_end_trial_list and trial_id != session_end_trial_list[-1]:
                     lick_plot_ax.axhline(y=row_idx, color='k', linestyle='--')
                     # plot the notes of the session at the end position of the session (only plot in the left plot)
-                    # if cue_idx == 0:
-                    #     wrapped_text = "\n".join(textwrap.wrap(self.metadata[note_idx]["session_notes"], width=32))
-                    #     lick_plot_ax.text(text_pos, row_idx, wrapped_text, fontsize=10, ha='left')
-                    #     note_idx += 1
+                    if cue_idx == 0:
+                        wrapped_text = "\n".join(textwrap.wrap(self.metadata[note_idx]["session_notes"], width=32))
+                        lick_plot_ax.text(text_pos, row_idx, wrapped_text, fontsize=10, ha='left')
+                        note_idx += 1
 
                 data_trial = data[data["trial_id"] == trial_id]
                 trial_licks = lick_data[lick_data["trial_id"] == trial_id].event_pc_timestamp.values
@@ -354,9 +373,9 @@ class LinearTrackPlot:
             lick_plot_ax.set_xticklabels([f'{int(label)}' for label in x_tick_labels])
 
             # plot the notes of the last session
-            # if cue_idx == 0:
-            #     wrapped_text = "\n".join(textwrap.wrap(self.metadata[note_idx]["session_notes"], width=32))
-            #     lick_plot_ax.text(text_pos, row_idx, wrapped_text, fontsize=10, ha='left')
+            if cue_idx == 0:
+                wrapped_text = "\n".join(textwrap.wrap(self.metadata[note_idx]["session_notes"], width=32))
+                lick_plot_ax.text(text_pos, row_idx, wrapped_text, fontsize=10, ha='left')
             
             lick_plot_ax.legend(loc='upper left')
 
@@ -583,7 +602,6 @@ class LinearTrackPlot:
 
 
 
-
 def generate_all_figures(animal_id, data_group):
     parent_folder = f"/mnt/NTnas/nas_vrdata/RUN_rYL00{animal_id}/rYL00{animal_id}_P0800/"
 
@@ -615,18 +633,27 @@ def generate_all_figures(animal_id, data_group):
     plot = LinearTrackPlot(data, event_data, variable_data, metadata, animal_id, data_group)
 
     # 4 types of plots we have now
-    if data_group != "All":
-        plot.make_trialwise_velocity_plot()
-        plot.make_trialwise_velocity_heatmap()
-        plot.make_trialwise_lick_plot()
-        # plot.make_sessionwise_timeratio_plot()
+    if animal_id == 1 or animal_id == 2 or animal_id == 3:
+        if data_group != "All":
+            plot.make_trialwise_velocity_plot()
+            plot.make_trialwise_velocity_heatmap()
+            plot.make_trialwise_lick_plot()
+            plot.make_sessionwise_timeratio_plot()
+        else:
+            plot.make_reward_time_plot()
     else:
-        plot.make_reward_time_plot()
+        # plot.make_trialwise_velocity_plot()
+        plot.make_trialwise_velocity_heatmap()
+        # plot.make_trialwise_lick_plot()
+        # plot.make_reward_time_plot()
+
 
 def main():
     # specify the animal ids and the date to generate the figures
-    animal_ids = [1]
-    data_groups = ["Late", "All"] # True for after 2024-07-30, False for before 2024-07-30
+    animal_ids = [8]
+    # for animal 1,2,3: Late for after 2024-07-30, Early for before 2024-07-30
+    # for animal 8: use All for all data
+    data_groups = ["All"] 
 
     for animal_id in animal_ids:
         for data_group in data_groups:

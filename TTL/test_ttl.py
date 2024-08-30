@@ -19,12 +19,15 @@ def detect_edges(signal, signal_name):
 
 def get_data():
     # folder = '/home/ntgroup/Project/data/2024-08-14_14-31_dummyAnimal_P0800_LinearTrack_3min/'
-    # folder = '/home/ntgroup/Project/data/2024-08-16_14-40-39_active/'
-    folder = "/mnt/NTnas/nas_vrdata/Unprocessed/2024-08-19_17-53_rYL008_P0500_MotorLearning_19min/"
+    # folder = "/mnt/SpatialSequenceLearning/Unprocessed/2024-08-26_16-05-17_active/"
+    folder = "/mnt/SpatialSequenceLearning/Unprocessed/2024-08-26_12-57-39_active/"
+    
+    
     ephys_fname = "ephys_output.raw.h5"
     # behavior_fname = "behavior_2024-08-14_14-31_dummyAnimal_P0800_LinearTrack_3min.hdf5"
     # behavior_fname = "2024-08-16_14-41_dummyAnimal_P0800_LinearTrack_2min.hdf5"
-    behavior_fname = "2024-08-19_17-53_rYL008_P0500_MotorLearning_19min.hdf5"
+    # behavior_fname = "2024-08-26_16-05_dummyAnimal_P0800_LinearTrack_0min.hdf5"
+    behavior_fname = "2024-08-26_12-57_dummyAnimal_P0800_LinearTrack_0min.hdf5"
 
     ephys_fullfname = os.path.join(folder, ephys_fname)
     behavioral_fullfname = os.path.join(folder, behavior_fname)
@@ -45,7 +48,8 @@ def get_data():
     event_data = pd.read_hdf(behavioral_fullfname, key="event")
     frame_data = pd.read_hdf(behavioral_fullfname, key="unity_frame")
     ball_data = pd.read_hdf(behavioral_fullfname, key="ballvelocity")
-    facecam_data = pd.read_hdf(behavioral_fullfname, key="facecam_packages")
+    # facecam_data = pd.read_hdf(behavioral_fullfname, key="facecam_packages")
+    facecam_data = None
     return ephys_data, event_data, frame_data, ball_data, facecam_data
 
 def comparision_plot(ttl,pc_timestamp):
@@ -67,6 +71,12 @@ def comparision_plot(ttl,pc_timestamp):
 
     plt.show()
 
+def clean_ttl_data(data, threshold=10):
+    filtered_data = [data[0]]
+    for i in range(1, len(data)):
+        if data[i] - data[i - 1] >= threshold:
+            filtered_data.append(data[i])
+    return np.array(filtered_data)
 
 def main():
 
@@ -74,30 +84,68 @@ def main():
 
     ball_ttl = ephys_data[['time', 'bit0']]
     ball_rising_ttl, ball_falling_ttl = detect_edges(ball_ttl, "bit0")
+    
+    if(ball_ttl["bit0"].iloc[0] == 1):
+        ball_rising_ttl = np.insert(ball_rising_ttl, 0,  ball_ttl["time"].iloc[0])
     ball_pc_timestamp = np.array(ball_data["ballvelocity_pc_timestamp"])
     ball_portenta_timestamp = np.array(ball_data["ballvelocity_portenta_timestamp"])
 
-    ball_rising_ttl_norm = ball_rising_ttl - ball_rising_ttl[0]
+    ball_rising_ttl_norm = (ball_rising_ttl - ball_rising_ttl[0])*50
     ball_pc_timestamp_norm = ball_pc_timestamp - ball_pc_timestamp[0]
     ball_portenta_timestamp_norm = ball_portenta_timestamp - ball_portenta_timestamp[0]
 
+    gap_num = len(ball_pc_timestamp_norm) - len(ball_rising_ttl_norm)
+    ball_pc_timestamp_late = ball_pc_timestamp_norm[gap_num:]
+    ball_pc_timestamp_late = ball_pc_timestamp_late - ball_pc_timestamp_late[0]
+    
+    # bins = np.arange(-500, 500, 10)
+    # plt.hist(ball_rising_ttl_norm - ball_pc_timestamp_late,bins=bins, label='Late')
+    # plt.hist(ball_rising_ttl_norm - ball_pc_timestamp_norm[:-1*gap_num],bins=bins, label='early')
+    plt.plot(ball_rising_ttl_norm-ball_pc_timestamp_norm[:-gap_num], label="early")
+    plt.plot(ball_rising_ttl_norm-ball_pc_timestamp_late, label="late")
+    plt.legend()
+    plt.show()
+    
     # ball_ratio_mean = np.mean(ball_pc_timestamp_norm[1:-2]/ball_rising_ttl_norm[1:])
     # print("Ratio mean of ball: ", ball_ratio_mean)
-    ball_rising_ttl_norm = ball_rising_ttl_norm * 50
+    # ball_rising_ttl_norm = ball_rising_ttl_norm * 50
 
-    comparision_plot(ball_rising_ttl_norm[:1000], ball_pc_timestamp_norm[:1000])
-    comparision_plot(ball_rising_ttl_norm[-1000:], ball_pc_timestamp_norm[-1002:-2])
-    plt.plot(ball_pc_timestamp_norm[0:-2] - ball_rising_ttl_norm, label='Rising TTL')
-    plt.show()
+    # comparision_plot(ball_rising_ttl_norm[:1000], ball_pc_timestamp_norm[:1000])
+    # comparision_plot(ball_rising_ttl_norm[-1000:], ball_pc_timestamp_norm[-1002:-2])
+    # plt.plot(ball_pc_timestamp_norm[0:-2] - ball_rising_ttl_norm, label='Rising TTL')
+    # plt.show()
 
 
     frame_ttl = ephys_data[['time', 'bit2']]
     frame_rising_ttl, frame_falling_ttl = detect_edges(frame_ttl, "bit2")
     combined_ttl = np.concatenate((frame_rising_ttl, frame_falling_ttl))
     combined_ttl = np.sort(combined_ttl)
+    # clean the jitter
+    combined_ttl = clean_ttl_data(combined_ttl)
     frame_pc_timestamp = np.array(frame_data["frame_pc_timestamp"])
-    frame_ttl_norm = combined_ttl - combined_ttl[0]
+    # take every 4th frame
+    frame_pc_timestamp = frame_pc_timestamp[::8]
+    
+    frame_ttl_norm = (combined_ttl - combined_ttl[0])*50
     frame_pc_timestamp_norm = frame_pc_timestamp - frame_pc_timestamp[0]
+
+    plt.figure()
+    plt.plot(frame_ttl["bit2"])
+    plt.show()
+    
+    plt.figure()
+    bins = np.arange(0, 100000, 50)
+    plt.hist(np.diff(frame_ttl_norm), bins=bins, label='Rising TTL')
+    plt.yscale('log')
+    plt.show()
+
+    plt.figure()
+    bins = np.arange(0, 100000, 50)
+    plt.hist(np.diff(frame_pc_timestamp_norm), bins=bins, label='Rising TTL')
+    plt.yscale('log')
+    plt.show()
+
+
 
     facecam_ttl = ephys_data[['time', 'bit3']]
     facecam_rising_ttl, facecam_falling_ttl = detect_edges(facecam_ttl, "bit3")

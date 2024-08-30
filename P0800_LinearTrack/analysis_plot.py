@@ -661,12 +661,19 @@ def generate_all_figures(animal_id, data_group, note_on):
 
 
 def main():
-    # specify the animal ids and the date to generate the figures
+    # specify the animal ids 
     animal_ids = [8]
-    # for animal 1,2,3: Late for after 2024-07-30, Early for before 2024-07-30
+    
+    # choose the data group (different date periods, should be deprecated later) to generate the figures
+    # for animal 1,2,3: "Late" for after 2024-07-30, "Early" for before 2024-07-30, "All" for all data
+    # Uncomment the code below to generate for animal 1,2,3
+    # data_groups = ["Late", "Early", "All"]
+    
     # for animal 8: use All for all data
     data_groups = ["All"] 
-    note_on = True # whethter to display the session notes on the plots
+    
+     # whethter to display the session notes on the plots
+    note_on = True
 
     for animal_id in animal_ids:
         for data_group in data_groups:

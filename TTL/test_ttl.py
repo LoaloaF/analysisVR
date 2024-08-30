@@ -20,11 +20,13 @@ def detect_edges(signal, signal_name):
 def get_data():
     # folder = '/home/ntgroup/Project/data/2024-08-14_14-31_dummyAnimal_P0800_LinearTrack_3min/'
     # folder = '/home/ntgroup/Project/data/2024-08-16_14-40-39_active/'
-    folder = "/mnt/NTnas/nas_vrdata/Unprocessed/2024-08-19_17-53_rYL008_P0500_MotorLearning_19min/"
+    folder = "/home/ntgroup/Project/data/2024-08-21_16-21-13_active/"
+    # folder = "/mnt/NTnas/nas_vrdata/Unprocessed/2024-08-19_17-53_rYL008_P0500_MotorLearning_19min/"
     ephys_fname = "ephys_output.raw.h5"
     # behavior_fname = "behavior_2024-08-14_14-31_dummyAnimal_P0800_LinearTrack_3min.hdf5"
     # behavior_fname = "2024-08-16_14-41_dummyAnimal_P0800_LinearTrack_2min.hdf5"
-    behavior_fname = "2024-08-19_17-53_rYL008_P0500_MotorLearning_19min.hdf5"
+    behavior_fname = "2024-08-21_16-22_dummyAnimal_P0500_MotorLearning_0min.hdf5"
+    # behavior_fname = "2024-08-19_17-53_rYL008_P0500_MotorLearning_19min.hdf5"
 
     ephys_fullfname = os.path.join(folder, ephys_fname)
     behavioral_fullfname = os.path.join(folder, behavior_fname)
@@ -74,6 +76,10 @@ def main():
 
     ball_ttl = ephys_data[['time', 'bit0']]
     ball_rising_ttl, ball_falling_ttl = detect_edges(ball_ttl, "bit0")
+
+    if (ball_ttl["bit0"].iloc[0] == 1):
+        ball_rising_ttl = np.insert(ball_rising_ttl, 0, ball_ttl["time"].iloc[0])
+
     ball_pc_timestamp = np.array(ball_data["ballvelocity_pc_timestamp"])
     ball_portenta_timestamp = np.array(ball_data["ballvelocity_portenta_timestamp"])
 
@@ -81,14 +87,16 @@ def main():
     ball_pc_timestamp_norm = ball_pc_timestamp - ball_pc_timestamp[0]
     ball_portenta_timestamp_norm = ball_portenta_timestamp - ball_portenta_timestamp[0]
 
-    # ball_ratio_mean = np.mean(ball_pc_timestamp_norm[1:-2]/ball_rising_ttl_norm[1:])
-    # print("Ratio mean of ball: ", ball_ratio_mean)
     ball_rising_ttl_norm = ball_rising_ttl_norm * 50
 
     comparision_plot(ball_rising_ttl_norm[:1000], ball_pc_timestamp_norm[:1000])
     comparision_plot(ball_rising_ttl_norm[-1000:], ball_pc_timestamp_norm[-1002:-2])
     plt.plot(ball_pc_timestamp_norm[0:-2] - ball_rising_ttl_norm, label='Rising TTL')
     plt.show()
+
+
+
+
 
 
     frame_ttl = ephys_data[['time', 'bit2']]

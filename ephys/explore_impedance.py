@@ -15,8 +15,9 @@ NPULSES = 30
 
 # stim_traces = './impedance/rec3/output_stimulation_traces.csv'
 # PATH = '/Volumes/backup/data/rec3/'
-PATH = '/Volumes/large/Simon/mea1k/impedance/rec4_houman'
-
+basepath = "/Volumes/large/BMI/VirtualReality/SpatialSequenceLearning/Simon/impedance"
+PATH = basepath + '/device_4983/impedance_rec2/results'
+    
 fname = PATH + '/output_stimulation_traces.csv'
 # df = pd.read_csv(stimulation_traces, index_col=(0,1,2,3), header=[0,1])
 stim_traces = pd.read_pickle(

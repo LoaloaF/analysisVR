@@ -171,13 +171,16 @@ def extract_eletrode_pulses(path, stim_ttls, debug=True):
                 
         stim_set_file.close()
     agg_data = pd.concat(agg_data)
+    if path := not os.path.exists(os.path.join(path, "results")):
+        os.mkdir(path)
     agg_data.to_csv(os.path.join(path, "output_stimulation_traces.csv"))
     agg_data.to_pickle(os.path.join(path, "output_stimulation_traces.pkl"))
 
 def main():
     # PATH = '/run/media/loaloa/backup/data/rec3/'
     # PATH = '/Volumes/backup/data/rec3/'
-    PATH = '/Volumes/large/Simon/mea1k/impedance/rec4_houman'
+    basepath = "/Volumes/large/BMI/VirtualReality/SpatialSequenceLearning/Simon/impedance"
+    PATH = basepath + '/device_4983/impedance_rec2'
     stim_ttls = extract_stim_events(PATH, precomputed='from', debug=False)
     extract_eletrode_pulses(PATH, stim_ttls, debug=True)
 

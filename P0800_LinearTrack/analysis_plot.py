@@ -585,7 +585,7 @@ class LinearTrackPlot:
 
 
 def generate_all_figures(animal_id, data_group):
-    parent_folder = f"/mnt/NTnas/nas_vrdata/RUN_rYL00{animal_id}/rYL00{animal_id}_P0800/"
+    parent_folder = f"/Volumes/large/BMI/VirtualReality/SpatialSequenceLearning/RUN_rYL00{animal_id}/rYL00{animal_id}_P0800/"
 
     late_start_time = datetime.strptime("2024-07-30", '%Y-%m-%d')
 

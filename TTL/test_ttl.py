@@ -20,11 +20,12 @@ def detect_edges(signal, signal_name):
 def get_data():
     # folder = '/home/ntgroup/Project/data/2024-08-14_14-31_dummyAnimal_P0800_LinearTrack_3min/'
     # folder = '/home/ntgroup/Project/data/2024-08-16_14-40-39_active/'
-    folder = "/mnt/NTnas/nas_vrdata/Unprocessed/2024-08-19_17-53_rYL008_P0500_MotorLearning_19min/"
+    folder = "/home/vrmaster/Projects/VirtualReality/data/2024-09-04_14-46-25_active/"
     ephys_fname = "ephys_output.raw.h5"
     # behavior_fname = "behavior_2024-08-14_14-31_dummyAnimal_P0800_LinearTrack_3min.hdf5"
     # behavior_fname = "2024-08-16_14-41_dummyAnimal_P0800_LinearTrack_2min.hdf5"
     behavior_fname = "2024-08-19_17-53_rYL008_P0500_MotorLearning_19min.hdf5"
+    behavior_fname = "2024-09-04_14-46_dummyAnimal_P0800_LinearTrack.xlsx_4min.hdf5"
 
     ephys_fullfname = os.path.join(folder, ephys_fname)
     behavioral_fullfname = os.path.join(folder, behavior_fname)
@@ -42,10 +43,13 @@ def get_data():
         ephys_data[f'bit{column_id}'] = ephys_data[f'bit{column_id}'].astype(int)
     
 
-    event_data = pd.read_hdf(behavioral_fullfname, key="event")
+    # event_data = pd.read_hdf(behavioral_fullfname, key="event")
+    event_data = None
     frame_data = pd.read_hdf(behavioral_fullfname, key="unity_frame")
     ball_data = pd.read_hdf(behavioral_fullfname, key="ballvelocity")
-    facecam_data = pd.read_hdf(behavioral_fullfname, key="facecam_packages")
+    # facecam_data = pd.read_hdf(behavioral_fullfname, key="facecam_packages")
+    unitycam_data = pd.read_hdf(behavioral_fullfname, key="unitycam_packages")
+    facecam_data = None
     return ephys_data, event_data, frame_data, ball_data, facecam_data
 
 def comparision_plot(ttl,pc_timestamp):
@@ -67,7 +71,22 @@ def comparision_plot(ttl,pc_timestamp):
 
     plt.show()
 
+def clean_ttl(ttl):
+    diffs = np.diff(ttl)
 
+    # Find indices where the difference is greater than or equal to 10
+    valid_indices = np.where(diffs >= 10)[0] + 1
+
+    # Include the first element as it has no preceding element to compare
+    valid_indices = np.insert(valid_indices, 0, 0)
+
+    # Filter the combined_ttl array
+    filtered_combined_ttl = ttl[valid_indices]
+
+    return filtered_combined_ttl
+    
+    
+    
 def main():
 
     ephys_data, event_data, frame_data, ball_data, facecam_data = get_data()
@@ -77,27 +96,72 @@ def main():
     ball_pc_timestamp = np.array(ball_data["ballvelocity_pc_timestamp"])
     ball_portenta_timestamp = np.array(ball_data["ballvelocity_portenta_timestamp"])
 
+    if (len(ball_pc_timestamp) - len(ball_rising_ttl) == 1):
+        ball_pc_timestamp = ball_pc_timestamp[1:]
+
     ball_rising_ttl_norm = ball_rising_ttl - ball_rising_ttl[0]
     ball_pc_timestamp_norm = ball_pc_timestamp - ball_pc_timestamp[0]
     ball_portenta_timestamp_norm = ball_portenta_timestamp - ball_portenta_timestamp[0]
 
     # ball_ratio_mean = np.mean(ball_pc_timestamp_norm[1:-2]/ball_rising_ttl_norm[1:])
-    # print("Ratio mean of ball: ", ball_ratio_mean)
-    ball_rising_ttl_norm = ball_rising_ttl_norm * 50
+    # # print("Ratio mean of ball: ", ball_ratio_mean)
+    # ball_rising_ttl_norm = ball_rising_ttl_norm * 50
 
-    comparision_plot(ball_rising_ttl_norm[:1000], ball_pc_timestamp_norm[:1000])
-    comparision_plot(ball_rising_ttl_norm[-1000:], ball_pc_timestamp_norm[-1002:-2])
-    plt.plot(ball_pc_timestamp_norm[0:-2] - ball_rising_ttl_norm, label='Rising TTL')
-    plt.show()
-
-
+    # comparision_plot(ball_rising_ttl_norm[:1000], ball_pc_timestamp_norm[:1000])
+    # comparision_plot(ball_rising_ttl_norm[-1000:], ball_pc_timestamp_norm[-1002:-2])
+    # plt.plot(ball_pc_timestamp_norm[0:-2] - ball_rising_ttl_norm, label='Rising TTL')
+    # plt.show()
+    
+    print("Ball PC Timestamp: ", len(ball_pc_timestamp))
+    print("Ball Rising TTL: ", len(ball_rising_ttl))
+    
+    # plt.figure()
+    # plt.plot(ball_data["ballvelocity_raw"])
+    # plt.show()
+    
     frame_ttl = ephys_data[['time', 'bit2']]
     frame_rising_ttl, frame_falling_ttl = detect_edges(frame_ttl, "bit2")
     combined_ttl = np.concatenate((frame_rising_ttl, frame_falling_ttl))
     combined_ttl = np.sort(combined_ttl)
+    combined_ttl = clean_ttl(combined_ttl)
+    
     frame_pc_timestamp = np.array(frame_data["frame_pc_timestamp"])
-    frame_ttl_norm = combined_ttl - combined_ttl[0]
-    frame_pc_timestamp_norm = frame_pc_timestamp - frame_pc_timestamp[0]
+    frame_ttl_norm = (combined_ttl[1:] - combined_ttl[1])*50
+    frame_pc_timestamp_norm = frame_pc_timestamp[1:] - frame_pc_timestamp[1]
+
+    print("Frame PC Timestamp: ", len(frame_pc_timestamp_norm))
+    print("Frame TTLs: ", len(frame_ttl_norm))
+    
+    plt.figure()
+    plt.plot(frame_pc_timestamp_norm[:len(frame_ttl_norm)]-frame_ttl_norm)
+    # plt.plot(frame_pc_timestamp_norm-frame_ttl_norm[:len(frame_pc_timestamp_norm)])
+    plt.show()
+    
+    # plt.figure()
+    # diff_val = frame_pc_timestamp_norm[:len(frame_ttl_norm)]-frame_ttl_norm
+    # plt.plot(np.diff(diff_val))
+    # plt.show()
+    
+    plt.figure()
+    plt.plot(frame_ttl["time"], frame_ttl["bit2"])
+    plt.show()
+    
+    plt.figure()
+    bins = np.arange(0,100000,50)
+    plt.hist(np.diff(frame_ttl_norm), bins=bins)
+    plt.title("Frame TTL")
+    plt.yscale('log')
+    plt.show()
+
+    plt.figure()
+    bins = np.arange(0,100000,50)
+    plt.hist(np.diff(frame_pc_timestamp_norm), bins=bins)
+    plt.title("Frame PC Timestamp")
+    plt.yscale('log')
+    plt.show()
+    
+    exit()
+
 
     facecam_ttl = ephys_data[['time', 'bit3']]
     facecam_rising_ttl, facecam_falling_ttl = detect_edges(facecam_ttl, "bit3")
@@ -107,6 +171,10 @@ def main():
 
     facecam_rising_ttl_norm = facecam_rising_ttl_norm * 50
     comparision_plot(facecam_rising_ttl_norm, facecam_pc_timestamp_norm)
+    
+
+
+
 
     lick_ttl = ephys_data[['time', 'bit5']]
     lick_rising_ttl, lick_falling_ttl = detect_edges(lick_ttl, "bit5")

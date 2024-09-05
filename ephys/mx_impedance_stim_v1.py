@@ -91,6 +91,7 @@ def connect_el2stim_units(array, stim_electrodes):
 	return stim_els, stim_units, failed_stim_els
 
 def start_saving(s, dir_name, fname):
+	s.set_legacy_format(True)
 	s.open_directory(dir_name)
 	s.start_file(fname)
 	s.group_delete_all()
@@ -108,8 +109,11 @@ def stop_saving(s):
 def main():
 	random.seed(1)
 	np.random.seed(1)
-	PATH = './impedance/rec3'
-	log2file = False
+	PATH = "/mnt/SpatialSequenceLearning/Simon/impedance/device_headmount_old1/impedance_rec2"
+	PATH = "/mnt/SpatialSequenceLearning/Simon/impedance/device_4983/impedance_rec2"
+	PATH = "/mnt/SpatialSequenceLearning/Simon/impedance/device_headmount_new3EpoxyWalls/impedance_rec2_noGP"
+	# PATH = './impedance/rec3'
+	log2file = True
 	post_connection_sleep_time = .6
 	
 	if log2file:
@@ -141,7 +145,7 @@ def main():
 		array = setup_array(el_smple, stim_electrodes=None)#, config_name=stim_set_name)
 		array.save_config(f"{stim_set_path}/mxConfig.cfg")
 
-		start_saving(s, dir_name=stim_set_path, fname=stim_set_name+".h5")
+		start_saving(s, dir_name=stim_set_path, fname=stim_set_name)
   
 		chunk_size = 256
 		for chunk_i, stim_el_idx in enumerate(range(0, len(el_smple), chunk_size)):
@@ -186,6 +190,7 @@ def main():
 				stim_seq.send()
 				print("_|_|_|_|_|_|_|_")
 
+				time.sleep(.1)
 				print(f"Disconnecting {len(stim_els)} stimulation electrodes...", end="")
 				for stim_el in stim_els:
 					print(stim_el, end="...")

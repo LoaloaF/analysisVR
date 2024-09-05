@@ -56,7 +56,7 @@ def extract_stim_events(path, precomputed=None, debug=True):
     for stim_set_i in range(n_stim_sets):
         print(f"Extracting stim TTLs for stim_set_{stim_set_i:02d}")
         
-        stim_set_fname = os.path.join(path, 'recordings', f"stim_set_{stim_set_i:02d}.raw.h5")
+        stim_set_fname = os.path.join(path, f"stim_set_{stim_set_i:02d}", f"stim_set_{stim_set_i:02d}.raw.h5")
         stim_set_file = h5py.File(stim_set_fname, 'r')
         
         # chunk_i (4), elset_i (11-13), pulse_i (30)
@@ -84,17 +84,17 @@ def extract_stim_events(path, precomputed=None, debug=True):
         if precomputed == "to":
             # save the dict ttls to a file and pickle
             pickle.dump(ttls, open(precomputed_fname, 'wb'))
-        
-        if debug:
+        if debug or stim_set_i == 15:
             plt.title(f"Stim set {stim_set_i}")
             plt.plot(diffdata)
             for k, v in ttls.items():
                 if k[0] == stim_set_i:
                     plt.text(v, stim_ttl[v], f"{k}", fontsize=8)
             plt.show()
+        print("Found ", (diffdata==65511).sum()/2, " TTLs, expected ", nchunks*n_elsets*NPULSES)
     return ttls
 
-def extract_eletrode_pulses(path, stim_ttls, debug=True):
+def extract_eletrode_pulses(path, stim_ttls, debug=False):
     def process_elset():
         # (32,2) mapping from channel (1028) to stim channel electrode (26400)
         # channel_map = np.stack([mapping[(mapping[:,1] == stim_el)] for stim_el in stim_map[0]])[:,0]
@@ -148,8 +148,9 @@ def extract_eletrode_pulses(path, stim_ttls, debug=True):
          
     agg_data = []
     n_stim_sets = get_n_stimsets(path)
+    
     for stim_set_i in range(0,n_stim_sets):
-        stim_set_fname = os.path.join(path, 'recordings', f"stim_set_{stim_set_i:02d}.raw.h5")
+        stim_set_fname = os.path.join(path, f"stim_set_{stim_set_i:02d}", f"stim_set_{stim_set_i:02d}.raw.h5")
         stim_set_file = h5py.File(stim_set_fname, 'r')
 
         print(f"\n\n--------Processing stimulation set {stim_set_i}---------")
@@ -177,9 +178,11 @@ def extract_eletrode_pulses(path, stim_ttls, debug=True):
 def main():
     # PATH = '/run/media/loaloa/backup/data/rec3/'
     # PATH = '/Volumes/backup/data/rec3/'
-    PATH = '/Volumes/large/Simon/mea1k/impedance/rec4_houman'
-    stim_ttls = extract_stim_events(PATH, precomputed='from', debug=False)
-    extract_eletrode_pulses(PATH, stim_ttls, debug=True)
+    # PATH = '/Volumes/large/Simon/mea1k/impedance/rec4_houman'
+    PATH = "/mnt/SpatialSequenceLearning/Simon/impedance/device_headmount_old1/impedance_rec2"
+    PATH = "/mnt/SpatialSequenceLearning/Simon/impedance/device_4983/impedance_rec2"
+    stim_ttls = extract_stim_events(PATH, precomputed='to', debug=False)
+    extract_eletrode_pulses(PATH, stim_ttls, debug=False)
 
 if __name__ == "__main__":
     main()

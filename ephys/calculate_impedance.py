@@ -5,7 +5,8 @@ from scipy.optimize import curve_fit
 import matplotlib.colors as colors
 from scipy.ndimage import gaussian_filter
 
-PATH = '/Volumes/large/Simon/mea1k/impedance/rec4_houman'
+# PATH = '/Volumes/large/Simon/mea1k/impedance/rec4_houman'
+PATH = "/mnt/SpatialSequenceLearning/Simon/impedance/device_headmount_old1/impedance_rec2"
 # PATH = '/Volumes/backup/data/rec3/'
 fname = PATH + '/output_stimulation_traces.csv'
 # fname = './impedance/rec3/output_stimulation_traces.csv'

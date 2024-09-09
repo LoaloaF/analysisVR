@@ -20,18 +20,17 @@ def detect_edges(signal, signal_name):
 def get_data():
     # folder = '/home/ntgroup/Project/data/2024-08-14_14-31_dummyAnimal_P0800_LinearTrack_3min/'
     # folder = '/home/ntgroup/Project/data/2024-08-16_14-40-39_active/'
-    folder = "/home/vrmaster/Projects/VirtualReality/data/2024-09-04_14-46-25_active/"
+    folder = "/home/vrmaster/Projects/VirtualReality/data/2024-09-06_16-48-34_active/"
     ephys_fname = "ephys_output.raw.h5"
     # behavior_fname = "behavior_2024-08-14_14-31_dummyAnimal_P0800_LinearTrack_3min.hdf5"
-    # behavior_fname = "2024-08-16_14-41_dummyAnimal_P0800_LinearTrack_2min.hdf5"
-    behavior_fname = "2024-08-19_17-53_rYL008_P0500_MotorLearning_19min.hdf5"
-    behavior_fname = "2024-09-04_14-46_dummyAnimal_P0800_LinearTrack.xlsx_4min.hdf5"
+    behavior_fname = "2024-09-06_16-48_dummyAnimal_P0800_LinearTrack.xlsx_2min.hdf5"
+
 
     ephys_fullfname = os.path.join(folder, ephys_fname)
     behavioral_fullfname = os.path.join(folder, behavior_fname)
 
     with h5py.File(ephys_fullfname, 'r') as file:
-        ephys_bits = file['bits']["0000"][:]
+        ephys_bits = file['bits'][:]
 
     # convert the value into single bits and create time series
     msg = np.array([(a[0],a[1]) for a in ephys_bits])
@@ -71,96 +70,165 @@ def comparision_plot(ttl,pc_timestamp):
 
     plt.show()
 
-def clean_ttl(ttl):
-    diffs = np.diff(ttl)
+def clean_ttl_data(data, threshold=10):
+    filtered_data = [data[0]]
+    for i in range(1, len(data)):
+        if data[i] - data[i - 1] >= threshold:
+            filtered_data.append(data[i])
+    return np.array(filtered_data)
 
-    # Find indices where the difference is greater than or equal to 10
-    valid_indices = np.where(diffs >= 10)[0] + 1
-
-    # Include the first element as it has no preceding element to compare
-    valid_indices = np.insert(valid_indices, 0, 0)
-
-    # Filter the combined_ttl array
-    filtered_combined_ttl = ttl[valid_indices]
-
-    return filtered_combined_ttl
-    
-    
-    
 def main():
 
     ephys_data, event_data, frame_data, ball_data, facecam_data = get_data()
 
     ball_ttl = ephys_data[['time', 'bit0']]
     ball_rising_ttl, ball_falling_ttl = detect_edges(ball_ttl, "bit0")
+
+    if (ball_ttl["bit0"].iloc[0] == 1):
+        ball_rising_ttl = np.insert(ball_rising_ttl, 0, ball_ttl["time"].iloc[0])
+        
     ball_pc_timestamp = np.array(ball_data["ballvelocity_pc_timestamp"])
     ball_portenta_timestamp = np.array(ball_data["ballvelocity_portenta_timestamp"])
 
-    if (len(ball_pc_timestamp) - len(ball_rising_ttl) == 1):
-        ball_pc_timestamp = ball_pc_timestamp[1:]
-
-    ball_rising_ttl_norm = ball_rising_ttl - ball_rising_ttl[0]
+    ball_rising_ttl_norm = (ball_rising_ttl - ball_rising_ttl[0])*50
     ball_pc_timestamp_norm = ball_pc_timestamp - ball_pc_timestamp[0]
     ball_portenta_timestamp_norm = ball_portenta_timestamp - ball_portenta_timestamp[0]
 
-    # ball_ratio_mean = np.mean(ball_pc_timestamp_norm[1:-2]/ball_rising_ttl_norm[1:])
-    # # print("Ratio mean of ball: ", ball_ratio_mean)
+    print("Ball TTL: ", len(ball_rising_ttl))
+    print("Ball PC: ", len(ball_pc_timestamp))
+
+    
     # ball_rising_ttl_norm = ball_rising_ttl_norm * 50
 
     # comparision_plot(ball_rising_ttl_norm[:1000], ball_pc_timestamp_norm[:1000])
     # comparision_plot(ball_rising_ttl_norm[-1000:], ball_pc_timestamp_norm[-1002:-2])
     # plt.plot(ball_pc_timestamp_norm[0:-2] - ball_rising_ttl_norm, label='Rising TTL')
     # plt.show()
-    
-    print("Ball PC Timestamp: ", len(ball_pc_timestamp))
-    print("Ball Rising TTL: ", len(ball_rising_ttl))
-    
+
     # plt.figure()
-    # plt.plot(ball_data["ballvelocity_raw"])
+    # plt.plot(ball_rising_ttl_norm - ball_pc_timestamp_norm[:len(ball_rising_ttl)])
+    # plt.title("Ball Velocity")
     # plt.show()
-    
+
+
     frame_ttl = ephys_data[['time', 'bit2']]
     frame_rising_ttl, frame_falling_ttl = detect_edges(frame_ttl, "bit2")
     combined_ttl = np.concatenate((frame_rising_ttl, frame_falling_ttl))
     combined_ttl = np.sort(combined_ttl)
-    combined_ttl = clean_ttl(combined_ttl)
-    
+    # clean the jitter
+    combined_ttl = clean_ttl_data(combined_ttl)
     frame_pc_timestamp = np.array(frame_data["frame_pc_timestamp"])
+    # take every 4th frame
+    # frame_pc_timestamp = frame_pc_timestamp[::8]
+    
     frame_ttl_norm = (combined_ttl[1:] - combined_ttl[1])*50
     frame_pc_timestamp_norm = frame_pc_timestamp[1:] - frame_pc_timestamp[1]
+    
+    print("Frame TTL: ", len(frame_ttl_norm))
+    print("Frame PC: ", len(frame_pc_timestamp_norm))
+    
+    plt.figure()
+    bins = np.arange(0, 100000, 50)
+    plt.hist(np.diff(frame_pc_timestamp_norm), bins=bins, label='Rising TTL')
+    plt.yscale('log')
+    plt.show()
+    
+    # Calculate differences between consecutive points
+    diff_time = frame_ttl_norm - frame_pc_timestamp_norm[:len(frame_ttl_norm)]
+    diffs = np.diff(diff_time)
+    diffs2 = diff_time[2:] - diff_time[:-2]
 
-    print("Frame PC Timestamp: ", len(frame_pc_timestamp_norm))
-    print("Frame TTLs: ", len(frame_ttl_norm))
+    indices = np.where(diffs > 15000)[0] + 1
+    
+    # Find points where the difference is larger than 30000
+    indices1 = np.where(diffs > 30000)[0]
+    indices2 = np.where(diffs2 > 30000)[0]
+    
+    indices1 += 1
+    indices2 += 2
+    indices = np.unique(np.concatenate((indices1, indices2, indices2-1)))
+    # exclude_indices = []
+    # for indice in indices:
+    #     if frame_pc_timestamp_norm[indice+1] - frame_pc_timestamp_norm[indice] > 20000:
+    #         exclude_indices.append(indice)
+    
+    # indices = [indice for indice in indices if indice not in exclude_indices]
     
     plt.figure()
-    plt.plot(frame_pc_timestamp_norm[:len(frame_ttl_norm)]-frame_ttl_norm)
-    # plt.plot(frame_pc_timestamp_norm-frame_ttl_norm[:len(frame_pc_timestamp_norm)])
+    plt.plot(diff_time)
+    plt.title("Before patching: ttl - pc")
+    plt.scatter(indices, diff_time[indices], color='red')
+    plt.show() 
+    
+    # patch_num = 0
+    # for indice in indices:
+    #     time_diff_ttl = frame_ttl_norm[indice] - frame_ttl_norm[indice-1]
+    #     # time_diff_pc = frame_pc_timestamp_norm[indice + patch_num] - frame_pc_timestamp_norm[indice-1+patch_num]
+        
+    #     gap_num_ttl = round(time_diff_ttl/16666)
+    #     # gap_num_pc = round(time_diff_pc/16666)
+    #     if frame_pc_timestamp_norm[indice] - frame_pc_timestamp_norm[indice-1] > 20000:
+    #         continue
+    #     else:            
+    #         for each_gap in range(gap_num_ttl-1):
+    #             inter_time = frame_ttl_norm[indice-1] + time_diff_ttl/gap_num_ttl*(each_gap+1)
+    #             inter_time_ephys = inter_time/50 + combined_ttl[1]
+    #             time_diffs = (ephys_data['time'] - inter_time_ephys).abs()
+    #             closest_index = time_diffs.idxmin()
+    #             closest_time = ephys_data.loc[closest_index]["time"]
+    #             frame_ttl_norm = np.insert(frame_ttl_norm, -1, (closest_time- combined_ttl[1])*50)
+            
+    #         print(f"For indice {indice}, the patch_num is {gap_num_ttl-1} and the time difference is {time_diff_ttl}")
+    #         patch_num += gap_num_ttl - 1
+    
+    patch_num = 0
+    for indice in indices:
+        time_diff_ttl = frame_ttl_norm[indice] - frame_ttl_norm[indice-1]
+        time_diff_pc = frame_pc_timestamp_norm[indice + patch_num] - frame_pc_timestamp_norm[indice-1+patch_num]
+        
+        gap_num_ttl = round(time_diff_ttl/16666)
+        gap_num_pc = round(time_diff_pc/16666)
+        if time_diff_ttl < 20000 or gap_num_ttl == gap_num_pc:
+            continue
+        else:            
+            for each_gap in range(gap_num_ttl-1):
+                inter_time = frame_ttl_norm[indice-1] + time_diff_ttl/gap_num_ttl*(each_gap+1)
+                inter_time_ephys = inter_time/50 + combined_ttl[1]
+                time_diffs = (ephys_data['time'] - inter_time_ephys).abs()
+                closest_index = time_diffs.idxmin()
+                closest_time = ephys_data.loc[closest_index]["time"]
+                frame_ttl_norm = np.insert(frame_ttl_norm, -1, (closest_time- combined_ttl[1])*50)
+            
+            print(f"For indice {indice}, the patch_num is {gap_num_ttl-1} and the time difference is {time_diff_ttl}")
+            patch_num += gap_num_ttl - 1
+    
+    print("Patch Num: ", patch_num)
+    frame_ttl_norm = np.sort(frame_ttl_norm)
+
+    print("Frame TTL: ", len(frame_ttl_norm))
+    print("Frame PC: ", len(frame_pc_timestamp_norm))
+   
+    plt.figure()
+    plt.plot(frame_ttl_norm[:len(frame_pc_timestamp_norm)] - frame_pc_timestamp_norm[:len(frame_ttl_norm)])
+    plt.title("After patching")
+    plt.show() 
+    
+    plt.figure()
+    plt.plot(frame_ttl["time"],frame_ttl["bit2"])
     plt.show()
     
-    # plt.figure()
-    # diff_val = frame_pc_timestamp_norm[:len(frame_ttl_norm)]-frame_ttl_norm
-    # plt.plot(np.diff(diff_val))
-    # plt.show()
-    
     plt.figure()
-    plt.plot(frame_ttl["time"], frame_ttl["bit2"])
-    plt.show()
-    
-    plt.figure()
-    bins = np.arange(0,100000,50)
-    plt.hist(np.diff(frame_ttl_norm), bins=bins)
-    plt.title("Frame TTL")
+    bins = np.arange(0, 100000, 50)
+    plt.hist(np.diff(frame_ttl_norm), bins=bins, label='Rising TTL')
     plt.yscale('log')
     plt.show()
 
     plt.figure()
-    bins = np.arange(0,100000,50)
-    plt.hist(np.diff(frame_pc_timestamp_norm), bins=bins)
-    plt.title("Frame PC Timestamp")
+    bins = np.arange(0, 100000, 50)
+    plt.hist(np.diff(frame_pc_timestamp_norm), bins=bins, label='Rising TTL')
     plt.yscale('log')
     plt.show()
-    
-    exit()
+
 
 
     facecam_ttl = ephys_data[['time', 'bit3']]

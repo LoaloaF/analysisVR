@@ -26,6 +26,9 @@ def setup_array(electrodes, stim_electrodes=None, config_name="default_name"):
 	array.reset()
 	array.clear_selected_electrodes()
 	array.select_electrodes(electrodes)
+	array.connect_all_floating_amplifiers()
+	array.connect_amplifier_to_ringnode(0)
+
 	if stim_electrodes is not None:
 		array.select_stimulation_electrodes(stim_electrodes)
 	array.route()
@@ -40,6 +43,8 @@ def turn_on_stimulation_units(stim_units):
 		stim.power_up(True)
 		stim.connect(True)
 		stim.set_current_mode()
+		stim.set_small_current_range()
+		# stim.set_large_current_range()
 		stim.dac_source(0)
 		maxlab.send(stim)
 		time.sleep(.1)
@@ -112,6 +117,10 @@ def main():
 	PATH = "/mnt/SpatialSequenceLearning/Simon/impedance/device_headmount_old1/impedance_rec2"
 	PATH = "/mnt/SpatialSequenceLearning/Simon/impedance/device_4983/impedance_rec2"
 	PATH = "/mnt/SpatialSequenceLearning/Simon/impedance/device_headmount_new3EpoxyWalls/impedance_rec2_noGP"
+	PATH = "/mnt/SpatialSequenceLearning/Simon/impedance/device_headmount_old1CornerMarked/impedance_rec3_testingLCR"
+	PATH = "/mnt/SpatialSequenceLearning/Simon/impedance/device_headmount_old1CornerMarked/impedance_rec3_testingSCR_CAFA"
+	PATH = "/mnt/SpatialSequenceLearning/Simon/impedance/device_headmount_old1CornerMarked/impedance_rec3_testingSCR_CAFA_CATR"
+ 
 	# PATH = './impedance/rec3'
 	log2file = True
 	post_connection_sleep_time = .6
@@ -126,6 +135,7 @@ def main():
  
 	all_els = np.arange(26400)
 	nsets = len(all_els)//1024 +1
+	nsets = 1
 	
 	stim_seq = create_stim_sequence()
 	for el_set_i in range(nsets):

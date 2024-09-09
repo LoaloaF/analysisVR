@@ -9,7 +9,7 @@ import textwrap
 from utils_plot import *
 
 class LinearTrackPlot:
-    def __init__(self, data, event_data, variable_data, metadata, animal_id, data_group):
+    def __init__(self, data, event_data, variable_data, metadata, animal_id, data_group, note_on):
         self.data = data
         self.event_data = event_data
         self.variable_data = variable_data
@@ -18,28 +18,29 @@ class LinearTrackPlot:
         self.data_group = data_group
         self.sessions = data["session_name"].unique().tolist()
         self.sessions.sort()
+        self.note_on = note_on
 
-    def make_trialwise_position_overtime_plot(self):
-        fig = plt.figure(figsize=(30, 10))
-        gs = fig.add_gridspec(2, 1, height_ratios=[1, 1], hspace=0.5, wspace=0.2)
+    # def make_trialwise_position_overtime_plot(self):
+    #     fig = plt.figure(figsize=(30, 10))
+    #     gs = fig.add_gridspec(2, 1, height_ratios=[1, 1], hspace=0.5, wspace=0.2)
 
-        for i in range(2):
-            main_ax = fig.add_subplot(gs[i, 0])
-            data = self.data[i]
+    #     for i in range(2):
+    #         main_ax = fig.add_subplot(gs[i, 0])
+    #         data = self.data[i]
             
-            for trial_id in data["trial_id"].unique():
-                if trial_id == -1:
-                    continue
-                trial = data[data["trial_id"] == trial_id]
-                t = trial['frame_pc_timestamp'] /1e6
-                # t = trial['frame_id']
-                x = trial['frame_z_position']
-                main_ax.plot(t, x)
-            main_ax.xlabel("Time from trial start (s)")
-            main_ax.ylabel("Position (a.u.)")
+    #         for trial_id in data["trial_id"].unique():
+    #             if trial_id == -1:
+    #                 continue
+    #             trial = data[data["trial_id"] == trial_id]
+    #             t = trial['frame_pc_timestamp'] /1e6
+    #             # t = trial['frame_id']
+    #             x = trial['frame_z_position']
+    #             main_ax.plot(t, x)
+    #         main_ax.xlabel("Time from trial start (s)")
+    #         main_ax.ylabel("Position (a.u.)")
 
-        fig.savefig(f"Position_Animal{self.animal_id}_{self.early_data}", dpi=300)
-        fig.close()
+    #     fig.savefig(f"Position_Animal{self.animal_id}_{self.early_data}", dpi=300)
+    #     fig.close()
 
     def make_trialwise_velocity_plot(self):
 
@@ -47,17 +48,23 @@ class LinearTrackPlot:
         gs = fig.add_gridspec(len(self.sessions), 1)
             
         res = 100
-        if self.data_group == "Late":
+        if self.metadata[0]["session_group"] == "Late":
             # the start position of the track (-160 in the unity coordinate, so we should add 160 later)
             start_pos = 160 
             step = (start_pos + 260) /res
             bins = np.arange(-start_pos, start_pos + 100, step)
-            # get the posiiton of each zone by the pillar y position
-            # TODO: accommodate the newest 16-pillar adaptation
+
             cue_enter_pos = (self.metadata[0]["size"]/2 - self.metadata[0]["pillar7_y"] + start_pos)
             cue_pos = (self.metadata[0]["size"]/2 - self.metadata[0]["pillar2_y"] + start_pos)
             cue_exit_pos = (self.metadata[0]["size"]/2 - self.metadata[0]["pillar8_y"] + start_pos)
 
+        elif self.metadata[0]["session_group"] == "16pillars":
+            start_pos = 160 
+            step = (start_pos + 260) /res
+            bins = np.arange(-start_pos, start_pos + 100, step)
+            cue_enter_pos = (self.metadata[0]["size"]/2 - self.metadata[0]["pillar9_y"] + start_pos)
+            cue_pos = (self.metadata[0]["size"]/2 - self.metadata[0]["pillar2_y"] + start_pos)
+            cue_exit_pos = (self.metadata[0]["size"]/2 - self.metadata[0]["pillar12_y"] + start_pos)
         else:
             # the start position of the track (-230 in the unity coordinate, so we should add 230 later)
             start_pos = 230
@@ -116,8 +123,9 @@ class LinearTrackPlot:
             main_ax.set_xlim(0, mean_velocities.shape[0]*step)
             main_ax.set_ylim(0, 100)
 
-            # wrapped_text = "\n".join(textwrap.wrap(self.metadata[plot_id]["session_notes"], width=24))
-            # main_ax.text(-60, 0, wrapped_text, fontsize=8, ha='left')
+            if self.note_on:
+                wrapped_text = "\n".join(textwrap.wrap(self.metadata[plot_id]["session_notes"], width=24))
+                main_ax.text(-60, 0, wrapped_text, fontsize=8, ha='left')
 
             ymin, ymax = main_ax.get_ylim()
 
@@ -139,18 +147,25 @@ class LinearTrackPlot:
         
         
         res = 100
-        if self.data_group == "Late":
+        if self.metadata[0]["session_group"] == "Late":
             # the start position of the track (-160 in the unity coordinate, so we should add 160 later)
             start_pos = 160
             dist = 420
             step = (2 * start_pos + 100) /res
             bins = np.arange(-start_pos, start_pos + 100, step)
-            # get the position of each zone by the pillar y position
-            # TODO: accommodate the newest 16-pillar adaptation
             cue_enter_pos = (self.metadata[0]["size"]/2 - self.metadata[0]["pillar7_y"] + start_pos)/step
             cue_pos = (self.metadata[0]["size"]/2 - self.metadata[0]["pillar2_y"] + start_pos)/step
             cue_exit_pos = (self.metadata[0]["size"]/2 - self.metadata[0]["pillar8_y"] + start_pos)/step
 
+        elif self.metadata[0]["session_group"] == "16pillars":
+            start_pos = 160 
+            dist = 420
+            step = (2 * start_pos + 100) /res
+            bins = np.arange(-start_pos, start_pos + 100, step)
+            cue_enter_pos = (self.metadata[0]["size"]/2 - self.metadata[0]["pillar9_y"] + start_pos)/step
+            cue_pos = (self.metadata[0]["size"]/2 - self.metadata[0]["pillar2_y"] + start_pos)/step
+            cue_exit_pos = (self.metadata[0]["size"]/2 - self.metadata[0]["pillar12_y"] + start_pos)/step
+            
         else:
             # the start position of the track (-230 in the unity coordinate, so we should add 230 later)
             start_pos = 230
@@ -158,7 +173,6 @@ class LinearTrackPlot:
             step = 2 * start_pos / res
             bins = np.arange(-start_pos, start_pos, step)
             # get the position of each zone by the pillar y position
-            # TODO: accommodate the newest 16-pillar adaptation
             cue_enter_pos = (self.metadata[0]["size"]/2 - self.metadata[0]["pillar5_y"] + start_pos)/step
             cue_pos = (self.metadata[0]["size"]/2 - self.metadata[0]["pillar1_y"] + start_pos)/step
             cue_exit_pos = (self.metadata[0]["size"]/2 - self.metadata[0]["pillar6_y"] + start_pos)/step
@@ -184,31 +198,42 @@ class LinearTrackPlot:
             row_idx = 0
             note_idx = 0
             for trial_id in trials:
-
+                    
                 if trial_id in session_end_trial_list and trial_id != session_end_trial_list[-1]:
                     # print the lines horizontally to separate the sessions
                     main_ax.axhline(y=row_idx, color='k', linestyle='--')
                     # print the notes of the session at the end position of the session (only print in the left plot)
-                    # if cue_idx == 0:
-                    #     wrapped_text = "\n".join(textwrap.wrap(self.metadata[note_idx]["session_notes"], width=48))
-                    #     main_ax.text(-32, row_idx, wrapped_text, fontsize=8, ha='left')
-                    #     note_idx += 1
+                    if cue_idx == 0 and self.note_on: 
+                        wrapped_text = "\n".join(textwrap.wrap(self.metadata[note_idx]["session_notes"], width=48))
+                        main_ax.text(-32, row_idx, wrapped_text, fontsize=8, ha='left')
+                        note_idx += 1
                     
                 data_trial = data[data["trial_id"] == trial_id]
                 t = data_trial['frame_pc_timestamp'].values /1e6
                 x = data_trial['frame_z_position'].values
                 xbin_indices = np.digitize(x, bins)
-                for i in range(res):
-                    if x[xbin_indices==i].shape[0] < 2:
-                        continue
-                    v = np.gradient(x[xbin_indices==i], t[xbin_indices==i]).mean()
-                    velocities[row_idx, i] = v
+                
+                try:
+                    for i in range(res):
+                        if x[xbin_indices==i].shape[0] < 2:
+                            if i == 0 and i == res-1:
+                                v = 0
+                            else:
+                                v = 100                       
+                                # pos_tem = [x[xbin_indices==i-1][-1], x[xbin_indices==i][0], x[xbin_indices==i+1][0]]
+                                # time_tem = [t[xbin_indices==i-1][-1], t[xbin_indices==i][0], t[xbin_indices==i+1][0]]
+                                # v = np.gradient(pos_tem, time_tem).mean()
+                        else:
+                            v = np.gradient(x[xbin_indices==i], t[xbin_indices==i]).mean()
+                        velocities[row_idx, i] = v
+                except:
+                    print(row_idx)
                 row_idx += 1
 
             # print the last session notes
-            # if cue_idx == 0:
-            #     wrapped_text = "\n".join(textwrap.wrap(self.metadata[note_idx]["session_notes"], width=48))
-            #     main_ax.text(-32, row_idx, wrapped_text, fontsize=8, ha='left')
+            if cue_idx == 0 and self.note_on:
+                wrapped_text = "\n".join(textwrap.wrap(self.metadata[note_idx]["session_notes"], width=48))
+                main_ax.text(-32, row_idx, wrapped_text, fontsize=8, ha='left')
             
             im = main_ax.imshow(velocities, aspect='auto', cmap='coolwarm', vmin=0, vmax=100)
 
@@ -249,23 +274,29 @@ class LinearTrackPlot:
         # 1 in the middle for the white space
         gs = fig.add_gridspec(1, 7, width_ratios=[4, 0.5, 0.5, 0.5, 4, 0.5, 0.5])
 
-        if self.data_group == "Late":
+        if self.metadata[0]["session_group"] == "Late":
             start_pos = -160
             end_pos = 260
             plt.xlim(-start_pos, end_pos)
-            text_pos = -400 # Where to put the session notes
+            text_pos = -450 # Where to put the session notes
             # get the position of each zone by the pillar y position
-            # TODO: accommodate the newest 16-pillar adaptation
             cue_enter_pos = self.metadata[0]["size"]/2 - self.metadata[0]["pillar7_y"]
             cue_pos = self.metadata[0]["size"]/2 - self.metadata[0]["pillar2_y"]
             cue_exit_pos = self.metadata[0]["size"]/2 - self.metadata[0]["pillar8_y"]
+        elif self.metadata[0]["session_group"] == "16pillars":
+            start_pos = -160
+            end_pos = 260
+            plt.xlim(-start_pos, end_pos)
+            text_pos = -450 # Where to put the session notes
+            cue_enter_pos = (self.metadata[0]["size"]/2 - self.metadata[0]["pillar9_y"] + start_pos)
+            cue_pos = (self.metadata[0]["size"]/2 - self.metadata[0]["pillar2_y"] + start_pos)
+            cue_exit_pos = (self.metadata[0]["size"]/2 - self.metadata[0]["pillar12_y"] + start_pos)
         else:
             start_pos = -230
             end_pos = 230
             plt.xlim(start_pos, end_pos)
-            text_pos = -480 # Where to put the session notes
+            text_pos = -450 # Where to put the session notes
             # get the position of each zone by the pillar y position
-            # TODO: accommodate the newest 16-pillar adaptation
             cue_enter_pos = self.metadata[0]["size"]/2 - self.metadata[0]["pillar5_y"]
             cue_pos = self.metadata[0]["size"]/2 - self.metadata[0]["pillar1_y"]
             cue_exit_pos = self.metadata[0]["size"]/2 - self.metadata[0]["pillar6_y"]
@@ -325,10 +356,10 @@ class LinearTrackPlot:
                 if trial_id in session_end_trial_list and trial_id != session_end_trial_list[-1]:
                     lick_plot_ax.axhline(y=row_idx, color='k', linestyle='--')
                     # plot the notes of the session at the end position of the session (only plot in the left plot)
-                    # if cue_idx == 0:
-                    #     wrapped_text = "\n".join(textwrap.wrap(self.metadata[note_idx]["session_notes"], width=32))
-                    #     lick_plot_ax.text(text_pos, row_idx, wrapped_text, fontsize=10, ha='left')
-                    #     note_idx += 1
+                    if cue_idx == 0 and self.note_on:
+                        wrapped_text = "\n".join(textwrap.wrap(self.metadata[note_idx]["session_notes"], width=32))
+                        lick_plot_ax.text(text_pos, row_idx, wrapped_text, fontsize=10, ha='left')
+                        note_idx += 1
 
                 data_trial = data[data["trial_id"] == trial_id]
                 trial_licks = lick_data[lick_data["trial_id"] == trial_id].event_pc_timestamp.values
@@ -354,9 +385,9 @@ class LinearTrackPlot:
             lick_plot_ax.set_xticklabels([f'{int(label)}' for label in x_tick_labels])
 
             # plot the notes of the last session
-            # if cue_idx == 0:
-            #     wrapped_text = "\n".join(textwrap.wrap(self.metadata[note_idx]["session_notes"], width=32))
-            #     lick_plot_ax.text(text_pos, row_idx, wrapped_text, fontsize=10, ha='left')
+            if cue_idx == 0 and self.note_on:
+                wrapped_text = "\n".join(textwrap.wrap(self.metadata[note_idx]["session_notes"], width=32))
+                lick_plot_ax.text(text_pos, row_idx, wrapped_text, fontsize=10, ha='left')
             
             lick_plot_ax.legend(loc='upper left')
 
@@ -366,7 +397,7 @@ class LinearTrackPlot:
             WT_plot_ax.plot(stay_times, trial_ids, color="k")
             WT_plot_ax.set_xlabel("ST (s)")
             WT_plot_ax.set_ylim(len(trials), 0)
-            WT_plot_ax.set_xlim(0, 2)
+            WT_plot_ax.set_xlim(0, 5)
 
             # outcome plot
             colors = ['#cd1414', '#40ca72', '#2cde6eff', '#19ed6bff', '#00ff4fff', '#62ff00ff'] 
@@ -500,7 +531,7 @@ class LinearTrackPlot:
 
 
     def make_reward_time_plot(self):
-        
+        # plot the time rats spent in the reward zone compared with stay time required
         reward_time_sessions = []
         stay_time_sessions = []
 
@@ -585,7 +616,7 @@ class LinearTrackPlot:
 
 
 def generate_all_figures(animal_id, data_group):
-    parent_folder = f"/mnt/NTnas/nas_vrdata/RUN_rYL00{animal_id}/rYL00{animal_id}_P0800/"
+    parent_folder = f"/Volumes/large/BMI/VirtualReality/SpatialSequenceLearning/RUN_rYL00{animal_id}/rYL00{animal_id}_P0800/"
 
     late_start_time = datetime.strptime("2024-07-30", '%Y-%m-%d')
 
@@ -612,26 +643,43 @@ def generate_all_figures(animal_id, data_group):
     data, event_data = add_cue_2data(data, event_data, variable_data)
 
     # generate the plot object
-    plot = LinearTrackPlot(data, event_data, variable_data, metadata, animal_id, data_group)
+    plot = LinearTrackPlot(data, event_data, variable_data, metadata, animal_id, data_group, note_on)
 
     # 4 types of plots we have now
-    if data_group != "All":
+    if animal_id == 1 or animal_id == 2 or animal_id == 3:
+        if data_group != "All":
+            plot.make_trialwise_velocity_plot()
+            plot.make_trialwise_velocity_heatmap()
+            plot.make_trialwise_lick_plot()
+            plot.make_sessionwise_timeratio_plot()
+        else:
+            plot.make_reward_time_plot()
+    else:
         plot.make_trialwise_velocity_plot()
         plot.make_trialwise_velocity_heatmap()
         plot.make_trialwise_lick_plot()
-        # plot.make_sessionwise_timeratio_plot()
-    else:
         plot.make_reward_time_plot()
 
+
 def main():
-    # specify the animal ids and the date to generate the figures
-    animal_ids = [1]
-    data_groups = ["Late", "All"] # True for after 2024-07-30, False for before 2024-07-30
+    # specify the animal ids 
+    animal_ids = [8]
+    
+    # choose the data group (different date periods, should be deprecated later) to generate the figures
+    # for animal 1,2,3: "Late" for after 2024-07-30, "Early" for before 2024-07-30, "All" for all data
+    # Uncomment the code below to generate for animal 1,2,3
+    # data_groups = ["Late", "Early", "All"]
+    
+    # for animal 8: use All for all data
+    data_groups = ["All"] 
+    
+     # whethter to display the session notes on the plots
+    note_on = True
 
     for animal_id in animal_ids:
         for data_group in data_groups:
             # generate all types of figures for this setting
-            generate_all_figures(animal_id, data_group)
+            generate_all_figures(animal_id, data_group, note_on)
 
 
 if __name__ == "__main__":

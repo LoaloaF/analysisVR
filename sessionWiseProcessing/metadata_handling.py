@@ -1,4 +1,5 @@
 import pandas as pd
+import json 
 
 def _parse_metadata(metadata):
     paradigm_name = metadata.get("paradigm_name")
@@ -55,24 +56,103 @@ def _parse_metadata(metadata):
     }
     return metadata_parsed
 
-session_fullfname = "path/to/session.h5"
+session_fullfname = "/mnt/SpatialSequenceLearning/RUN_rYL001/rYL001_P0800/2024-08-28_16-50_rYL001_P0800_LinearTrack.xlsx_17min/2024-08-28_16-50_rYL001_P0800_LinearTrack.xlsx_17min.hdf5"
 metadata = pd.read_hdf(session_fullfname, key="metadata")
 
 metadata = _parse_metadata(metadata)
+
+pillars_posY = {}
 if metadata["paradigm_id"] == 800:
-    if len(metadata["pillar_details"]) == 16:
-        # 16 pillars version
-        regions = {
-            'start_zone': (160,240),
-            'cue1_visible': (240,320),
-            # ... and so on, but use metadata["pillar_details"] to get the exact values
+    
+    if len(metadata["pillar_details"]) == 17:
+        # the most up-to-date version of the paradigm
+        for i in range(1, 17):
+            pillar_pos = [value["y"] for key, value in metadata["pillars"].items() if value['id'] == i][0]
+            # To transfer excel coordinates to unity coordinates
+            pillars_posY[f"pillar{i}"] = metadata["envX_size"]/2 - pillar_pos
+        
+        regions_pos = {
+            'start_zone': (-169,pillars_posY["pillar5"]),
+            'cue1_visible': (pillars_posY["pillar5"],pillars_posY["pillar6"]),
+            'cue1': (pillars_posY["pillar6"],pillars_posY["pillar7"]),
+            'cue1_passed': (pillars_posY["pillar7"],pillars_posY["pillar8"]),
+            'between_cues': (pillars_posY["pillar8"],pillars_posY["pillar9"]),
+            'cue2_visible': (pillars_posY["pillar9"],pillars_posY["pillar10"]),
+            'cue2': (pillars_posY["pillar10"],pillars_posY["pillar11"]),
+            'cue2_passed': (pillars_posY["pillar11"],pillars_posY["pillar12"]),
+            'before_reward1': (pillars_posY["pillar12"],pillars_posY["pillar13"]),
+            'reward1': (pillars_posY["pillar13"],pillars_posY["pillar14"]),
+            'before_reward2': (pillars_posY["pillar14"],pillars_posY["pillar15"]),
+            'reward2': (pillars_posY["pillar15"],pillars_posY["pillar16"]),
+            'post_reward': (pillars_posY["pillar16"],metadata["envX_size"]/2),
         }
-    elif len(metadata["pillar_details"]) == 8:
-        pass
-        # 8 pillars version
+        
+    elif len(metadata["pillar_details"]) == 11:
+        for i in range(1, 11):
+            pillar_pos = [value["y"] for key, value in metadata["pillars"].items() if value['id'] == i][0]
+            # To transfer excel coordinates to unity coordinates
+            pillars_posY[f"pillar{i}"] = metadata["envX_size"]/2 - pillar_pos
+        
+        if metadata["envX_size"] == 440:
+            # early case when we start at 0 and cue at first position
+            start_pos = -metadata["envX_size"]/2
+        elif metadata["envX_size"] == 540:
+            # later case when we start at -169 and cue at second position
+            start_pos = -169
+        
+        regions_pos = {
+            'start_zone': (start_pos,pillars_posY["pillar5"]),
+            'cue1_visible': (pillars_posY["pillar5"],pillars_posY["pillar5"]+40),
+            'cue1': (pillars_posY["pillar5"]+40,pillars_posY["pillar5"]+80),
+            'cue1_passed': (pillars_posY["pillar5"]+80,pillars_posY["pillar6"]),
+            'between_cues': (pillars_posY["pillar6"],pillars_posY["pillar7"]),
+            'cue2_visible': (pillars_posY["pillar7"],pillars_posY["pillar7"]+40),
+            'cue2': (pillars_posY["pillar7"]+40,pillars_posY["pillar7"]+80),
+            'cue2_passed': (pillars_posY["pillar7"]+80,pillars_posY["pillar8"]),
+            'before_reward1': (pillars_posY["pillar8"],pillars_posY["pillar8"]+40),
+            'reward1': (pillars_posY["pillar8"]+40,pillars_posY["pillar9"]),
+            'before_reward2': (pillars_posY["pillar9"],pillars_posY["pillar9"]+40),
+            'reward2': (pillars_posY["pillar9"]+40,pillars_posY["pillar10"]),
+            'post_reward': (pillars_posY["pillar10"],metadata["envX_size"]/2),
+        }
     else:
-        # other casese?
+        print("Unknown condition, not supported")
         pass
     
-    print(regions)
-    metadata["regions"] = regions
+    region = {}
+    regions_name = list(regions_pos.keys())
+    
+    special_regions_pillar_idx = {
+        # these are the regions that have pillar details
+        "cue1": '1',
+        "cue2": '2',
+        "reward1": '3',
+        "reward2": '4'
+    }
+    
+    for each_region in regions_name:
+        region[each_region] = {
+            "start_pos": regions_pos[each_region][0],
+            "end_pos": regions_pos[each_region][1]
+        }
+        if each_region in special_regions_pillar_idx:
+            # these are the information I put in the metadata, maybe redundant
+            region[each_region]["radius"] = metadata["pillar_details"][special_regions_pillar_idx[each_region]]["pillarRadius"]
+            region[each_region]["height"] = metadata["pillar_details"][special_regions_pillar_idx[each_region]]["pillarHeight"]
+            region[each_region]["z_pos"] = metadata["pillar_details"][special_regions_pillar_idx[each_region]]["pillarZposition"]
+            region[each_region]["texture"] = metadata["pillar_details"][special_regions_pillar_idx[each_region]]["pillarTexture"]
+            region[each_region]["transparency"] = metadata["pillar_details"][special_regions_pillar_idx[each_region]]["pillarTransparency"]
+            region[each_region]["reward_radius"] = metadata["pillar_details"][special_regions_pillar_idx[each_region]]["pillarRewardRadius"]
+            region[each_region]["show_ground"] = metadata["pillar_details"][special_regions_pillar_idx[each_region]]["pillarShowGround"]
+        # below I am not sure if I should put None or leave it empty
+        # else:
+        #     region[each_region]["radius"] = None
+        #     region[each_region]["height"] = None
+        #     region[each_region]["z_pos"] = None
+        #     region[each_region]["texture"] = None
+        #     region[each_region]["transparency"] = None
+        #     region[each_region]["reward_radius"] = None
+        #     region[each_region]["show_ground"] = None
+            
+    
+    metadata["regions"] = region

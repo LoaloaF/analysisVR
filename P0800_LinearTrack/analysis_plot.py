@@ -615,8 +615,8 @@ class LinearTrackPlot:
 
 
 
-def generate_all_figures(animal_id, data_group):
-    parent_folder = f"/Volumes/large/BMI/VirtualReality/SpatialSequenceLearning/RUN_rYL00{animal_id}/rYL00{animal_id}_P0800/"
+def generate_all_figures(animal_id, data_group, note_on):
+    parent_folder = f"/mnt/SpatialSequenceLearning/RUN_rYL00{animal_id}/rYL00{animal_id}_P0800/"
 
     late_start_time = datetime.strptime("2024-07-30", '%Y-%m-%d')
 
@@ -648,10 +648,10 @@ def generate_all_figures(animal_id, data_group):
     # 4 types of plots we have now
     if animal_id == 1 or animal_id == 2 or animal_id == 3:
         if data_group != "All":
-            plot.make_trialwise_velocity_plot()
-            plot.make_trialwise_velocity_heatmap()
+            # plot.make_trialwise_velocity_plot()
+            # plot.make_trialwise_velocity_heatmap()
             plot.make_trialwise_lick_plot()
-            plot.make_sessionwise_timeratio_plot()
+            # plot.make_sessionwise_timeratio_plot()
         else:
             plot.make_reward_time_plot()
     else:
@@ -663,7 +663,7 @@ def generate_all_figures(animal_id, data_group):
 
 def main():
     # specify the animal ids 
-    animal_ids = [8]
+    animal_ids = [1]
     
     # choose the data group (different date periods, should be deprecated later) to generate the figures
     # for animal 1,2,3: "Late" for after 2024-07-30, "Early" for before 2024-07-30, "All" for all data
@@ -671,7 +671,7 @@ def main():
     # data_groups = ["Late", "Early", "All"]
     
     # for animal 8: use All for all data
-    data_groups = ["All"] 
+    data_groups = ["Early"] 
     
      # whethter to display the session notes on the plots
     note_on = True

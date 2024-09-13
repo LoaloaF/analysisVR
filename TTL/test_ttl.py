@@ -20,7 +20,7 @@ def detect_edges(signal, signal_name):
 def get_data():
     # folder = '/home/ntgroup/Project/data/2024-08-14_14-31_dummyAnimal_P0800_LinearTrack_3min/'
     # folder = "/mnt/SpatialSequenceLearning/Unprocessed/2024-08-26_16-05-17_active/"
-    folder = "/mnt/SpatialSequenceLearning/Unprocessed/2024-09-06_14-53-48_active/"
+    folder = "/mnt/SpatialSequenceLearning/Unprocessed/2024-09-13_14-36-06_active/"
     # folder = "/mnt/SpatialSequenceLearning/Unprocessed/2024-08-26_12-57-39_active/"
     
     
@@ -28,7 +28,7 @@ def get_data():
     # behavior_fname = "behavior_2024-08-14_14-31_dummyAnimal_P0800_LinearTrack_3min.hdf5"
     # behavior_fname = "2024-08-16_14-41_dummyAnimal_P0800_LinearTrack_2min.hdf5"
     # behavior_fname = "2024-08-26_16-05_dummyAnimal_P0800_LinearTrack_0min.hdf5"
-    behavior_fname = "2024-09-06_14-54_dummyAnimal_P0800_LinearTrack.xlsx_17min.hdf5"
+    behavior_fname = "2024-09-13_14-37_dummyAnimal_P0800_LinearTrack.xlsx_1min.hdf5"
     # behavior_fname = "2024-08-26_12-57_dummyAnimal_P0800_LinearTrack_0min.hdf5"
 
     ephys_fullfname = os.path.join(folder, ephys_fname)
@@ -36,7 +36,7 @@ def get_data():
 
     with h5py.File(ephys_fullfname, 'r') as file:
         # ephys_bits = file['bits'][:]
-        ephys_bits = file['bits'][:]
+        ephys_bits = file['bits']["0000"][:]
 
     # convert the value into single bits and create time series
     msg = np.array([(a[0],a[1]) for a in ephys_bits])
@@ -95,6 +95,10 @@ def main():
     print("-------------------")
     ball_ttl = ephys_data[['time', 'bit0']]
     ball_rising_ttl, ball_falling_ttl = detect_edges(ball_ttl, "bit0")
+    
+    plt.figure()
+    plt.plot(ball_ttl["bit0"])
+    plt.show()
 
     if (ball_ttl["bit0"].iloc[0] == 1):
         ball_rising_ttl = np.insert(ball_rising_ttl, 0, ball_ttl["time"].iloc[0])
@@ -106,6 +110,7 @@ def main():
 
     print("Ball TTL: ", len(ball_rising_ttl_norm))
     print("Ball PC: ", len(ball_pc_timestamp_norm))
+    print("Average diff: ", np.mean(ball_rising_ttl_norm - ball_pc_timestamp_norm))
     
     plt.figure()
     plt.plot(ball_rising_ttl_norm - ball_pc_timestamp_norm)
@@ -117,18 +122,76 @@ def main():
     print("-------------------")
     frame_ttl = ephys_data[['time', 'bit2']]
     frame_rising_ttl, frame_falling_ttl = detect_edges(frame_ttl, "bit2")
+    # frame_rising_ttl = frame_rising_ttl + 30
+    # frame_falling_ttl = frame_falling_ttl + 30
     combined_ttl = np.concatenate((frame_rising_ttl, frame_falling_ttl))
     combined_ttl = np.sort(combined_ttl)
-    # clean the jitter
-    combined_ttl = clean_ttl_data(combined_ttl)
     frame_pc_timestamp = np.array(frame_data["frame_pc_timestamp"])
+    # clean the jitter
     
-    frame_ttl_norm = (combined_ttl[1:] - combined_ttl[1])*50
-    frame_pc_timestamp_norm = frame_pc_timestamp[1:] - frame_pc_timestamp[1]
+    # plt.figure()
+    # plt.hist(np.diff(combined_ttl), bins=np.arange(0, 400, 1))
+    # plt.show()
+    combined_ttl = clean_ttl_data(combined_ttl)
+    # plt.figure()
+    # plt.hist(np.diff(combined_ttl), bins=np.arange(0, 400, 1))
+    # plt.show()
+    
+    
+    frame_ttl_norm = (combined_ttl - combined_ttl[0])*50
+    frame_pc_timestamp_norm = frame_pc_timestamp - frame_pc_timestamp[0]
+    
+    ball_last_packages_ids = frame_data.ballvelocity_last_package.values
+    filtered_ball_data = ball_data[ball_data["ballvelocity_package_id"].isin(ball_last_packages_ids)]
+    ball_last_ephys = filtered_ball_data.ballvelocity_ephys_timestamp.values
+    ball_last_ephys_norm = (ball_last_ephys - ball_last_ephys[0])*50
+    diff = combined_ttl[1:] - ball_last_ephys[1:len(combined_ttl)]
+    
     
     print("Before Patching:")
     print("Frame TTL: ", len(frame_ttl_norm))
     print("Frame PC: ", len(frame_pc_timestamp_norm))
+    print("Average diff: ", np.mean(frame_ttl_norm - frame_pc_timestamp_norm[:len(frame_ttl_norm)]))
+    
+    # for ball_ttl comparison
+    plt.figure()
+    plt.plot(combined_ttl - ball_last_ephys[:len(combined_ttl)])
+    plt.title('Difference between photodiode TTL and ball TTL')
+    plt.show() 
+    
+    plt.figure()
+    plt.plot(ball_last_ephys_norm - frame_pc_timestamp_norm)
+    plt.title('Difference between ball TTL and PC timestamp')
+    plt.show() 
+    
+    
+    plt.figure()
+    plt.plot(frame_ttl_norm - frame_pc_timestamp_norm[:len(frame_ttl_norm)])
+    plt.title('Difference between TTL and PC Timestamp after patching: TTL - PC')
+    plt.show() 
+    
+    # current_idx = 1
+    # while (current_idx < len(frame_pc_timestamp_norm)):
+    #     if (current_idx % 5000 == 0):
+    #         print("Current Index: ", current_idx)
+
+    #     time_diff = frame_ttl_norm[current_idx] - frame_ttl_norm[current_idx-1]
+    #     gap_num = round(time_diff/16650)
+    #     if gap_num == 1:
+    #         current_idx += 1
+    #     else:
+    #         insert_gap = time_diff/gap_num
+    #         for insert_id in range(1, gap_num):
+    #             insert_time = frame_ttl_norm[current_idx-1] + insert_gap*(gap_num-insert_id)
+    #             insert_time = insert_time/50 + combined_ttl[0]
+    #             time_diffs = (ephys_data['time'] - insert_time).abs()
+    #             closest_index = time_diffs.idxmin()
+    #             closest_time = ephys_data.loc[closest_index]["time"]
+    #             frame_ttl_norm = np.insert(frame_ttl_norm, current_idx, (closest_time- combined_ttl[0])*50)
+    #         current_idx += gap_num
+                
+
+    
     
     current_idx = 0
     number_of_inserts = 0
@@ -136,28 +199,36 @@ def main():
     modify_idx_list = []
     threshold = 6000
     while (current_idx < len(frame_pc_timestamp_norm)):
+        if (current_idx % 5000 == 0):
+            print("Current Index: ", current_idx)
+        # if (len(frame_ttl_norm) == len(frame_pc_timestamp_norm)):
+        #     break
         time_diff = frame_ttl_norm[current_idx] - frame_pc_timestamp_norm[current_idx]
         if time_diff < threshold and time_diff > -threshold:
             current_idx += 1
         elif time_diff >= threshold:
-            insert_time = frame_pc_timestamp_norm[current_idx]/50 + combined_ttl[1]
+            insert_time = frame_pc_timestamp_norm[current_idx]/50 + combined_ttl[0]
             time_diffs = (ephys_data['time'] - insert_time).abs()
             closest_index = time_diffs.idxmin()
             closest_time = ephys_data.loc[closest_index]["time"]
-            frame_ttl_norm = np.insert(frame_ttl_norm, current_idx, (closest_time- combined_ttl[1])*50)
+            frame_ttl_norm = np.insert(frame_ttl_norm, current_idx, (closest_time- combined_ttl[0])*50)
             number_of_inserts += 1
             modify_idx_list.append(current_idx)
+            # current_idx += 1
         elif time_diff <= -threshold:
-            frame_ttl_norm = np.delete(frame_ttl_norm, current_idx)
-            number_of_deletes += 1
-            modify_idx_list.append(current_idx)
-    
+            # print("Delete")
+            # frame_ttl_norm = np.delete(frame_ttl_norm, current_idx)
+            # number_of_deletes += 1
+            # modify_idx_list.append(current_idx)
+            current_idx += 1
+
     print("Number of Inserts: ", number_of_inserts)
     print("Number of Deletes: ", number_of_deletes)
    
     print("After Patching:")
     print("Frame TTL: ", len(frame_ttl_norm))
     print("Frame PC: ", len(frame_pc_timestamp_norm))
+    print("Average diff: ", np.mean(frame_ttl_norm - frame_pc_timestamp_norm[:len(frame_ttl_norm)]))
    
     plt.figure()
     plt.plot(frame_ttl_norm - frame_pc_timestamp_norm[:len(frame_ttl_norm)])
@@ -183,6 +254,7 @@ def main():
 
             print("Facecam TTL: ", len(facecam_rising_ttl_norm))
             print("Facecam PC: ", len(facecam_pc_timestamp_norm))
+            print("Average diff: ", np.mean(facecam_rising_ttl_norm - facecam_pc_timestamp_norm))
             
             plt.figure()
             plt.plot(facecam_rising_ttl_norm - facecam_pc_timestamp_norm)
@@ -202,16 +274,20 @@ def main():
             print("No Lick TTL")
         else:
             lick_pc_timestamp = np.array(event_data[event_data["event_name"]=="L"]["event_pc_timestamp"])
+            lick_pc_value = np.array(event_data[event_data["event_name"]=="L"]["event_value"])
+            lick_pc_timestamp = lick_pc_timestamp + lick_pc_value
             lick_rising_ttl_norm = (lick_rising_ttl - lick_rising_ttl[0])*50
             lick_pc_timestamp_norm = lick_pc_timestamp - lick_pc_timestamp[0]
 
             print("Lick TTL: ", len(lick_rising_ttl_norm))
             print("Lick PC: ", len(lick_pc_timestamp_norm))
+            print("Average diff: ", np.mean(lick_rising_ttl_norm - lick_pc_timestamp_norm))
             
             plt.figure()
             plt.plot(lick_rising_ttl_norm - lick_pc_timestamp_norm)
             plt.title('Difference between TTL and PC Timestamp after patching: TTL - PC')
             plt.show() 
+            comparision_plot(lick_rising_ttl_norm, lick_pc_timestamp_norm)
             
             event_data.loc[event_data["event_name"]=="L", "event_ephys_timestamp"] = lick_rising_ttl_norm/50 + lick_rising_ttl[0]
 
@@ -228,11 +304,13 @@ def main():
 
             print("Reward TTL: ", len(reward_rising_ttl_norm))
             print("Reward PC: ", len(reward_pc_timestamp_norm))
+            print("Average diff: ", np.mean(reward_rising_ttl_norm - reward_pc_timestamp_norm))
             
             plt.figure()
             plt.plot(reward_rising_ttl_norm - reward_pc_timestamp_norm)
             plt.title('Difference between TTL and PC Timestamp after patching: TTL - PC')
             plt.show()
+            comparision_plot(reward_rising_ttl_norm, reward_pc_timestamp_norm)
             
             event_data.loc[event_data["event_name"]=="R", "event_ephys_timestamp"] = reward_rising_ttl_norm/50 + reward_rising_ttl[0]
 
@@ -249,6 +327,7 @@ def main():
 
             print("Sound TTL: ", len(sound_rising_ttl_norm))
             print("Sound PC: ", len(sound_pc_timestamp_norm))
+            print("Average diff: ", np.mean(sound_rising_ttl_norm - sound_pc_timestamp_norm))
             
             plt.figure()
             plt.plot(sound_rising_ttl_norm - sound_pc_timestamp_norm)
@@ -256,7 +335,7 @@ def main():
             plt.show()
             
             event_data.loc[event_data["event_name"]=="S", "event_ephys_timestamp"] = sound_rising_ttl_norm/50 + sound_rising_ttl[0]
-        
+            comparision_plot(sound_rising_ttl_norm, sound_pc_timestamp_norm)
 
 if __name__ == "__main__":
     main()

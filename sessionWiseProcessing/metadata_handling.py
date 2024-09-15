@@ -61,8 +61,8 @@ metadata = pd.read_hdf(session_fullfname, key="metadata")
 
 metadata = _parse_metadata(metadata)
 
-pillars_posY = {}
 if metadata["paradigm_id"] == 800:
+    pillars_posY = {}
     
     if len(metadata["pillar_details"]) == 17:
         # the most up-to-date version of the paradigm

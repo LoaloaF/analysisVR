@@ -8,8 +8,15 @@ from scipy.ndimage import gaussian_filter
 # basepath = "/Volumes/large/BMI/VirtualReality/SpatialSequenceLearning/Simon/impedance/device_4983/impedance_rec2"
 # PATH = '/Volumes/large/BMI/VirtualReality/SpatialSequenceLearning/Simon/impedance/device_4983/impedance_rec2'
 basepath = "/Volumes/large/BMI/VirtualReality/SpatialSequenceLearning/Simon/impedance"
-PATH = basepath + '/device_4983/impedance_rec2/results'
-    
+# PATH = basepath + '/device_4983/impedance_rec2/results'
+PATH = basepath + '/device_headmount_old1CornerMarked/impedance_rec2'
+# PATH = basepath + '/device_headmount_old1CornerMarked/impedance_rec3_testing'
+# PATH = basepath + '/device_headmount_old1CornerMarked/impedance_rec3_testingSCR'
+# PATH = basepath + '/device_headmount_old1CornerMarked/impedance_rec3_testingLCR'
+# PATH = basepath + '/device_headmount_old1CornerMarked/impedance_rec3_testingSCR_CAFA'
+# PATH = basepath + '/device_headmount_old1CornerMarked/impedance_rec3_testingSCR_CAFA_CATR'
+
+
 # PATH = '/Volumes/backup/data/rec3/'
 fname = PATH + '/output_stimulation_traces.csv'
 # fname = './impedance/rec3/output_stimulation_traces.csv'

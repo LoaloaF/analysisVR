@@ -56,7 +56,7 @@ def extract_stim_events(path, precomputed=None, debug=True):
     for stim_set_i in range(n_stim_sets):
         print(f"Extracting stim TTLs for stim_set_{stim_set_i:02d}")
         
-        stim_set_fname = os.path.join(path, 'recordings', f"stim_set_{stim_set_i:02d}.raw.h5")
+        stim_set_fname = os.path.join(path, f"stim_set_{stim_set_i:02d}", f"stim_set_{stim_set_i:02d}.raw.h5")
         stim_set_file = h5py.File(stim_set_fname, 'r')
         
         # chunk_i (4), elset_i (11-13), pulse_i (30)
@@ -149,7 +149,7 @@ def extract_eletrode_pulses(path, stim_ttls, debug=True):
     agg_data = []
     n_stim_sets = get_n_stimsets(path)
     for stim_set_i in range(0,n_stim_sets):
-        stim_set_fname = os.path.join(path, 'recordings', f"stim_set_{stim_set_i:02d}.raw.h5")
+        stim_set_fname = os.path.join(path, f"stim_set_{stim_set_i:02d}", f"stim_set_{stim_set_i:02d}.raw.h5")
         stim_set_file = h5py.File(stim_set_fname, 'r')
 
         print(f"\n\n--------Processing stimulation set {stim_set_i}---------")
@@ -171,8 +171,8 @@ def extract_eletrode_pulses(path, stim_ttls, debug=True):
                 
         stim_set_file.close()
     agg_data = pd.concat(agg_data)
-    if path := not os.path.exists(os.path.join(path, "results")):
-        os.mkdir(path)
+    if not os.path.exists(os.path.join(path, "results")):
+        os.mkdir(os.path.join(path, "results"))
     agg_data.to_csv(os.path.join(path, "output_stimulation_traces.csv"))
     agg_data.to_pickle(os.path.join(path, "output_stimulation_traces.pkl"))
 
@@ -180,9 +180,15 @@ def main():
     # PATH = '/run/media/loaloa/backup/data/rec3/'
     # PATH = '/Volumes/backup/data/rec3/'
     basepath = "/Volumes/large/BMI/VirtualReality/SpatialSequenceLearning/Simon/impedance"
-    PATH = basepath + '/device_4983/impedance_rec2'
+    PATH = basepath + '/device_headmount_old1CornerMarked/impedance_rec2'
+    # PATH = basepath + '/device_headmount_old1CornerMarked/impedance_rec3_testing'
+    # PATH = basepath + '/device_headmount_old1CornerMarked/impedance_rec3_testingSCR'
+    # PATH = basepath + '/device_headmount_old1CornerMarked/impedance_rec3_testingLCR'
+    # PATH = basepath + '/device_headmount_old1CornerMarked/impedance_rec3_testingSCR_CAFA'
+    # PATH = basepath + '/device_headmount_old1CornerMarked/impedance_rec3_testingSCR_CAFA_CATR'
+
     stim_ttls = extract_stim_events(PATH, precomputed='from', debug=False)
-    extract_eletrode_pulses(PATH, stim_ttls, debug=True)
+    extract_eletrode_pulses(PATH, stim_ttls, debug=False)
 
 if __name__ == "__main__":
     main()

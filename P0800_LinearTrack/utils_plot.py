@@ -65,6 +65,7 @@ def extract_useful_metadata(session_parameters):
     else:
         for i in range(1, 12):
             extracted_metadata[f"pillar{i}_y"] = [value["y"] for key, value in pillar_info.items() if value['id'] == i][0]
+            
     extracted_metadata["size"] = session_metadata["envX_size"]
     return extracted_metadata
 

@@ -47,7 +47,7 @@ class LinearTrackPlot:
         fig = plt.figure(figsize=(15, 5 * len(self.sessions)))
         gs = fig.add_gridspec(len(self.sessions), 1)
             
-        res = 100
+        res = 50
         if self.metadata[0]["session_group"] == "Late":
             # the start position of the track (-160 in the unity coordinate, so we should add 160 later)
             start_pos = 160 
@@ -111,6 +111,13 @@ class LinearTrackPlot:
 
                 x = np.arange(0, mean_velocities.shape[0]*step, step)
                 
+                # if cue_idx == 0:
+                #     for vel in velocities:
+                #         main_ax.plot(x, vel, color='purple', alpha=0.2)
+                # elif cue_idx == 1:
+                #     for vel in velocities:
+                #         main_ax.plot(x, vel, color='green', alpha=0.5)
+
                 if cue_idx == 0:
                     main_ax.plot(x, mean_velocities, color="purple", label='Velocity Cue 1')
                     main_ax.fill_between(x, mean_velocities - std_velocities, mean_velocities + std_velocities, color='purple', alpha=0.2)
@@ -121,7 +128,7 @@ class LinearTrackPlot:
             main_ax.set_xlabel("Position (cm)")
             main_ax.set_ylabel("Velocity (cm/s)")
             main_ax.set_xlim(0, mean_velocities.shape[0]*step)
-            main_ax.set_ylim(0, 100)
+            main_ax.set_ylim(0, 200)
 
             if self.note_on:
                 wrapped_text = "\n".join(textwrap.wrap(self.metadata[plot_id]["session_notes"], width=24))
@@ -137,7 +144,7 @@ class LinearTrackPlot:
 
             main_ax.legend(loc='upper left')
         
-        fig.savefig(f"Velocity_Animal{self.animal_id}_{self.data_group}.png", dpi=300)
+        fig.savefig(f"Velocity_Animal{self.animal_id}_{self.data_group}.svg", dpi=300)
 
 
     def make_trialwise_velocity_heatmap(self):
@@ -234,6 +241,10 @@ class LinearTrackPlot:
             if cue_idx == 0 and self.note_on:
                 wrapped_text = "\n".join(textwrap.wrap(self.metadata[note_idx]["session_notes"], width=48))
                 main_ax.text(-32, row_idx, wrapped_text, fontsize=8, ha='left')
+            
+            # for each row in velocities, do guassian smoothing on it
+            for i in range(velocities.shape[0]):
+                velocities[i] = np.convolve(velocities[i], np.ones(5)/5, mode='same')
             
             im = main_ax.imshow(velocities, aspect='auto', cmap='coolwarm', vmin=0, vmax=100)
 
@@ -527,7 +538,8 @@ class LinearTrackPlot:
             main_ax.set_title(f"Time Ratio Cue {cue_idx+1}")
             main_ax.legend(loc='upper left')
 
-        fig.savefig(f"Time_Ratio_Animal{self.animal_id}_{self.data_group}.png", dpi=300)
+        print(f"Time_Ratio_Animal{self.animal_id}_{self.data_group}.svg")
+        fig.savefig(f"Time_Ratio_Animal{self.animal_id}_{self.data_group}.svg", dpi=300)
 
 
     def make_reward_time_plot(self):
@@ -615,7 +627,7 @@ class LinearTrackPlot:
 
 
 
-def generate_all_figures(animal_id, data_group):
+def generate_all_figures(animal_id, data_group, note_on):
     parent_folder = f"/Volumes/large/BMI/VirtualReality/SpatialSequenceLearning/RUN_rYL00{animal_id}/rYL00{animal_id}_P0800/"
 
     late_start_time = datetime.strptime("2024-07-30", '%Y-%m-%d')
@@ -648,10 +660,11 @@ def generate_all_figures(animal_id, data_group):
     # 4 types of plots we have now
     if animal_id == 1 or animal_id == 2 or animal_id == 3:
         if data_group != "All":
+            print(animal_id, data_group)
             plot.make_trialwise_velocity_plot()
             plot.make_trialwise_velocity_heatmap()
             plot.make_trialwise_lick_plot()
-            plot.make_sessionwise_timeratio_plot()
+            # plot.make_sessionwise_timeratio_plot()
         else:
             plot.make_reward_time_plot()
     else:
@@ -659,11 +672,13 @@ def generate_all_figures(animal_id, data_group):
         plot.make_trialwise_velocity_heatmap()
         plot.make_trialwise_lick_plot()
         plot.make_reward_time_plot()
+        plot.make_sessionwise_timeratio_plot()
+        
 
 
 def main():
     # specify the animal ids 
-    animal_ids = [8]
+    animal_ids = [1]
     
     # choose the data group (different date periods, should be deprecated later) to generate the figures
     # for animal 1,2,3: "Late" for after 2024-07-30, "Early" for before 2024-07-30, "All" for all data
@@ -671,7 +686,7 @@ def main():
     # data_groups = ["Late", "Early", "All"]
     
     # for animal 8: use All for all data
-    data_groups = ["All"] 
+    data_groups = ["Early"] 
     
      # whethter to display the session notes on the plots
     note_on = True

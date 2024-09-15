@@ -1,3 +1,5 @@
+import json
+import h5py
 import os
 import sys
 sys.path.insert(1, os.path.join(sys.path[0], '../')) # project dir
@@ -12,11 +14,14 @@ from CustomLogger import CustomLogger as Logger
 from Parameters import Parameters
 
 from sessionWiseProcessing.session_loading import get_session_modality
-from sessionWiseProcessing.session_loading import get_session_metadata
 
-from sessionWiseProcessing.session_transformations import calc_staytimes
-from sessionWiseProcessing.session_transformations import calc_timeintervals_around_lick
-from sessionWiseProcessing.session_transformations import calc_unity_velocity
+from animalWiseProcessing.animal_loading import get_animal_modality
+
+# from sessionWiseProcessing.session_loading import get_session_metadata
+
+# from sessionWiseProcessing.session_transformations import calc_staytimes
+# from sessionWiseProcessing.session_transformations import calc_timeintervals_around_lick
+# from sessionWiseProcessing.session_transformations import calc_unity_velocity
 
 def trial_wise_staytime(data, sort=True, with_average=False, max_staytime=25, fname_postfix=""):
     session_ids = data.index.get_level_values("session_id").unique()
@@ -26,7 +31,9 @@ def trial_wise_staytime(data, sort=True, with_average=False, max_staytime=25, fn
     bewteen_session_centers = 20
     xloc = 0
     for session_id in session_ids:
-        session_data = data.loc[session_id]
+        # session_data = data.loc[session_id]
+        session_data = data.xs(session_id, level="session_id")
+
         cue1_only = (session_data['cue'] == 1).all()
         cue2_only = (session_data['cue'] == 2).all()
         
@@ -178,10 +185,14 @@ def compare_lick_velocity(lick_velocities, average_velocity):
     plt.savefig("outputs/animal8_LM/velocity_comparison.svg")
     
 
+Logger().init_logger(None, None, "INFO")
 nas_dir = "/Volumes/large/BMI/VirtualReality/SpatialSequenceLearning"
-animal_id = 8
-
 paradigm_id = 800
+animal_id = 8
+modality = "unity_trial"
+
+
+
 paradigm_dir = f"RUN_rYL00{animal_id}/rYL{animal_id:03}_P{paradigm_id:04d}"
 data = []
 session_dirs = [sd for sd in os.listdir(os.path.join(nas_dir, paradigm_dir)) if sd.endswith("min")]
@@ -199,6 +210,7 @@ for i, session_name in enumerate(sorted(session_dirs)):
     # frames = get_session_modality(from_nas=(nas_dir, session_dir, session_name), 
     #                               modality="unity_frame", us2s=True, pct_as_index=True, 
     #                               complement_data=True)
+    # exit()
     # frames = frames.loc[frames.cue == 1]
     # intervals = calc_timeintervals_around_lick(lick_data, interval=.4)
     
@@ -214,36 +226,14 @@ for i, session_name in enumerate(sorted(session_dirs)):
     #                        index=("average_velocity", 'std_velocity'),
     #                        name=i))
     
-    #   stay time calculation, TODO move later    
-    trial_data = get_session_modality(from_nas=(nas_dir, session_dir, session_name), 
-                                      modality="unity_trial", complement_data=True,
-                                       to_deltaT_from_session_start=True,
-                                      )
-    get_session_metadata(from_nas=(nas_dir, session_dir, session_name))
-    exit()
-    # print(trial_data)
-    # print(trial_data.columns)
-    # exit()
-    # frames = get_session_modality(from_nas=(nas_dir, session_dir, session_name), 
-    #                               modality="unity_frame", us2s=True)
-    # staytimes = calc_staytimes(trial_data, frames)
-    
-    # session_data = pd.concat((trial_data, staytimes), axis=1)
-    session_data = trial_data
-    session_data.index = pd.MultiIndex.from_tuples([(i, ID_) for ID_ in session_data.trial_id]).set_names(["session_id", "trial_id"])
-    session_data = session_data.drop(columns=["trial_id"])
-    data.append(session_data)
-
-    
 # data = pd.concat(data, axis=0)
 # # print(data)
 # data2 = pd.concat(data2, axis=1).T
 # print(data2)
 # compare_lick_velocity(data, data2)
 
-data = pd.concat(data, axis=0)
-data.to_pickle(f"staytimes_rYL{animal_id:03}_P{paradigm_id:04d}.pkl")
-# data = pd.read_pickle(f"staytimes_rYL{animal_id:03}_P{paradigm_id:04d}.pkl")
+data = get_animal_modality(paradigm_id, animal_id, "unity_trial", from_nas=nas_dir,
+                           complement_data=True, to_deltaT_from_session_start=True)
 
 # trial_wise_staytime(data.loc[data['cue']==1].loc[1:2], fname_postfix="_cue1_S1-2")
 # trial_wise_staytime(data.loc[data['cue']==2].loc[1:2], fname_postfix="_cue2_S1-2")

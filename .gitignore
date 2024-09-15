@@ -1,3 +1,6 @@
 *.png
 *.pkl
 ephys/impedance*
+
+__pycache__/
+*.pyc

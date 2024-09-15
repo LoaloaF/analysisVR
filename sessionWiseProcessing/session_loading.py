@@ -1,8 +1,5 @@
 import json
 import os
-import sys
-sys.path.insert(1, os.path.join(sys.path[0], '../../CoreRatVR'))
-
 
 import h5py
 import pandas as pd
@@ -20,7 +17,6 @@ def _make_session_filename(nas_base_dir, pardigm_subdir, session_name):
         new_sessionfname = os.path.basename(session_fullfname).replace("2024-", "behavior_2024-")
         session_fullfname = os.path.join(os.path.dirname(session_fullfname), new_sessionfname)
     return session_fullfname
-    
 
 def _load_cam_frames(session_file, key):
     # if session_file is None: return None
@@ -33,7 +29,7 @@ def _load_cam_frames(session_file, key):
     raise NotImplementedError("Loading camera frames from session data is not implemented yet")
 
 def _session_modality_from_nas(nas_base_dir, pardigm_subdir, session_name, key, 
-                               start=None, stop=None, where=None, columns=None):
+                               where=None, start=None, stop=None, columns=None):
     L = Logger()
     session_fullfname = _make_session_filename(nas_base_dir, pardigm_subdir, session_name)
     
@@ -44,6 +40,7 @@ def _session_modality_from_nas(nas_base_dir, pardigm_subdir, session_name, key,
     
     # pandas based data
     try:
+        L.logger.debug(f"Accessing {key}...")
         with pd.HDFStore(session_fullfname, mode='r') as store:
             if store.get_storer(key).is_table:
                 # Table format, use the where clause
@@ -51,10 +48,9 @@ def _session_modality_from_nas(nas_base_dir, pardigm_subdir, session_name, key,
                                     columns=columns)
             else:
                 data = store.select(key)
-        # L.logger.info(f"Loading {key} from session data...")
         data = pd.read_hdf(session_fullfname, key=key, mode='r', start=start, 
                            stop=stop, where=where, columns=columns)
-        L.logger.info(f"Successfully accessed {key}")
+        L.logger.debug(f"Successfully accessed {key}")
     except KeyError:
         L.logger.error(f"Key {key} not found in session data")
         data = None
@@ -69,8 +65,6 @@ def _session_modality_from_db(db_fullfname, key):
 
 def _parse_metadata(metadata):
     metadata_parsed = {}
-    print(metadata)
-    print(metadata.columns)
     
     paradigm_name = metadata.get("paradigm_name")
     if paradigm_name is not None and paradigm_name.shape[0]:
@@ -146,7 +140,7 @@ def load_session_hdf5(session_fullfname):
         session_file = None
     return session_file
 
-def get_session_metadata(from_nas=None, from_db=None, **kwargs):
+def get_session_metadata(from_nas=None, from_db=None):
     if from_nas is not None:
         metadata = _session_modality_from_nas(*from_nas, "metadata")
     elif from_db is not None:
@@ -160,9 +154,9 @@ def get_session_metadata(from_nas=None, from_db=None, **kwargs):
         metadata["P0800_pillar_details"] = P0800_pillar_details
     return metadata
     
-def get_session_modality(from_nas=None, from_db=None, modality=None, **kwargs):
+def get_session_modality(modality, from_nas=None, from_db=None, modality_kwargs={}, **kwargs):
     if from_nas is not None:
-        data = _session_modality_from_nas(*from_nas, modality)
+        data = _session_modality_from_nas(*from_nas, modality, **modality_kwargs)
     elif from_db is not None:
         data = _session_modality_from_db(*from_db, modality)
     else:
@@ -189,7 +183,7 @@ def get_session_modality(from_nas=None, from_db=None, modality=None, **kwargs):
                 
     if kwargs.get("complement_data"):
         if modality == "unity_trial":
-            Logger().logger.info(f"Complementing {modality} modality with paradigmVariable_data and unity_frame")
+            Logger().logger.debug(f"Complementing {modality} modality with paradigmVariable_data and unity_frame")
             if from_nas is not None:
                 trials_variable = _session_modality_from_nas(*from_nas, "paradigm_variable")
                 unity_frames = _session_modality_from_nas(*from_nas, "unity_frame")
@@ -212,5 +206,5 @@ def get_session_modality(from_nas=None, from_db=None, modality=None, **kwargs):
     if kwargs.get("rename2oldkeys"):
         data = sT.data_modality_rename2oldkeys(data, modality,)
     
-    Logger().logger.info(f"Returning {modality} modality, {data.shape}, first row:\n{data.iloc[0]}")
+    Logger().logger.debug(f"Returning {modality} modality, {data.shape}, first row:\n{data.iloc[0]}")
     return data

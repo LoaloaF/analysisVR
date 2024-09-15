@@ -1,12 +1,7 @@
-import os
-import sys
-sys.path.insert(1, os.path.join(sys.path[0], '../../CoreRatVR')) # project dir
-
 import numpy as np
 import pandas as pd
 
 from CustomLogger import CustomLogger as Logger
-
 
 def data_modality_na2null(data):
     # Convert float64 columns to object type
@@ -206,7 +201,7 @@ def calc_staytimes(trials, frames, metadata):
     def _calc_trial_staytimes(trial_frames):
         trial_id = trial_frames["trial_id"].iloc[0]
         if trial_id == -1:
-            return pd.Series()
+            return pd.Series(dtype='int64')
         
         staytimes = {}
         for zone, zone_details in metadata["P0800_pillar_details"].items():

@@ -120,6 +120,8 @@ def main():
 	PATH = "/mnt/SpatialSequenceLearning/Simon/impedance/device_headmount_old1CornerMarked/impedance_rec3_testingLCR"
 	PATH = "/mnt/SpatialSequenceLearning/Simon/impedance/device_headmount_old1CornerMarked/impedance_rec3_testingSCR_CAFA"
 	PATH = "/mnt/SpatialSequenceLearning/Simon/impedance/device_headmount_old1CornerMarked/impedance_rec3_testingSCR_CAFA_CATR"
+	PATH = "/mnt/SpatialSequenceLearning/Simon/impedance/device_headmount_old1CornerMarked/impedance_rec3_testingSCR_CAFA_CATR"
+	PATH = "/mnt/SpatialSequenceLearning/Simon/impedance/device_headmount_new2EpoxyWalls/impedance_rec2_noGP_PBS/"
  
 	# PATH = './impedance/rec3'
 	log2file = True
@@ -135,7 +137,6 @@ def main():
  
 	all_els = np.arange(26400)
 	nsets = len(all_els)//1024 +1
-	nsets = 1
 	
 	stim_seq = create_stim_sequence()
 	for el_set_i in range(nsets):

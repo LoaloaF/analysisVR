@@ -84,7 +84,7 @@ def extract_stim_events(path, precomputed=None, debug=True):
         if precomputed == "to":
             # save the dict ttls to a file and pickle
             pickle.dump(ttls, open(precomputed_fname, 'wb'))
-        if debug or stim_set_i == 15:
+        if debug:
             plt.title(f"Stim set {stim_set_i}")
             plt.plot(diffdata)
             for k, v in ttls.items():
@@ -174,21 +174,27 @@ def extract_eletrode_pulses(path, stim_ttls, debug=False):
     agg_data = pd.concat(agg_data)
     if not os.path.exists(os.path.join(path, "results")):
         os.mkdir(os.path.join(path, "results"))
-    agg_data.to_csv(os.path.join(path, "output_stimulation_traces.csv"))
-    agg_data.to_pickle(os.path.join(path, "output_stimulation_traces.pkl"))
+    agg_data.to_csv(os.path.join(path, "results", "output_stimulation_traces.csv"))
+    agg_data.to_pickle(os.path.join(path, "results", "output_stimulation_traces.pkl"))
 
 def main():
     # PATH = '/run/media/loaloa/backup/data/rec3/'
     # PATH = '/Volumes/backup/data/rec3/'
-    basepath = "/Volumes/large/BMI/VirtualReality/SpatialSequenceLearning/Simon/impedance"
-    PATH = basepath + '/device_headmount_old1CornerMarked/impedance_rec2'
+    basepath = "/Volumes/large/BMI/VirtualReality/SpatialSequenceLearning/Simon/impedance/"
+    # PATH = basepath + '/device_headmount_old1CornerMarked/impedance_rec2'
     # PATH = basepath + '/device_headmount_old1CornerMarked/impedance_rec3_testing'
     # PATH = basepath + '/device_headmount_old1CornerMarked/impedance_rec3_testingSCR'
     # PATH = basepath + '/device_headmount_old1CornerMarked/impedance_rec3_testingLCR'
     # PATH = basepath + '/device_headmount_old1CornerMarked/impedance_rec3_testingSCR_CAFA'
     # PATH = basepath + '/device_headmount_old1CornerMarked/impedance_rec3_testingSCR_CAFA_CATR'
-
-    stim_ttls = extract_stim_events(PATH, precomputed='from', debug=False)
+    # device_name = 'device_headmount_new3EpoxyWalls/impedance_rec2_noGP'
+    # device_name = 'device_headmount_new2EpoxyWalls/impedance_rec2_noGP'
+    device_name = 'device_headmount_new2EpoxyWalls/impedance_rec2_noGP_PBS'
+    PATH = basepath + device_name
+    if not os.path.exists(PATH):
+        print("Path does not exist: ", PATH)
+        return
+    stim_ttls = extract_stim_events(PATH, precomputed='to', debug=False)
     extract_eletrode_pulses(PATH, stim_ttls, debug=False)
 
 if __name__ == "__main__":

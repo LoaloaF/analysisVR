@@ -219,5 +219,10 @@ def calc_staytimes(trials, frames, metadata):
                 staytimes["staytime_correct_r"] = zone_staytime
             elif (zone == "reward2" and cue == 1) or (zone == "reward1" and cue == 2):
                 staytimes["staytime_incorrect_r"] = zone_staytime
+                
+            # add the time of entry into the reward zone
+            if zone == 'reward1' or zone == 'reward2':
+                staytimes[f"enter_{zone}"] = zone_frames["frame_pc_timestamp"].iloc[0]
+                
         return pd.Series(staytimes)
     return frames.groupby("trial_id").apply(_calc_trial_staytimes).unstack().reset_index(drop=True)

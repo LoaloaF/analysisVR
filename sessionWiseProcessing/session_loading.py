@@ -196,8 +196,11 @@ def get_session_modality(modality, from_nas=None, from_db=None, modality_kwargs=
             trials_variable.drop(columns=['trial_id'], inplace=True) # double
             data = pd.concat([data, trials_variable], axis=1)
             
-            staytimes = sT.calc_staytimes(data, unity_frames, metadata)
-            data = pd.concat([data, staytimes], axis=1)
+            if metadata['paradigm_id'] == 800:
+                staytimes = sT.calc_staytimes(data, unity_frames, metadata)
+                data = pd.concat([data, staytimes], axis=1)
+            else:
+                Logger().logger.info(f"Staytimes not calculated for paradigm {metadata['paradigm_id']}")
 
         if modality == 'unity_frame':
             vel = sT.calc_unity_velocity(data)

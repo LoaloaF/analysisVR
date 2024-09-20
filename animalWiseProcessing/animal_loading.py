@@ -14,7 +14,15 @@ def _parse_animal_sessions_from_nas(nas_base_dir, paradigm_id, animal_id):
 def _query_animal_sessions_from_db(db_fullfname, paradigm, animal):
     raise NotImplementedError("Querying animal sessions from database is not implemented yet")
 
-def get_animal_modality(paradigm_id, animal_id, modality, from_nas=None, from_db=None, **kwargs):
+def _get_cache_fullfname(animal_id, modality, **kwargs):
+    cachedir = os.path.dirname(os.path.abspath(__file__)) + "/../cache"
+    args_msg = "_".join([f"{k}-{v}" for k, v in kwargs.items()])
+    args_msg = args_msg.replace("/", "_").replace(":","_").replace(" ","_")
+    full_fname = f"{cachedir}/r{animal_id}_{modality}_{args_msg}.pkl"
+    return full_fname
+
+def get_animal_modality(paradigm_id, animal_id, modality, from_nas=None, 
+                        from_db=None, cache=None, **kwargs):
     if modality == "metadata":
         raise NotImplementedError("Loading metadata is not implemented yet")
     
@@ -22,10 +30,11 @@ def get_animal_modality(paradigm_id, animal_id, modality, from_nas=None, from_db
     if from_nas is not None:
         from_nas_all_sessions = _parse_animal_sessions_from_nas(from_nas, paradigm_id, animal_id)
         L.logger.info(f"Loading {modality} data for animal {animal_id} from "
-                      f"NAS, found {len(from_nas_all_sessions)} sessions...")
+                      f"NAS, found {len(from_nas_all_sessions)} sessions")
         
         animal_modality_data = []
         for i, from_nas in enumerate(from_nas_all_sessions):
+            print(f"  {i+1}/{len(from_nas_all_sessions)}...", end='\r')
             session_data = get_session_modality(from_nas=from_nas, 
                                                 modality=modality, 
                                                 **kwargs)
@@ -37,10 +46,15 @@ def get_animal_modality(paradigm_id, animal_id, modality, from_nas=None, from_db
 
     elif from_db is not None:
         animal_session_names = _query_animal_sessions_from_db(*from_db)
-    else:
-        raise ValueError("Either from_nas or from_db must be provided")
+    elif cache == 'from':
+        fullfname = _get_cache_fullfname(animal_id, modality, **kwargs)
+        if not os.path.exists(fullfname):
+            raise FileNotFoundError(f"Cache file not found: {fullfname}")
+        return pd.read_pickle(fullfname)
 
     if animal_modality_data:
         animal_modality_data = pd.concat(animal_modality_data, axis=0)
         L.logger.info(f"Loaded {modality} data for animal {animal_id} from NAS:\n{animal_modality_data}")
+        if cache == 'to':
+            animal_modality_data.to_pickle(_get_cache_fullfname(animal_id, modality, **kwargs))
         return animal_modality_data

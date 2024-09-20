@@ -40,14 +40,20 @@ def _session_modality_from_nas(nas_base_dir, pardigm_subdir, session_name, key,
     
     # pandas based data
     try:
-        L.logger.debug(f"Accessing {key}...")
         with pd.HDFStore(session_fullfname, mode='r') as store:
             if store.get_storer(key).is_table:
-                # Table format, use the where clause
+                args = {keystr: key for keystr, key in zip(("start", "stop", "where", "columns"),
+                                                           (start, stop, where, columns)) 
+                        if key is not None}
+                argsmsg = "with "+L.fmtmsg(args) if args else ""
+                L.logger.debug(f"Accessing {key} from table {argsmsg}")
                 data = store.select(key, start=start, stop=stop, where=where, 
                                     columns=columns)
+            # very old data (non-patched) may not be in table format, can't slice
             else:
+                L.logger.debug(f"Accessing {key}...")
                 data = store.select(key)
+            L.logger.debug(f"Got data with shape {data.shape}")
         data = pd.read_hdf(session_fullfname, key=key, mode='r', start=start, 
                            stop=stop, where=where, columns=columns)
         L.logger.debug(f"Successfully accessed {key}")
@@ -65,6 +71,7 @@ def _session_modality_from_db(db_fullfname, key):
 
 def _parse_metadata(metadata):
     metadata_parsed = {}
+    L = Logger()
     
     paradigm_name = metadata.get("paradigm_name")
     if paradigm_name is not None and paradigm_name.shape[0]:
@@ -98,6 +105,13 @@ def _parse_metadata(metadata):
     env_metadata = metadata.get("env_metadata")
     if env_metadata is not None and env_metadata.shape[0]:
         metadata_parsed['env_metadata'] = json.loads(env_metadata.item())
+        # faulty metadata somehow
+        if metadata_parsed['env_metadata'].get("pillars") is None and metadata_parsed['paradigm_id'] == 800:
+            L.logger.warning("P0800 metadata is faulty, patching with default values")
+            curdir = os.path.dirname(os.path.abspath(__file__))
+            L.logger.warning(metadata_parsed["start_time"])
+            with open(curdir+"/../patching/P0800_env_metadata.json", 'r') as f:
+                metadata_parsed['env_metadata'] = json.load(f)
 
     fsm_metadata = metadata.get("fsm_metadata")
     if fsm_metadata is not None and fsm_metadata.shape[0]:
@@ -109,6 +123,7 @@ def _parse_metadata(metadata):
 
     # old metadata format
     if (nested_metadata := metadata.get("metadata")) is not None: 
+        L.logger.debug("Parsing old-format metadata")
         nested_metadata = json.loads(nested_metadata.item())
         metadata_parsed.update({'env_metadata': {
             "pillars": nested_metadata.get("pillars"),
@@ -129,6 +144,9 @@ def _parse_metadata(metadata):
         metadata_parsed.update({'log_file_content': {
             "log_file_content": nested_metadata.get("log_files"),
         }})
+        
+    L.logger.debug(f"Parsed metadata keys: {tuple(metadata_parsed.keys())}")
+    L.logger.debug(f"Env metadata keys:\n{tuple(metadata_parsed['env_metadata'])}")
     return metadata_parsed
 
 def load_session_hdf5(session_fullfname):
@@ -140,9 +158,9 @@ def load_session_hdf5(session_fullfname):
         session_file = None
     return session_file
 
-def get_session_metadata(from_nas=None, from_db=None):
+def get_session_metadata(from_nas=None, from_db=None, modality_kwargs={}):
     if from_nas is not None:
-        metadata = _session_modality_from_nas(*from_nas, "metadata")
+        metadata = _session_modality_from_nas(*from_nas, "metadata", **modality_kwargs)
     elif from_db is not None:
         metadata = _session_modality_from_db(*from_db, "metadata")
     else:
@@ -182,30 +200,33 @@ def get_session_modality(modality, from_nas=None, from_db=None, modality_kwargs=
         data = data.loc[data['event_name'] == event_name]
                 
     if kwargs.get("complement_data"):
-        if modality == "unity_trial":
-            Logger().logger.debug(f"Complementing {modality} modality with paradigmVariable_data and unity_frame")
-            if from_nas is not None:
-                trials_variable = _session_modality_from_nas(*from_nas, "paradigm_variable")
-                unity_frames = _session_modality_from_nas(*from_nas, "unity_frame")
-                metadata =  get_session_metadata(from_nas)
-            elif from_db is not None:
-                trials_variable = _session_modality_from_db(*from_db, "paradigm_variable")
-                unity_frames = _session_modality_from_nas(*from_db, "unity_frame")
-                metadata = get_session_metadata(from_db)
-            
-            trials_variable.drop(columns=['trial_id'], inplace=True) # double
-            data = pd.concat([data, trials_variable], axis=1)
-            
-            if metadata['paradigm_id'] == 800:
-                staytimes = sT.calc_staytimes(data, unity_frames, metadata)
-                data = pd.concat([data, staytimes], axis=1)
-            else:
-                Logger().logger.info(f"Staytimes not calculated for paradigm {metadata['paradigm_id']}")
+        try:
+            if modality == "unity_trial":
+                Logger().logger.debug(f"Complementing {modality} modality with paradigmVariable_data and unity_frame")
+                if from_nas is not None:
+                    trials_variable = _session_modality_from_nas(*from_nas, "paradigm_variable")
+                    cols = ('trial_id', "frame_z_position", 'frame_pc_timestamp')
+                    unity_frames = _session_modality_from_nas(*from_nas, "unity_frame", columns=cols)
+                    cols = ["P0800_pillar_details", 'trial_id']
+                    metadata =  get_session_metadata(from_nas, {"columns": cols})
+                elif from_db is not None:
+                    pass
+                    # trials_variable = _session_modality_from_db(*from_db, "paradigm_variable")
+                    # unity_frames = _session_modality_from_nas(*from_db, "unity_frame")
+                    # metadata = get_session_metadata(from_db)
 
-        if modality == 'unity_frame':
-            vel = sT.calc_unity_velocity(data)
-            data = pd.concat([data, vel], axis=1)
-            
+                trials_variable.drop(columns=['trial_id'], inplace=True) # double
+                data = pd.concat([data, trials_variable], axis=1)
+                
+                if metadata['paradigm_id'] == 800:
+                    staytimes = sT.calc_staytimes(data, unity_frames, metadata["P0800_pillar_details"])
+                    data = pd.concat([data, staytimes], axis=1)
+
+            if modality == 'unity_frame':
+                vel = sT.calc_unity_velocity(data)
+                data = pd.concat([data, vel], axis=1)
+        except Exception as e:
+            Logger().logger.error(f"Failed to complement {modality} data, {e}")
     if kwargs.get("rename2oldkeys"):
         data = sT.data_modality_rename2oldkeys(data, modality,)
     

@@ -197,14 +197,14 @@ def calc_unity_velocity(frames):
     velocity = pd.Series(np.gradient(positions,tstamps), index=frames.index, name='z_velocity')
     return velocity # in cm/s
     
-def calc_staytimes(trials, frames, metadata):
+def calc_staytimes(trials, frames, P0800_pillar_details):
     def _calc_trial_staytimes(trial_frames):
         trial_id = trial_frames["trial_id"].iloc[0]
         if trial_id == -1:
             return pd.Series(dtype='int64')
         
         staytimes = {}
-        for zone, zone_details in metadata["P0800_pillar_details"].items():
+        for zone, zone_details in P0800_pillar_details.items():
             zone_frames = trial_frames.loc[(trial_frames["frame_z_position"] >= zone_details["start_pos"]) & 
                                            (trial_frames["frame_z_position"] < zone_details["end_pos"])]
             if zone_frames.empty:

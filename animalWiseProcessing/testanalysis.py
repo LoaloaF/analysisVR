@@ -185,10 +185,10 @@ def compare_lick_velocity(lick_velocities, average_velocity):
     plt.savefig("outputs/animal8_LM/velocity_comparison.svg")
     
 
-Logger().init_logger(None, None, "INFO")
+Logger().init_logger(None, None, "DEBUG")
 nas_dir = "/Volumes/large/BMI/VirtualReality/SpatialSequenceLearning"
 paradigm_id = 800
-animal_id = 8
+animal_id = 2
 modality = "unity_trial"
 
 
@@ -233,6 +233,8 @@ for i, session_name in enumerate(sorted(session_dirs)):
 # compare_lick_velocity(data, data2)
 
 data = get_animal_modality(paradigm_id, animal_id, "unity_trial", from_nas=nas_dir,
+                           cache='to',
+                           modality_kwargs={"columns": ['trial_id', 'cue', 'trial_outcome']},
                            complement_data=True, to_deltaT_from_session_start=True)
 
 # trial_wise_staytime(data.loc[data['cue']==1].loc[1:2], fname_postfix="_cue1_S1-2")

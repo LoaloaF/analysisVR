@@ -105,7 +105,7 @@ def make_trialwise_volocity_plot():
 def make_trialwise_lick_plot():
     data, lickdata = get_data(with_lick=True)
     plt.subplots(figsize=(13, 4))
-    print(data)
+    # print(data)
     print(lickdata)
     
     trials = data.index.get_level_values("trial_id").unique().values

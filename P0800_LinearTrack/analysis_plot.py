@@ -668,17 +668,17 @@ def generate_all_figures(animal_id, data_group, note_on):
         else:
             plot.make_reward_time_plot()
     else:
-        plot.make_trialwise_velocity_plot()
-        plot.make_trialwise_velocity_heatmap()
+        # plot.make_trialwise_velocity_plot()
+        # plot.make_trialwise_velocity_heatmap()
         plot.make_trialwise_lick_plot()
-        plot.make_reward_time_plot()
-        plot.make_sessionwise_timeratio_plot()
+        # plot.make_reward_time_plot()
+        # plot.make_sessionwise_timeratio_plot()
         
 
 
 def main():
     # specify the animal ids 
-    animal_ids = [1]
+    animal_ids = [7]
     
     # choose the data group (different date periods, should be deprecated later) to generate the figures
     # for animal 1,2,3: "Late" for after 2024-07-30, "Early" for before 2024-07-30, "All" for all data
@@ -686,7 +686,7 @@ def main():
     # data_groups = ["Late", "Early", "All"]
     
     # for animal 8: use All for all data
-    data_groups = ["Early"] 
+    data_groups = ["All"] 
     
      # whethter to display the session notes on the plots
     note_on = True

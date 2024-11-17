@@ -3,7 +3,7 @@ from scipy.signal import decimate
 import os
 import json
 from datetime import datetime
-
+import h5py
 
 def exclude_inproper_data(data_folder, data, event_data, variable_data, metadata):
 
@@ -55,7 +55,10 @@ def extract_useful_metadata(session_parameters):
     else:
         extracted_metadata["session_group"] = "16pillars"
 
-    session_metadata = json.loads(session_parameters["metadata"][0])
+    print(session_parameters.keys())
+    # session_metadata = json.loads(session_parameters["metadata"][0])
+    # pillar_info = session_metadata["pillars"]
+    session_metadata = json.loads(session_parameters['env_metadata'].item())
     pillar_info = session_metadata["pillars"]
 
     # TODO: accommodate the newest 16-pillar adaptation

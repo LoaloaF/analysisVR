@@ -172,7 +172,7 @@ def get_session_metadata(session_dir_tuple=None, from_db=None, modality_parsing_
         raise ValueError("Either session_dir_tuple or from_db must be provided")
     
     metadata = _parse_metadata(metadata)
-    if metadata["paradigm_id"] == 800:
+    if metadata["paradigm_id"] in (800, 1100):
         P0800_pillar_details = sT.metadata_complement_P0800(metadata["env_metadata"])
         metadata["P0800_pillar_details"] = P0800_pillar_details
     return metadata
@@ -215,7 +215,7 @@ def get_session_modality(modality, session_dir_tuple, modality_parsing_kwargs={}
                 trials_variable.drop(columns=['trial_id'], inplace=True) # double
                 data = pd.concat([data, trials_variable], axis=1)
                 
-                if metadata['paradigm_id'] == 800:
+                if metadata['paradigm_id'] in (800,1100):
                     staytimes = sT.calc_staytimes(data, unity_frames, metadata["P0800_pillar_details"])
                     data = pd.concat([data, staytimes], axis=1)
 
@@ -225,7 +225,7 @@ def get_session_modality(modality, session_dir_tuple, modality_parsing_kwargs={}
                 data['binned_pos'] = binned_pos
                 
                 metadata =  get_session_metadata(session_dir_tuple)
-                if metadata['paradigm_id'] == 800:
+                if metadata['paradigm_id'] in (800,1100):
                     # insert current zone 
                     cols = ["P0800_pillar_details", 'trial_id']
                     metadata =  get_session_metadata(session_dir_tuple, {"columns": cols})

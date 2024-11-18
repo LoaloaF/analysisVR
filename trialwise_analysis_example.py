@@ -277,13 +277,13 @@ def corr_plot(data):
 
 
 
-analysis_core.init_analysis("INFO")
+analysis_core.init_analysis("DEBUG")
 
 # args: skip_animals, from_date, to_date
-paradigm_parsing_kwargs={"skip_animals":[1,2,4,5,6,7,8]}
+paradigm_parsing_kwargs={"skip_animals":[1,2,3,4,5,6,7,8]}
 # args: skip_sessions, from_date, to_date
 animal_parsing_kwargs={"skip_sessions":["2024-07-29_16-58_rYL001_P0800_LinearTrack_41min"], # bell vel doesn't match up with unity frames
-                       "from_date": "2024-07-29", "to_date": "2024-08-03",}
+                       }#"from_date": "2024-07-29", "to_date": "2024-08-03",}
 # args: to_deltaT_from_session_start pct_as_index us2s event_subset na2null
 # complement_data position_bin_index rename2oldkeys
 session_parsing_kwargs={"complement_data":True, "to_deltaT_from_session_start":True, 
@@ -291,7 +291,7 @@ session_parsing_kwargs={"complement_data":True, "to_deltaT_from_session_start":T
 # args: where start stop columns
 modality_parsing_kwargs={"columns": ['trial_id', 'cue', 'trial_outcome', 'trial_pc_duration']}
 
-data = get_paradigm_modality(paradigm_id=800, modality='unity_trial', cache='from', 
+data = get_paradigm_modality(paradigm_id=1100, modality='unity_trial', cache='to', 
                              **paradigm_parsing_kwargs,
                              animal_parsing_kwargs=animal_parsing_kwargs,
                              session_parsing_kwargs=session_parsing_kwargs,

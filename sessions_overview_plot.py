@@ -31,10 +31,10 @@ def get_all_sessions_metadata(excl_paradigms=[]):
 
 def rewrite_metadata(metadata):
     print(metadata)
-    metadata.to_excel("./assets/all_sessions_metadata.xlsx")
+    metadata.to_excel("./plots/all_sessions_metadata.xlsx")
     metadata.sort_values(["start_time"], inplace=True)
     print(metadata)
-    metadata.to_excel("./assets/all_sessions_metadata_sorted.xlsx")
+    metadata.to_excel("./plots/all_sessions_metadata_sorted.xlsx")
 
 def draw_all_sessions(metadata):
     print('\n\n\n')

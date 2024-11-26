@@ -19,8 +19,6 @@ def _parse_animal_sessions_from_nas(paradigm_id, animal_id):
 
 def get_animal_modality(paradigm_id, animal_id, modality, modality_parsing_kwargs={}, 
                         session_parsing_kwargs={}, **animal_parsing_kwargs):
-    if modality == "metadata":
-        raise NotImplementedError("Loading metadata is not implemented yet")
     L = Logger()
     
     from_nas_all_sessions = _parse_animal_sessions_from_nas(paradigm_id, animal_id)
@@ -61,7 +59,6 @@ def get_animal_modality(paradigm_id, animal_id, modality, modality_parsing_kwarg
                                             )
         if session_data is None:
             continue
-        
         
         midx_tuples = [(animal_id, i, tr_id) for tr_id in session_data.trial_id]
         midx = pd.MultiIndex.from_tuples(midx_tuples, names=["animal_id", "session_id", "trial_id"])

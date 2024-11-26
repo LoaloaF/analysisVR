@@ -26,6 +26,7 @@ def _get_cache_fullfname(identifier, kwargs):
     # Create a hash of the kwargs string to ensure the filename is not too long
     kwargs_hash = hashlib.md5(kwargs_str.encode()).hexdigest()[:8]
     filename = f"{identifier}_{kwargs_hash}.pkl"
+    Logger().logger.debug(f"Cache filename: {filename}")
     return os.path.join(LOCAL_DATA_DIR, filename)
 
 def get_paradigm_modality(paradigm_id, modality, cache=None, 
@@ -61,11 +62,11 @@ def get_paradigm_modality(paradigm_id, modality, cache=None,
             if animal_data is not None:
                 animal_data = pd.concat({paradigm_id: animal_data}, names=["paradigm_id"])
                 paradigm_modality_data.append(animal_data)
-                L.spacer()
 
         if paradigm_modality_data:
             paradigm_modality_data = pd.concat(paradigm_modality_data, axis=0)
             if cache == 'to':
+                L.logger.info(f"Caching paradigm {paradigm_id} {modality} data to {fullfname}")
                 paradigm_modality_data.to_pickle(fullfname)
         else:
             return

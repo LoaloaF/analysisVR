@@ -162,12 +162,12 @@ def plot_lick_vel(data):
 analysis_core.init_analysis("DEBUG")
 
 # args: skip_animals, from_date, to_date
-paradigm_parsing_kwargs={"skip_animals":[1,2,4,5,6,7,8]}
+paradigm_parsing_kwargs={}#"skip_animals":[1,2,4,5,6,7,8]}
 # args: skip_sessions, from_date, to_date
-animal_parsing_kwargs={"skip_sessions":["2024-07-29_16-58_rYL001_P0800_LinearTrack_41min",
-                                        "2024-07-24_17-45_rYL003_P0800_LinearTrack_25min"], # bell vel doesn't match up with unity frames
-                     #   "from_date": "2024-07-29", "to_date": "2024-09-03",
-                       }
+animal_parsing_kwargs={"skip_sessions":["2024-07-29_16-58_rYL001_P0800_LinearTrack_41min", # bell vel doesn't match up with unity frames
+                                        "2024-07-26_14-57_rYL003_P0800_LinearTrack_27min", # trial_id 1-5 duplicated
+                                        "2024-08-09_18-20_rYL003_P0800_LinearTrack_21min", # has only 1 trial
+]}
 # args: to_deltaT_from_session_start pct_as_index us2s event_subset na2null
 # complement_data position_bin_index rename2oldkeys
 session_parsing_kwargs={"complement_data":True, "to_deltaT_from_session_start":True, 

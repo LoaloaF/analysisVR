@@ -12,7 +12,7 @@ from CustomLogger import CustomLogger as Logger
 
 def init_analysis(loglevel='INFO'):
     Logger().init_logger(None, None, loglevel)
-    
+
 def _delfault_paths():
     which_os = platform.system()
     user = os.getlogin()
@@ -43,3 +43,35 @@ def _delfault_paths():
     return nas_dir, local_data_dir, project_dir
 
 NAS_DIR, LOCAL_DATA_DIR, PROJECT_DIR = _delfault_paths()
+
+PARADIGM_COLORS = {
+    0: "#ccccccff", # AutoLickReward
+    100: "#666666ff", # Spout Association
+
+    500: "#ff72a4ff", # Motor Learning
+    900: "#cc72ffff", # Motor Lick Learning
+    1000: "#7279ffff", # Motor Stop Learning
+
+    200: "#1577d6ff", # 2D arena 1 Pillar
+    400: "#2f15d6ff", # 2D arena 4 Pillars
+
+    800: "#0ee1beff", # 1D track, Cue1 Cue2
+    801: "#0ee136ff", # 1D track, Cue1 Cue2, Lick triggered
+    1100: "#d64215ff", # 1D track, first both rewarded, then Cue1 Cue2, Stop triggered
+}
+
+PARADIGM_VISIBLE_NAMES = {
+    0: "learn-Spout-Licking",
+    100: "learn-Sound->R-Association",
+    
+    500: "learn-Ball-Control",
+    900: "learn-Lick-Triggers-Reward",
+    1000: "learn-Complete-Stopping",
+    
+    200: "2D-Arena: One-Pillar",
+    400: "2D-Arena: Four-Pillars",
+    
+    800: "1D-Track: slowing -> R1 or R2",
+    801: "1D-Track: lick -> R1 or R2",
+    1100: "1D-Track: stopping -> R1 and R2, then or",
+}

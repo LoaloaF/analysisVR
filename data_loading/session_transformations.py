@@ -93,81 +93,6 @@ def data_modality_us2s(data):
     data[us_columns] /= 1e6
     return data
 
-def metadata_complement_P0800(env_metadata):
-    n_pillar_types = len(env_metadata["pillar_details"])
-    pillars_posY = {}
-    for i in range(1, n_pillar_types):
-        pillar_pos = [val["y"] for val in env_metadata["pillars"].values() if val['id'] == i][0]
-        # transform excel coordinates to unity coordinates
-        pillars_posY[f"pillar{i}"] = env_metadata["envX_size"]/2 - pillar_pos
-    
-    # the most up-to-date version of the paradigm
-    if n_pillar_types == 17:
-        # gget the start and stop unity cooredinates for each region
-        zone_positions = {
-            # 'start_zone': (-169, pillars_posY["pillar5"]),
-            'start_zone': (pillars_posY["pillar5"]-40, pillars_posY["pillar5"]),
-            'cue1_visible': (pillars_posY["pillar5"], pillars_posY["pillar6"]),
-            'cue1': (pillars_posY["pillar6"], pillars_posY["pillar7"]),
-            'cue1_passed': (pillars_posY["pillar7"], pillars_posY["pillar8"]),
-            'between_cues': (pillars_posY["pillar8"], pillars_posY["pillar9"]),
-            'cue2_visible': (pillars_posY["pillar9"], pillars_posY["pillar10"]),
-            'cue2': (pillars_posY["pillar10"], pillars_posY["pillar11"]),
-            'cue2_passed': (pillars_posY["pillar11"], pillars_posY["pillar12"]),
-            'before_reward1': (pillars_posY["pillar12"], pillars_posY["pillar13"]),
-            'reward1': (pillars_posY["pillar13"], pillars_posY["pillar14"]),
-            'before_reward2': (pillars_posY["pillar14"], pillars_posY["pillar15"]),
-            'reward2': (pillars_posY["pillar15"], pillars_posY["pillar16"]),
-            'post_reward': (pillars_posY["pillar16"], env_metadata["envX_size"]/2),
-        }
-        
-    # initial version of paradigm
-    elif n_pillar_types == 11:
-        if env_metadata["envX_size"] == 480:
-            # early case when we start at 0 and cue at first position
-            start_pos = -env_metadata["envX_size"]/2
-        elif env_metadata["envX_size"] == 540:
-            # later case when we start at -169 and cue at second position
-            start_pos = -169
-        zone_positions = {
-            'start_zone': (start_pos, pillars_posY["pillar5"]),
-            'cue1_visible': (pillars_posY["pillar5"], pillars_posY["pillar5"]+40),
-            'cue1': (pillars_posY["pillar5"]+40, pillars_posY["pillar5"]+80),
-            'cue1_passed': (pillars_posY["pillar5"]+80, pillars_posY["pillar6"]),
-            'between_cues': (pillars_posY["pillar6"], pillars_posY["pillar7"]),
-            'cue2_visible': (pillars_posY["pillar7"], pillars_posY["pillar7"]+40),
-            'cue2': (pillars_posY["pillar7"]+40, pillars_posY["pillar7"]+80),
-            'cue2_passed': (pillars_posY["pillar7"]+80, pillars_posY["pillar8"]),
-            'before_reward1': (pillars_posY["pillar8"], pillars_posY["pillar8"]+40),
-            'reward1': (pillars_posY["pillar8"]+40, pillars_posY["pillar9"]),
-            'before_reward2': (pillars_posY["pillar9"], pillars_posY["pillar9"]+40),
-            'reward2': (pillars_posY["pillar9"]+40, pillars_posY["pillar10"]),
-            'post_reward': (pillars_posY["pillar10"], env_metadata["envX_size"]/2),
-        }
-    else:
-        raise ValueError(f"Unknown number of pillar types {n_pillar_types}, not 11 or 17")
-    
-    # these are the regions that have relevant pillar details (actual pillars)
-    special_zones_pillar_indices = {"cue1": '1', "cue2": '2', "reward1": '3', 
-                                    "reward2": '4'}
-    
-    P0800_pillar_details = {}
-    for zone in zone_positions.keys():
-        P0800_zone_details = {"start_pos": zone_positions[zone][0], 
-                              "end_pos": zone_positions[zone][1]}
-        if zone in special_zones_pillar_indices:
-            pillar_idx = special_zones_pillar_indices[zone]
-            P0800_zone_details["radius"] = env_metadata["pillar_details"][pillar_idx]["pillarRadius"]
-            P0800_zone_details["height"] = env_metadata["pillar_details"][pillar_idx]["pillarHeight"]
-            P0800_zone_details["z_pos"] = env_metadata["pillar_details"][pillar_idx]["pillarZposition"]
-            P0800_zone_details["texture"] = env_metadata["pillar_details"][pillar_idx]["pillarTexture"]
-            P0800_zone_details["transparency"] = env_metadata["pillar_details"][pillar_idx]["pillarTransparency"]
-            P0800_zone_details["reward_radius"] = env_metadata["pillar_details"][pillar_idx]["pillarRewardRadius"]
-            P0800_zone_details["show_ground"] = env_metadata["pillar_details"][pillar_idx]["pillarShowGround"]
-        P0800_pillar_details[zone] = P0800_zone_details
-    
-    return P0800_pillar_details
-
 def calc_timeintervals_around_lick(lickdata, interval):
     # check if data is in seconds or microseconds
     unit = 'us' if lickdata["event_pc_timestamp"].iloc[0] > 1e10 else "s"
@@ -225,7 +150,11 @@ def calc_staytimes(trials, frames, P0800_pillar_details):
                 
             # add the time of entry into the reward zone
             if zone == 'reward1' or zone == 'reward2':
-                staytimes[f"enter_{zone}"] = zone_frames["frame_pc_timestamp"].iloc[0]
+                if zone_frames.empty:
+                    staytimes[f"enter_{zone}"] = np.nan
+                    Logger().logger.warning(f"Trial {trial_id} has no frames in {zone}")
+                else:
+                    staytimes[f"enter_{zone}"] = zone_frames["frame_pc_timestamp"].iloc[0]
         return pd.Series(staytimes)
     result = frames.groupby("trial_id").apply(_calc_trial_staytimes).unstack().reset_index(drop=True)
     return result

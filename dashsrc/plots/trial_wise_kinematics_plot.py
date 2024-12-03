@@ -5,14 +5,8 @@ from plotly.subplots import make_subplots
 from .plot_constants import *
 from .plot_utils import make_discr_trial_cmap
 
-def render_plot(data, animal_id, session_id, trial_ids, trial_color, metric):
+def render_plot(data, n_trials, trial_color, metric):
     # Filter data based on the selected animal, session, and trial IDs
-    print(data)
-    n_trials = int(data.loc[(animal_id, session_id)].index.unique('trial_id').max())
-    data = data.loc[(animal_id, session_id, trial_ids)]
-    print(data)
-    # print(data)
-    # print(data.iloc[0]) 
     print("-----------------")
     
     if metric == 'Velocity':
@@ -36,9 +30,9 @@ def render_plot(data, animal_id, session_id, trial_ids, trial_color, metric):
     # Create the main plot with line grouping by trial_id and color based on trial_color
     fig_main = px.line(
         data, 
-        x='posbin_z_position', 
+        x='from_z_position_bin', 
         y=metric_col, 
-        line_group=data.index.get_level_values('trial_id'),
+        line_group="trial_id",
         color=color_col,
         color_discrete_map=cmap
     )
@@ -59,18 +53,14 @@ def render_plot(data, animal_id, session_id, trial_ids, trial_color, metric):
     for trace in fig_main['data']:
         fig.add_trace(trace, row=2, col=1)
         
-        # print("y ", data[metric_col].mean(), "x ", data.index.get_level_values('binned_pos').mid)
-        # print("y ", data[metric_col].mean(), "x ", data.index.get_level_values('binned_pos').mean())
-        
-        trace2 = go.Line(
-            y=data[metric_col],
-            x=data.index.get_level_values('binned_pos').mid,
-            mode='lines',
-            line=dict(color='black', width=2),
-            name='Average'
-            
+    trace2 = go.Line(
+        y=data.groupby('from_z_position_bin')[metric_col].mean(),
+        x=data["from_z_position_bin"],
+        mode='lines',
+        line=dict(color='black', width=2),
+        name='Average'
         )
-        fig.add_trace(trace2, row=2, col=1)
+    fig.add_trace(trace2, row=2, col=1)
     
     # Update layout for the top axis
     fig.update_xaxes(
@@ -92,7 +82,6 @@ def render_plot(data, animal_id, session_id, trial_ids, trial_color, metric):
     
     # Update layout for the main axis
     fig.update_layout(
-        title=f'Trial-wise Kinematics for Animal {animal_id}, Session {session_id}',
         xaxis_title='Position (Z)',
         yaxis_title=metric,
         font=dict(

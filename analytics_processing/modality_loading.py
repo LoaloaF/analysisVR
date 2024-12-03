@@ -7,7 +7,7 @@ import pandas as pd
 from CustomLogger import CustomLogger as Logger
 
 import analytics_processing.modality_transformations as mT
-import metadata_loading
+from analytics_processing import metadata_loading
 
 import analytics_processing.analytics_constants as C
 

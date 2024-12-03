@@ -5,8 +5,7 @@ import pandas as pd
 
 from .constants import *
 
-def render(app: Dash, data: pd.DataFrame) -> html.Div:
-    
+def render(app: Dash) -> html.Div:
     @app.callback(
         [(Output(f'{analysis}-container', 'style'), Output(f'{analysis}-button', 'active')) for i, analysis in enumerate(ROW1_ANALYSISS)],
         [Input(f'{analysis}-button', 'n_clicks') for analysis in ROW1_ANALYSISS]
@@ -20,22 +19,7 @@ def render(app: Dash, data: pd.DataFrame) -> html.Div:
                 outputs.append(({'display': 'none'}, False))
         return outputs
     
-    return dbc.Col([
-        # header 
-        html.H5("Select Analysis to Display", style={"marginTop": 20}),
-        
-        # first group of buttons 
-        dbc.ButtonGroup([
+    return dbc.ButtonGroup([
             dbc.Button(analysis_name, id=analysis_name+'-button', color="primary", outline=True) 
             for analysis_name in ROW1_ANALYSISS
-        ], vertical=False, style={"marginTop": "10px", "marginBottom": "5px"}),
-        
-        # for later, add rows of buttons
-        dbc.ButtonGroup([
-            dbc.Button(analysis_name, id=analysis_name+'-button', color="primary", outline=True) 
-            for analysis_name in ROW2_ANALYSISS
-        ], vertical=False, style={"marginTop": "5px", "marginBottom": "10px"}),
-    ], width=6)
-    
-    
-
+        ], vertical=False, style={"marginTop": "10px", "marginBottom": "5px"})

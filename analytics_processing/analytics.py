@@ -14,8 +14,9 @@ import analytics_processing.analytics_constants as C
 from CustomLogger import CustomLogger as Logger
 from analytics_processing.modality_loading import get_complemented_session_modality
 from analysis_utils import device_paths
+from analytics_processing.agg_modalities2analytic import transform_to_position_bin_index
 
-from analytics_processing.merge_and_agg_modalities import transform_to_position_bin_index
+import analytics_processing.agg_modalities2analytic as m2a
 
 def _parse_paradigms_from_nas(nas_dir):
     # get list of something like "RUN_rYL001", in nas bas dir
@@ -344,7 +345,7 @@ if __name__ == "__main__":
     argParser.add_argument("--recompute", action="store_true", default=False)
     argParser.add_argument("--from_date", default=None)
     argParser.add_argument("--to_date", default=None)
-    argParser.add_argument("--logging_level", default="DEBUG")
+    argParser.add_argument("--logging_level", default="INFO")
     argParser.add_argument("--nas_dir", default=None)
     kwargs = vars(argParser.parse_args())
     
@@ -355,8 +356,9 @@ if __name__ == "__main__":
     L.spacer()
     
     # get_analytics(**kwargs)
-    # d = get_analytics("unity_framewise", mode="recompute", animal_ids=[1], 
-    #                   paradigm_ids=[800])
-    d = get_analytics("behavior_event", mode="compute", animal_ids=[1], 
+    d = get_analytics("unity_framewise", mode="set", animal_ids=[1], 
                       paradigm_ids=[800])
+    # d = get_analytics("behavior_event", mode="compute", animal_ids=[1], 
+    #                   paradigm_ids=[800])
     print(d)
+    print(d.columns)

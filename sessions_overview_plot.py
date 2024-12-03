@@ -17,7 +17,7 @@ def get_all_sessions_metadata(excl_paradigms=[]):
         session_parsing_kwargs={"dict2pandas":True}
         modality_parsing_kwargs={"columns": ['start_time', 'duration']}
 
-        data = get_paradigm_modality(paradigm_id=p, modality='metadata', cache='from', 
+        data = get_paradigm_modality(paradigm_id=p, modality='metadata', cache='', 
                                     animal_parsing_kwargs=animal_parsing_kwargs,
                                     session_parsing_kwargs=session_parsing_kwargs,
                                     modality_parsing_kwargs=modality_parsing_kwargs,

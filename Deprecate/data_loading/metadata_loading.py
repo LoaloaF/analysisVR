@@ -152,6 +152,12 @@ def extract_metadata(metadata, session_name):
         metadata_parsed.update({'log_file_content': {
             "log_file_content": nested_metadata.get("log_files"),
         }})
+        
+    # add keys that are still in metadata but not in metadata_parsed
+    metadata_parsed['GAP'] = None
+    for key in metadata.keys():
+        if key not in metadata_parsed:
+            metadata_parsed[key] = metadata[key].item()
 
     return metadata_parsed
 

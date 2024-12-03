@@ -62,6 +62,7 @@ def get_paradigm_modality(paradigm_id, modality, cache=None,
             if animal_data is not None:
                 animal_data = pd.concat({paradigm_id: animal_data}, names=["paradigm_id"])
                 paradigm_modality_data.append(animal_data)
+                L.spacer()
 
         if paradigm_modality_data:
             paradigm_modality_data = pd.concat(paradigm_modality_data, axis=0)

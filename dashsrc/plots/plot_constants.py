@@ -24,6 +24,13 @@ CUE_COL_MAP = {
     2: convert_colors_to_same_type('#bc00e9')[0][0],
 }
 
+FLAT_GRAY_COL_MAP = { # cue column is used as dummy column
+    0: convert_colors_to_same_type('#888888')[0][0], # unexpcted/ error
+    1: convert_colors_to_same_type('#888888')[0][0],
+    2: convert_colors_to_same_type('#888888')[0][0],
+}
+    
+
 TRIAL_COL_MAP = px.colors.sequential.Viridis
 
 MULTI_TRACES_ALPHA = .3

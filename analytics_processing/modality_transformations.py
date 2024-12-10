@@ -46,6 +46,15 @@ def data_modality_rename2oldkeys(data, key):
         }
         data['N'] = "U" # add back the name "U", indicating Unity frame
         
+    elif key == 'paradigm_variable':
+        rename_dict = {
+            'trial_id': 'ID',
+            'cue': 'C',
+            'maximum_reward_number': 'MRN',
+            'stay_time': 'ST',
+            'lick_reward': 'LR',
+        }
+        
     elif key == "unity_trial":
         rename_dict = {
             "trial_id": "ID", 

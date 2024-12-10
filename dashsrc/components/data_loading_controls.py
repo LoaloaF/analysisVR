@@ -44,5 +44,5 @@ def _load_all_data(selected_modalities, data):
     for analytic in selected_modalities:
         print(f"Loading {analytic}...", end=" ")
         data[analytic] = analytics.get_analytics(analytic, mode='set', 
-                                                 animal_ids=[1], paradigm_ids=[800])
+                                                 animal_ids=[9,], session_ids=None, paradigm_ids=[1100])
         print("Done.")

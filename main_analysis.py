@@ -13,7 +13,7 @@ sys.path.append(os.path.join(os.path.dirname(__file__), 'pipelines'))
 def main():
     analysis_core.init_analysis("DEBUG")
 
-    global_data = {"unity_trackwise": None, "unity_framewise": None}
+    global_data = {"UnityTrackwise": None, "UnityFramewise": None}
     
     # Initialize app
     app = dash.Dash(__name__, external_stylesheets=[dbc.themes.BOOTSTRAP])

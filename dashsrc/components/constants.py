@@ -2,7 +2,8 @@
 # MODALITIES = 'unity_trial', 'unity_frame', 'event', 'ballvelocity'
 # ANIMALS = 1, 2, 3, 8
 
-ROW1_ANALYSISS = ('Velocity-Heatmap', 'Trial-Wise-Kinematics', 'Sucessrate',  'Trial-Wise-Staytimes')
+SESSION_WISE_VISS = ('Velocity-Heatmap', 'Trial-Wise-Kinematics', 'Sucessrate',  'Trial-Wise-Staytimes')
+MULTISESSION_VISS = {'Kinematics', 'Session-Wise-Staytimes', 'Session-Wise-PCA', 'Session-Wise-Clustering', 'Session-Wise-PCA-Clustering'}
 # ROW2_ANALYSISS = ('Trial-Metrics-Corr', "Trial-Metrics-PCA", "Trial-Metrics-Clustering", "Trial-Metrics-PCA-Clustering")
 
 # html ids

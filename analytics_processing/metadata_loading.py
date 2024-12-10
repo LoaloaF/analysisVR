@@ -1,5 +1,7 @@
 import json
 import os
+import ast
+
 from CustomLogger import CustomLogger as Logger
 
 from analysis_core import PROJECT_DIR
@@ -152,6 +154,10 @@ def extract_metadata(metadata, session_name):
         metadata_parsed.update({'log_file_content': {
             "log_file_content": nested_metadata.get("log_files"),
         }})
+    
+    if metadata_parsed['paradigm_id'] in (800, 1100): 
+        track_details = env_metadata2track_details(metadata_parsed['env_metadata'])
+        metadata_parsed['track_details'] = json.dumps(track_details, indent='  ')
         
     # add keys that are still in metadata but not in metadata_parsed, to see if something interesting is missing
     metadata_parsed['GAP'] = None

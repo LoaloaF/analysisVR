@@ -1,4 +1,5 @@
 from datetime import datetime
+import json
 import sys
 import os
 import argparse
@@ -12,11 +13,12 @@ import numpy as np
 import analytics_processing.analytics_constants as C
 
 from CustomLogger import CustomLogger as Logger
-from analytics_processing.modality_loading import get_complemented_session_modality
+# from analytics_processing.modality_loading import get_complemented_session_modality
 from analysis_utils import device_paths
-from analytics_processing.agg_modalities2analytic import transform_to_position_bin_index
+# from analytics_processing.agg_modalities2analytic import transform_to_position_bin_index
 
 import analytics_processing.agg_modalities2analytic as m2a
+import analytics_processing.integr_analytics as integr_analytics
 
 def _parse_paradigms_from_nas(nas_dir):
     # get list of something like "RUN_rYL001", in nas bas dir
@@ -96,42 +98,77 @@ def _get_analytics_fname(session_dir, analysis_name):
     fullfname = os.path.join(full_path, analysis_name+".parquet")
     return fullfname
 
-def _compute_analytic(analytic, session_fullfname):
-    if analytic == "metadata":
-        data = get_complemented_session_modality(session_fullfname, "metadata", dict2pandas=True)
+# def _compute_analytic(analytic, session_fullfname):
+#     if analytic == "metadata":
+#         data = get_complemented_session_modality(session_fullfname, "metadata", dict2pandas=True)
         
-    if analytic == "behavior_event":
-        data = get_complemented_session_modality(session_fullfname, "event",
-                                                 complement_data=True)
-        print(data)
-        exit()
-        data = data.reindex(columns=C.BEHAVIOR_EVENT_TABLE.keys())
-        data = data.astype(C.BEHAVIOR_EVENT_TABLE)
+#     if analytic == "behavior_event":
+#         data = get_complemented_session_modality(session_fullfname, "event",
+#                                                  complement_data=True)
+#         print(data)
+#         exit()
+#         data = data.reindex(columns=C.BEHAVIOR_EVENT_TABLE.keys())
+#         data = data.astype(C.BEHAVIOR_EVENT_TABLE)
     
-    elif analytic == "unity_framewise":
-        data = get_complemented_session_modality(session_fullfname, "unity_frame",
-                                    position_bin_index=True, complement_data=True)
-        data = data.reindex(columns=C.UNITY_FAMEWISE_TABLE.keys())
-        data = data.astype(C.UNITY_FAMEWISE_TABLE)
+#     elif analytic == "unity_framewise":
+#         data = get_complemented_session_modality(session_fullfname, "unity_frame",
+#                                     position_bin_index=True, complement_data=True)
+#         data = data.reindex(columns=C.UNITY_FAMEWISE_TABLE.keys())
+#         data = data.astype(C.UNITY_FAMEWISE_TABLE)
     
-    elif analytic == "unity_trialwise":
-        data = get_complemented_session_modality(session_fullfname, "unity_trial",
-                                    position_bin_index=True, complement_data=True)
-        # TODO doesn't convert poroperly NaN
-        # data = data.reindex(columns=C.UNITY_TRIALWISE_TABLE.keys())
-        # data = data.astype(C.UNITY_TRIALWISE_TABLE)
+#     elif analytic == "unity_trialwise":
+#         data = get_complemented_session_modality(session_fullfname, "unity_trial",
+#                                     position_bin_index=True, complement_data=True)
+#         # TODO doesn't convert poroperly NaN
+#         # data = data.reindex(columns=C.UNITY_TRIALWISE_TABLE.keys())
+#         # data = data.astype(C.UNITY_TRIALWISE_TABLE)
 
-    elif analytic == "unity_trackwise":
-        # data = get_analytic(os.path.dirname(session_fullfname), "unity_framewise")
-        data = get_analytics(analytic="unity_framewise", sessionlist_fullfnames=[session_fullfname])
-        data.reset_index(inplace=True, drop=True)
-        data = transform_to_position_bin_index(data)
-        data = data.reindex(columns=C.UNITY_TRACKWISE_TABLE.keys())
-        data = data.astype(C.UNITY_TRACKWISE_TABLE)
+#     elif analytic == "unity_trackwise":
+#         # data = get_analytic(os.path.dirname(session_fullfname), "unity_framewise")
+#         data = get_analytics(analytic="unity_framewise", sessionlist_fullfnames=[session_fullfname])
+#         data.reset_index(inplace=True, drop=True)
+#         data = transform_to_position_bin_index(data)
+#         data = data.reindex(columns=C.UNITY_TRACKWISE_TABLE.keys())
+#         data = data.astype(C.UNITY_TRACKWISE_TABLE)
+#     return data
+
+def _compute_analytic(analytic, session_fullfname):
+    print(f"Computing {analytic} for {os.path.basename(session_fullfname)}")
+    if analytic == "SessionMetadata":
+        data = m2a.get_SesssionMetadata(session_fullfname)
+        data_table = C.SESSION_METADATA_TABLE
+    
+    elif analytic == "BehaviorEvents":
+        data = m2a.get_BehaviorEvents(session_fullfname)
+        data_table = C.BEHAVIOR_EVENT_TABLE
+        
+    elif analytic == "UnityFramewise":
+        data = m2a.get_UnityFramewise(session_fullfname)
+        # TODO
+        behavior_event_data = m2a.get_BehaviorEvents(session_fullfname)
+        data = integr_analytics.merge_behavior_events_with_frames(data, behavior_event_data)
+        data_table = C.UNITY_FAMEWISE_TABLE
+        
+    elif analytic == "UnityTrackwise":
+        unity_framewise = get_analytics(analytic="UnityFramewise", 
+                                        sessionlist_fullfnames=[session_fullfname])
+        data = integr_analytics.get_UnityTrackwise(unity_framewise)
+        print(data)
+        data_table = C.UNITY_TRACKWISE_TABLE
+    
+    elif analytic == "UnityTrialwiseMetrics":
+        unity_framewise = get_analytics(analytic="UnityFramewise", 
+                                        sessionlist_fullfnames=[session_fullfname])
+        data = integr_analytics.get_UnityTrialwiseMetrics(unity_framewise)
+        data_table = C.UNITY_TRIALWISE_METRICS_TABLE
+    
+    data = data.reindex(columns=data_table.keys())
+    data = data.astype(data_table)        
     return data
 
 def _extract_id_from_sessionname(session_name):
-    _, _, anim_name, parad_name, _, _ = session_name.split("_")
+    session_name_split = session_name.split("_")
+    anim_name, parad_name = session_name_split[2], session_name_split[3]
     return int(anim_name[-3:]), int(parad_name[1:]), 0
 
 def get_analytics(analytic, mode="set", paradigm_ids=None, animal_ids=None, 
@@ -173,6 +210,13 @@ def get_analytics(analytic, mode="set", paradigm_ids=None, animal_ids=None,
             print(analytics_fname)
             if os.path.exists(analytics_fname):
                 aggr.append(identif)
+        
+        elif mode == 'clear':
+            if os.path.exists(analytics_fname):
+                os.remove(analytics_fname)
+                # print("del: ", analytics_fname)
+            else:
+                print(f"File {analytics_fname} does not exist, skipping.")
         
         else:
             raise ValueError(f"Unknown mode {mode}")
@@ -356,9 +400,9 @@ if __name__ == "__main__":
     L.spacer()
     
     # get_analytics(**kwargs)
-    d = get_analytics("unity_framewise", mode="set", animal_ids=[1], 
-                      paradigm_ids=[800])
-    # d = get_analytics("behavior_event", mode="compute", animal_ids=[1], 
+    # d = get_analytics("SessionMetadata", mode="recompute", animal_ids=[1], 
     #                   paradigm_ids=[800])
-    print(d)
-    print(d.columns)
+    d = get_analytics("UnityFramewise", mode="compute", animal_ids=[6], 
+                      paradigm_ids=[1100])
+    d = get_analytics("UnityTrackwise", mode="compute", animal_ids=[6], 
+                      paradigm_ids=[1100])

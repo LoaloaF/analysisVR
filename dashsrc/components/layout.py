@@ -19,7 +19,7 @@ def create_sessionwise_vis_containers(app: Dash, global_data: dict):
                 analysis_div = trial_wise_kinematics.render(app, global_data, vis_name=vis_name)
             case _:
                 analysis_div = html.Div([html.H5(vis_name)], id=f'{vis_name}-container', 
-                                        style={'display': True, 'backgroundColor': 'gray'})
+                                        style={'display': 'none', 'backgroundColor': 'gray'})
                 
         viss_row_container.append(analysis_div)
     return html.Div(viss_row_container, id='vis_name-container')
@@ -46,10 +46,10 @@ def create_layout(app: Dash, global_data: dict) -> html.Div:
             ], width=2),
             dbc.Col([
                 session_wise_vis_buttons.render(app),
-            ], width=7),
+            ], width=5),
             dbc.Col([
                 data_loading_controls.render(app, global_data)
-            ], width=3),
+            ], width=5),
         ], align="center"),
         html.Hr(style={"borderTop": "2px solid #bbb", "marginBottom": "20px"}),
         create_sessionwise_vis_containers(app, global_data),

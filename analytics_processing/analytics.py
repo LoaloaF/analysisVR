@@ -156,10 +156,12 @@ def _compute_analytic(analytic, session_fullfname):
         data_table = C.UNITY_TRACKWISE_TABLE
     
     elif analytic == "UnityTrialwiseMetrics":
-        unity_framewise = get_analytics(analytic="UnityFramewise", 
-                                        sessionlist_fullfnames=[session_fullfname])
-        data = integr_analytics.get_UnityTrialwiseMetrics(unity_framewise)
-        data_table = C.UNITY_TRIALWISE_METRICS_TABLE
+        data = m2a.get_UnityTrialwiseMetrics(session_fullfname)
+        exit()
+        # unity_framewise = get_analytics(analytic="UnityFramewise", 
+        #                                 sessionlist_fullfnames=[session_fullfname])
+        # data = integr_analytics.get_UnityTrialwiseMetrics(unity_framewise)
+        # data_table = C.UNITY_TRIALWISE_METRICS_TABLE
     
     data = data.reindex(columns=data_table.keys())
     data = data.astype(data_table)        
@@ -388,7 +390,7 @@ if __name__ == "__main__":
     argParser.add_argument("--recompute", action="store_true", default=False)
     argParser.add_argument("--from_date", default=None)
     argParser.add_argument("--to_date", default=None)
-    argParser.add_argument("--logging_level", default="DEBUG")
+    argParser.add_argument("--logging_level", default="INFO")
     argParser.add_argument("--nas_dir", default=None)
     kwargs = vars(argParser.parse_args())
     
@@ -401,7 +403,7 @@ if __name__ == "__main__":
     # get_analytics(**kwargs)
     # d = get_analytics("SessionMetadata", mode="recompute", animal_ids=[1], 
     #                   paradigm_ids=[800])
-    d = get_analytics("UnityFramewise", mode="recompute", animal_ids=[1], 
-                      paradigm_ids=[800], session_ids=[0])
-    # d = get_analytics("UnityTrackwise", mode="recompute", animal_ids=[6], 
-    #                   paradigm_ids=[1100], session_ids=None)
+    d = get_analytics("UnityTrackwise", mode="recompute", animal_ids=[6], 
+                      paradigm_ids=[1100], session_ids=None, )#from_date='2024-12-01')
+    # d = get_analytics("UnityTrialwiseMetrics", mode="recompute", animal_ids=[1], 
+    #                   paradigm_ids=[800], session_ids=None)

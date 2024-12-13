@@ -42,48 +42,35 @@ def transform_to_position_bin_index(data):
         data = data.convert_dtypes()
         # what identifies this is an interpolated observation, 0 frames in bin
         data.loc[:, "nframes_in_bin"] = data.loc[:, "nframes_in_bin"].fillna(0)
+        
         # fill the index columns
         data['from_z_position_bin'] = from_z_position_bin
         data['to_z_position_bin'] = to_z_position_bin
-        # Interpolate numeric columns, kinematics and timestamps
-        numeric_cols = [
-            "posbin_z_position", "posbin_z_velocity", "posbin_z_acceleration",
-            "posbin_to_pc_timestamp", "posbin_from_pc_timestamp",
-            "posbin_from_ephys_timestamp", "posbin_to_ephys_timestamp",
-        ]
+
+        # Interpolate numeric columns, kinematics 
+        kinematic_cols = ["posbin_z_position", "posbin_z_velocity", "posbin_z_acceleration",]
+        data.loc[:,kinematic_cols] = data.loc[:,kinematic_cols].interpolate(method='linear', 
+                                                                            limit_direction='both')
+        # and timestamps
+        time_cols = ["posbin_to_pc_timestamp", "posbin_from_pc_timestamp",
+            "posbin_from_ephys_timestamp", "posbin_to_ephys_timestamp"]
+        for col in time_cols:
+            if not data.loc[:, col].isna().all():
+                # integers may be cast to string if not converted to datetime
+                dt_time = pd.to_datetime(data.loc[:,col], unit='us')
+                data.loc[:,col] = dt_time.interpolate(method='linear', 
+                                                      limit_direction='both').astype('int64')
         
-        # from_z_position_bin issue
-
-        for col in numeric_cols:
-            if col in data.columns:
-                if data[col].isna().all():
-                    continue
-                if col_dtype := data[col].dtype == pd.Int64Dtype():
-                    # interploation of integers causes problems, case, then cast back
-                    data.loc[:,col] = data.loc[:,col].astype(pd.Float32Dtype())
-                data.loc[:,col] = data.loc[:,col].interpolate(method='linear', 
-                                                              limit_direction='both')
-                if col_dtype:
-                    data.loc[:,col] = data.loc[:,col].astype(pd.Int64Dtype())
-
         const_cols = [
             # these columns are constant within a trial
             "maximum_reward_number", "stay_time", "cue", "lick_reward", "trial_id",
             "trial_start_frame", "trial_start_pc_timestamp", "trial_end_frame",
             "trial_end_pc_timestamp", "trial_pc_duration", "trial_outcome",
             "trial_start_ephys_timestamp", "trial_end_ephys_timestamp",
-            # these columns change slowly and can be forward filled
+            # these columns change slowly and can be forward filled (although not 100% to be trusted)
             "zone", "posbin_state",  
         ]
-        # truely NaN columns, leave them as NaN
-        true_na_cols = "posbin_to_frame_id", "posbin_from_frame_id"
-        
-        for col in data.columns:
-            if (col not in numeric_cols) and (col not in true_na_cols) and \
-                col not in data.index.names and col != "nframes_in_bin":
-                if col not in const_cols:
-                    Logger().logger.warning(f"Column {col} not expected to be interpolated, valid?")
-                data.loc[:,col] = data.loc[:,col].ffill().bfill()
+        data.loc[:,const_cols] = data.loc[:,const_cols].ffill().bfill()
         return data
         
     def proc_trial_data(trial_data):

@@ -155,16 +155,16 @@ def unity_modality_track_spatial_bins(frames):
                                             na_action='ignore')
     return from_z_position, to_z_position
 
-def unity_modality_track_zones(frames, P0800_pillar_details):
+def unity_modality_track_zones(frames, track_details):
     # Extract start and end positions from the dictionary
-    intervals = [(details['start_pos'], details['end_pos']) for details in P0800_pillar_details.values()]
+    intervals = [(details['start_pos'], details['end_pos']) for details in track_details.values()]
 
     # Create an IntervalIndex from the list of tuples
     interval_index = pd.IntervalIndex.from_tuples(intervals, closed='left')
     binned_pos = pd.cut(frames['frame_z_position'], bins=interval_index)
     # Map the intervals to their corresponding zone names
     interval_to_zone = {interval: zone for interval, zone in zip(interval_index, 
-                                                                 P0800_pillar_details.keys())}
+                                                                 track_details.keys())}
     return binned_pos.map(interval_to_zone)
 
 def unity_modality_track_kinematics(frames):
@@ -274,14 +274,14 @@ def transform_to_position_bin_index(data):
 
 
 # trial complementation using frames 
-def calc_staytimes(trials, frames, P0800_pillar_details):
+def calc_staytimes(trials, frames, track_details):
     def _calc_trial_staytimes(trial_frames):
         trial_id = trial_frames["trial_id"].iloc[0]
         if trial_id == -1:
             return pd.Series(dtype='int64')
 
         staytimes = {}
-        for zone, zone_details in P0800_pillar_details.items():
+        for zone, zone_details in track_details.items():
             zone_frames = trial_frames.loc[(trial_frames["frame_z_position"] >= zone_details["start_pos"]) & 
                                            (trial_frames["frame_z_position"] < zone_details["end_pos"])]
             if zone_frames.empty:

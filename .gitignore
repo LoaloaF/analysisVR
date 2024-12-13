@@ -4,5 +4,7 @@ ephys/impedance*
 
 __pycache__/
 *.pyc
-.DS_Store
+*/.DS_Store
 *.log
+
+outputs/

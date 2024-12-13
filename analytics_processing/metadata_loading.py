@@ -245,22 +245,21 @@ def env_metadata2track_details(env_metadata):
     special_zones_pillar_indices = {"cue1": '1', "cue2": '2', "reward1": '3', 
                                     "reward2": '4'}
     
-    P0800_pillar_details = {}
+    track_details = {}
     for zone in zone_positions.keys():
-        P0800_zone_details = {"start_pos": zone_positions[zone][0], 
+        track_zone_details = {"start_pos": zone_positions[zone][0], 
                               "end_pos": zone_positions[zone][1]}
         if zone in special_zones_pillar_indices:
             pillar_idx = special_zones_pillar_indices[zone]
-            P0800_zone_details["radius"] = env_metadata["pillar_details"][pillar_idx]["pillarRadius"]
-            P0800_zone_details["height"] = env_metadata["pillar_details"][pillar_idx]["pillarHeight"]
-            P0800_zone_details["z_pos"] = env_metadata["pillar_details"][pillar_idx]["pillarZposition"]
-            P0800_zone_details["texture"] = env_metadata["pillar_details"][pillar_idx]["pillarTexture"]
-            P0800_zone_details["transparency"] = env_metadata["pillar_details"][pillar_idx]["pillarTransparency"]
-            P0800_zone_details["reward_radius"] = env_metadata["pillar_details"][pillar_idx]["pillarRewardRadius"]
-            P0800_zone_details["show_ground"] = env_metadata["pillar_details"][pillar_idx]["pillarShowGround"]
-        P0800_pillar_details[zone] = P0800_zone_details
-    
-    return P0800_pillar_details
+            track_zone_details["radius"] = env_metadata["pillar_details"][pillar_idx]["pillarRadius"]
+            track_zone_details["height"] = env_metadata["pillar_details"][pillar_idx]["pillarHeight"]
+            track_zone_details["z_pos"] = env_metadata["pillar_details"][pillar_idx]["pillarZposition"]
+            track_zone_details["texture"] = env_metadata["pillar_details"][pillar_idx]["pillarTexture"]
+            track_zone_details["transparency"] = env_metadata["pillar_details"][pillar_idx]["pillarTransparency"]
+            track_zone_details["reward_radius"] = env_metadata["pillar_details"][pillar_idx]["pillarRewardRadius"]
+            track_zone_details["show_ground"] = env_metadata["pillar_details"][pillar_idx]["pillarShowGround"]
+        track_details[zone] = track_zone_details
+    return track_details
 
 
 def _get_default_P0800_env_metadata():

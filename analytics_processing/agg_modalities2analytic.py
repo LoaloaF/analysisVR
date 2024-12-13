@@ -55,3 +55,28 @@ def get_UnityFramewise(session_fullfname):
         vel, acc = mT.unity_modality_track_kinematics(framedata)
         framedata = pd.concat([framedata, vel, acc], axis=1)
     return framedata
+
+# TODO: should move from agg_modalities2analytic to integr_analytics, using unity_FrameWise
+# right now, this reproduces what we had before, future should include kinematics
+# calculations in UNityFrameWise, and could also not use metadata, and instead 
+# do groupby on zone column in UnityFrameWise
+def get_UnityTrialwiseMetrics(session_fullfname):
+    # merge trial data with trial variables (cue, required staytime etc)
+    trialdata = session_modality_from_nas(session_fullfname, "unity_trial")
+    trials_variable = session_modality_from_nas(session_fullfname, "paradigm_variable")
+    trialdata = pd.merge(trialdata, trials_variable, on='trial_id', how='left')
+    
+    # for track paradigms, calculate staytimes and other kinematic metrics 
+    # in relevant zones using unity frames
+    metad = session_modality_from_nas(session_fullfname, "metadata")
+    if metad['paradigm_id'] in (800, 1100):
+        track_details = json.loads(metad['track_details'])
+        cols = ('trial_id', "frame_z_position", 'frame_pc_timestamp')
+        unity_frames = session_modality_from_nas(session_fullfname, "unity_frame",
+                                                columns=cols)
+        staytimes = mT.calc_staytimes(trialdata, unity_frames, track_details)
+        print(staytimes)
+        trialdata = pd.concat([trialdata, staytimes], axis=1)
+    print(trialdata)
+    
+    return trialdata

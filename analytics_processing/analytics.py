@@ -144,9 +144,9 @@ def _compute_analytic(analytic, session_fullfname):
         
     elif analytic == "UnityFramewise":
         data = m2a.get_UnityFramewise(session_fullfname)
-        # TODO
         behavior_event_data = m2a.get_BehaviorEvents(session_fullfname)
         data = integr_analytics.merge_behavior_events_with_frames(data, behavior_event_data)
+        # TODO: Add pose to merge
         data_table = C.UNITY_FAMEWISE_TABLE
         
     elif analytic == "UnityTrackwise":
@@ -390,7 +390,7 @@ if __name__ == "__main__":
     argParser.add_argument("--recompute", action="store_true", default=False)
     argParser.add_argument("--from_date", default=None)
     argParser.add_argument("--to_date", default=None)
-    argParser.add_argument("--logging_level", default="INFO")
+    argParser.add_argument("--logging_level", default="DEBUG")
     argParser.add_argument("--nas_dir", default=None)
     kwargs = vars(argParser.parse_args())
     

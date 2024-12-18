@@ -26,21 +26,38 @@ def merge_behavior_events_with_frames(unity_framewise, behavior_events):
     
     # get the unique event types
     event_types = behavior_events["event_name"].unique()
+    event_batch = 15000
     
     for each_event in event_types:
         certain_event = behavior_events[behavior_events["event_name"] == each_event]
+        
         frame_timestamps = unity_framewise[frame_time_col].values
-        event_timestamps = certain_event[behavior_time_col].values
+        # event_timestamps = certain_event[behavior_time_col].values
 
-        # get the closest frame to each event
-        abs_diff_event = np.abs(frame_timestamps[:, np.newaxis] - event_timestamps)
-        closest_unity_indices = np.argmin(abs_diff_event, axis=0)
-        counts = np.bincount(closest_unity_indices)
+        # # get the closest frame to each event
+        # abs_diff_event = np.abs(frame_timestamps[:, np.newaxis] - event_timestamps)
+        # closest_unity_indices = np.argmin(abs_diff_event, axis=0)
+        # counts = np.bincount(closest_unity_indices)
 
+        # unity_framewise[f'{each_event}_count'] = 0
+        # for index, count in enumerate(counts):
+        #     if index < len(unity_framewise):
+        #         unity_framewise.at[index, f'{each_event}_count'] = count
         unity_framewise[f'{each_event}_count'] = 0
-        for index, count in enumerate(counts):
-            if index < len(unity_framewise):
-                unity_framewise.at[index, f'{each_event}_count'] = count
+
+        # Process in batches
+        for start in range(0, len(certain_event), event_batch):
+            end = start + event_batch
+            event_timestamps = certain_event[behavior_time_col].values[start:end]
+
+            # get the closest frame to each event
+            abs_diff_event = np.abs(frame_timestamps[:, np.newaxis] - event_timestamps)
+            closest_unity_indices = np.argmin(abs_diff_event, axis=0)
+            counts = np.bincount(closest_unity_indices, minlength=len(frame_timestamps))
+
+            for index, count in enumerate(counts):
+                if index < len(unity_framewise):
+                    unity_framewise.at[index, f'{each_event}_count'] += count
 
     return unity_framewise
 

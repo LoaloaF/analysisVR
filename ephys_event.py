@@ -68,21 +68,40 @@ def plot_event_ephys(event_type, behavior_event, clusters, spikeTimes, time_wind
     normalized_spike_count_array = np.mean(spike_count_array, axis=0)
     
     
+    # spontaneous firing rate
+    spontaneous_spike_count_array = normalized_spike_count_array[:, :41] # use the first 12 bins for spontaneous firing rate
+    # TODO make the time window for spontaneous firing rate a parameter
+    
+    # normalization across rows(neurons)
+    row_means = np.mean(spontaneous_spike_count_array, axis=1)
+    print("Mean across rows:", row_means)
+
+    # Calculate the standard deviation across each row (axis=1)
+    row_stds = np.std(spontaneous_spike_count_array, axis=1)
+    print("Standard deviation across rows:", row_stds)
+
+    # Z-score normalization: (array - row_mean) / row_std
+    z_score_rows = (normalized_spike_count_array - row_means[:, np.newaxis]) / row_stds[:, np.newaxis]
+    print("\nZ-score across rows:\n", np.shape(z_score_rows))
+    
+    
     # Remove the last bin edge to get the bin centers
     time_bin_centers = (time_bins[:-1] + time_bins[1:]) / 2
 
     # Create the raster plot
     plt.figure(figsize=(10, 6))
-    plt.imshow(normalized_spike_count_array, aspect='auto', 
+    plt.imshow(z_score_rows, aspect='auto', 
             extent=[time_bin_centers[0], time_bin_centers[-1], 0, 
-                    normalized_spike_count_array.shape[0]], cmap='viridis')
+                    z_score_rows.shape[0]], cmap='viridis')
     plt.colorbar(label='Spike Count')
     plt.xlabel('Time (s)')
     plt.ylabel('Cluster')
     if event_type == "S":
         plt.title('Raster Plot of Normalized Spike Counts for Sound')
+        
     elif event_type == "R":
         plt.title('Raster Plot of Normalized Spike Counts for Reward')
+        plt.savefig('reward_response_ungrouped.png')
     elif event_type == "V":
         plt.title('Raster Plot of Normalized Spike Counts for Vacuum')
     # plt.title('Raster Plot of Normalized Spike Counts')
@@ -90,7 +109,7 @@ def plot_event_ephys(event_type, behavior_event, clusters, spikeTimes, time_wind
     
 
     
-    return normalized_spike_count_array
+    return z_score_rows
 
 
 
@@ -112,8 +131,11 @@ print("Cluster size:", len(clusters))
 
 # lick_raster = plot_event_ephys("L", behavior_event, clusters, time_window=0.5)
 
-sound_raster = plot_event_ephys("S", behavior_event, clusters, spikeTimes, time_window=1)
+sound_raster = plot_event_ephys("S", behavior_event, clusters, spikeTimes, time_window=2)
 
-reward_raster = plot_event_ephys("R", behavior_event, clusters, spikeTimes, time_window=1)
+reward_raster = plot_event_ephys("R", behavior_event, clusters, spikeTimes, time_window=2)
+
+# Save the Z-score array into a MATLAB-compatible .mat file
+scipy.io.savemat('z_score_array.mat', {'z_score': reward_raster})
 
 vacuum_raster = plot_event_ephys("V", behavior_event, clusters, spikeTimes, time_window=0.5)

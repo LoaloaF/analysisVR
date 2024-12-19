@@ -26,7 +26,7 @@ def pca_on_clusters(clusters):
 
     return np.argsort(-np.abs(pca.components_[0]))
 
-def plot_event_ephys(event_type, behavior_event, clusters, time_window):
+def plot_event_ephys(event_type, behavior_event, clusters, spikeTimes, time_window):
     df_event = behavior_event[behavior_event["event_name"] == f"{event_type}"]
     df_event.reset_index(drop=True, inplace=True)
     # if event_type == "L":
@@ -50,9 +50,12 @@ def plot_event_ephys(event_type, behavior_event, clusters, time_window):
         event_time = event["event_ephys_timestamp"]
         
         # Iterate over each cluster
-        for cluster_idx, cluster in enumerate(clusters):            
+        for cluster_idx, cluster in enumerate(clusters):     
+                   
             # Convert spike times to seconds
-            spike_times = cluster[0] * 50 / 1e6  
+            cluster = np.array(cluster).astype(int)
+            # print("Cluster:", cluster)
+            spike_times = spikeTimes[cluster] * 50 / 1e6  #/20kHz sampling rate
             
             # Count spikes in each time bin
             for bin_idx in range(time_bin_num):
@@ -64,7 +67,6 @@ def plot_event_ephys(event_type, behavior_event, clusters, time_window):
 
     normalized_spike_count_array = np.mean(spike_count_array, axis=0)
     
-    # sorted_cluster_indices = pca_on_clusters(normalized_spike_count_array)
     
     # Remove the last bin edge to get the bin centers
     time_bin_centers = (time_bins[:-1] + time_bins[1:]) / 2
@@ -77,7 +79,13 @@ def plot_event_ephys(event_type, behavior_event, clusters, time_window):
     plt.colorbar(label='Spike Count')
     plt.xlabel('Time (s)')
     plt.ylabel('Cluster')
-    plt.title('Raster Plot of Normalized Spike Counts')
+    if event_type == "S":
+        plt.title('Raster Plot of Normalized Spike Counts for Sound')
+    elif event_type == "R":
+        plt.title('Raster Plot of Normalized Spike Counts for Reward')
+    elif event_type == "V":
+        plt.title('Raster Plot of Normalized Spike Counts for Vacuum')
+    # plt.title('Raster Plot of Normalized Spike Counts')
     plt.show()
     
 
@@ -97,13 +105,15 @@ behavior_event["event_ephys_timestamp"] = behavior_event["event_ephys_timestamp"
 
     
 cluster_mat = mat73.loadmat(cluster_file)
-clusters = cluster_mat["spikesByCluster"]
+clusters = cluster_mat["spikesByCluster"] # This is only the index for spikeTimes (spikeTimes(spikebyCluster{1,2 3 4....number of neurons}(:,:))) =this gives you the actual spike times
+spikeTimes= cluster_mat["spikeTimes"]
+
 print("Cluster size:", len(clusters))
 
 # lick_raster = plot_event_ephys("L", behavior_event, clusters, time_window=0.5)
 
-sound_raster = plot_event_ephys("S", behavior_event, clusters, time_window=0.5)
+sound_raster = plot_event_ephys("S", behavior_event, clusters, spikeTimes, time_window=1)
 
-reward_raster = plot_event_ephys("R", behavior_event, clusters, time_window=0.5)
+reward_raster = plot_event_ephys("R", behavior_event, clusters, spikeTimes, time_window=1)
 
-vacuum_raster = plot_event_ephys("V", behavior_event, clusters, time_window=0.5)
+vacuum_raster = plot_event_ephys("V", behavior_event, clusters, spikeTimes, time_window=0.5)

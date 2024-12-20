@@ -34,7 +34,7 @@ def plot_event_ephys(event_type, behavior_event, clusters, spikeTimes, time_wind
     
     # time_window = 0.5   # 0.5 seconds before and after each event
     bin_size = 0.025  # 25ms bins
-    time_bins = np.arange(-time_window, time_window + bin_size, bin_size)
+    time_bins = np.arange(-time_window-bin_size, time_window + bin_size, bin_size)
 
     # Initialize the spike count array
     event_num = len(df_event)
@@ -58,11 +58,20 @@ def plot_event_ephys(event_type, behavior_event, clusters, spikeTimes, time_wind
             spike_times = spikeTimes[cluster] * 50 / 1e6  #/20kHz sampling rate
             
             # Count spikes in each time bin
-            for bin_idx in range(time_bin_num):
-                start_time = event_time + time_bins[bin_idx]
-                end_time = event_time + time_bins[bin_idx + 1]
-                spike_count = np.sum((spike_times >= start_time) & (spike_times < end_time))
-                spike_count_array[event_idx, cluster_idx, bin_idx] = spike_count
+            start_time = event_time - time_window
+            end_time = event_time + time_window
+            
+            # use np.hist to bin the spikes
+            # imporve the speed of the code
+            spike_for_binning=spike_times[((spike_times >= start_time) & (spike_times < end_time))]-event_time 
+            hist_counts, bin_edges = np.histogram(spike_for_binning,  time_bins)
+            spike_count_array[event_idx, cluster_idx] = hist_counts
+            
+            # for bin_idx in range(time_bin_num):
+            #     start_time = event_time + time_bins[bin_idx]
+            #     end_time = event_time + time_bins[bin_idx + 1]
+            #     spike_count = np.sum((spike_times >= start_time) & (spike_times < end_time))
+            #     spike_count_array[event_idx, cluster_idx, bin_idx] = spike_count
 
 
     normalized_spike_count_array = np.mean(spike_count_array, axis=0)
@@ -101,7 +110,7 @@ def plot_event_ephys(event_type, behavior_event, clusters, spikeTimes, time_wind
         
     elif event_type == "R":
         plt.title('Raster Plot of Normalized Spike Counts for Reward')
-        plt.savefig('reward_response_ungrouped.png')
+        # plt.savefig('reward_response_ungrouped.png')
     elif event_type == "V":
         plt.title('Raster Plot of Normalized Spike Counts for Vacuum')
     # plt.title('Raster Plot of Normalized Spike Counts')
@@ -109,7 +118,7 @@ def plot_event_ephys(event_type, behavior_event, clusters, spikeTimes, time_wind
     
 
     
-    return z_score_rows
+    return z_score_rows  
 
 
 
@@ -132,10 +141,12 @@ print("Cluster size:", len(clusters))
 # lick_raster = plot_event_ephys("L", behavior_event, clusters, time_window=0.5)
 
 sound_raster = plot_event_ephys("S", behavior_event, clusters, spikeTimes, time_window=2)
+scipy.io.savemat('sound_response_array.mat', {'sound_response': sound_raster})
 
 reward_raster = plot_event_ephys("R", behavior_event, clusters, spikeTimes, time_window=2)
 
 # Save the Z-score array into a MATLAB-compatible .mat file
-scipy.io.savemat('z_score_array.mat', {'z_score': reward_raster})
+scipy.io.savemat('reward_response_array.mat', {'reward_response': reward_raster})
 
-vacuum_raster = plot_event_ephys("V", behavior_event, clusters, spikeTimes, time_window=0.5)
+vacuum_raster = plot_event_ephys("V", behavior_event, clusters, spikeTimes, time_window=2)
+scipy.io.savemat('vacuum_response_array.mat', {'vacuum_response': vacuum_raster})

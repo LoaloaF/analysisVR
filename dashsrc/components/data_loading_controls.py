@@ -11,7 +11,6 @@ from . import constants as C
 from analytics_processing import analytics
 
 def render(app: Dash, data: dict) -> html.Div:
-    
     @app.callback(
         Output(C.D2M_LOAD_DATA_BUTTON_ID, 'style'),
         Output('data-loaded', 'data'),
@@ -26,13 +25,21 @@ def render(app: Dash, data: dict) -> html.Div:
             return {"marginTop": 15, "backgroundColor": "green"}, True
         return {"marginTop": 15, "backgroundColor": "blue"}, False
     
+    default_animals = [1]
+    default_paradigms = [800]
+    # default_analytics = ['UnityTrialwiseMetrics', 'SesssionMetadata']
+    default_analytics = ['UnityTrackwise', 'SessionMetadata']
+    # default_animals = C.ANIMALS[-2:]
+    # default_paradigms = C.PARADIGMS
+    # default_analytics = list(data.keys())[0:1]
+    
     return dbc.Row([
                 dbc.Col([
                     dcc.Dropdown(
                         id=C.D2M_ANALYTICS_DROPDOWN_ID,
                         options= list(data.keys()),
                         multi=True,
-                        value=list(data.keys())[0:1],
+                        value=default_analytics,
                         placeholder="Select one or more analytics",
                         style={"marginTop": 15}
                     ),
@@ -43,7 +50,7 @@ def render(app: Dash, data: dict) -> html.Div:
                         id=C.D2M_PARADIGMS_DROPDOWN_ID,
                         options=C.PARADIGMS,
                         multi=True,
-                        value=C.PARADIGMS,
+                        value=default_paradigms,
                         placeholder="Select paradigms",
                         style={"marginTop": 15}
                     ),
@@ -54,7 +61,7 @@ def render(app: Dash, data: dict) -> html.Div:
                         id=C.D2M_ANIMALS_DROPDOWN_ID,
                         options=C.ANIMALS,
                         multi=True,
-                        value=C.ANIMALS[-2:],
+                        value=default_animals,
                         placeholder="Select animals",
                         style={"marginTop": 15}
                     ),
@@ -76,4 +83,5 @@ def _load_all_data(selected_analytics, data, selected_paradigms, selected_animal
         data[analytic] = analytics.get_analytics(analytic, mode='set', session_ids=None,
                                                  paradigm_ids=selected_paradigms,
                                                  animal_ids=selected_animals)
-        print("Done.")
+        print(data['UnityTrialwiseMetrics'])
+        print("Done.")  

@@ -29,9 +29,22 @@ FLAT_GRAY_COL_MAP = { # cue column is used as dummy column
     1: convert_colors_to_same_type('#888888')[0][0],
     2: convert_colors_to_same_type('#888888')[0][0],
 }
+
+REWARD_LOCATION_COL_MAP = {
+    1: 'rgba(120,120,120, 1)',
+    2: 'rgba(190,190,190, 1)',
+}
+EARLY_REWARD_LOCATION_COLOR = 'rgba(120,120,120, 1)'
+LATE_REWARD_LOCATION_COLOR = 'rgba(190,190,190, 1)'
     
 
 TRIAL_COL_MAP = px.colors.sequential.Viridis
 
 MULTI_TRACES_ALPHA = .3
+MULTI_MARKERS_ALPHA = .6
 # MULTI_TRACES_ALPHA = int(0.1*255)  # 0 to 255
+
+KINEMATICS_HEATMAP_DEFAULT_HEIGHT = 450
+KINEMATICS_HEATMAP_DEFAULT_WIDTH = 600
+TRACK_VISUALIZATION_HEIGHT = 30
+KINEMATICS_HEATMAP_XLABELSIZE_HEIGHT = 40

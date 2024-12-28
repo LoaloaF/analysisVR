@@ -23,9 +23,9 @@ from .plot_components import get_track_graph_component
 
 def render(app: Dash, global_data: dict, vis_name: str) -> html.Div:
     # Register the callbacks
-    register_animal_dropdown_callback(app, global_data, vis_name)
-    register_session_dropdown_callback(app, global_data, vis_name)
-    register_trial_slider_callback(app, global_data, vis_name)
+    register_animal_dropdown_callback(app, global_data, 'UnityTrackwise', vis_name)
+    register_session_dropdown_callback(app, global_data, 'UnityTrackwise', vis_name)
+    register_trial_slider_callback(app, global_data, 'UnityTrackwise', vis_name)
 
     @app.callback(
         Output(f'figure-{vis_name}', 'figure'),
@@ -124,7 +124,7 @@ def render(app: Dash, global_data: dict, vis_name: str) -> html.Div:
                 dbc.Row([
                     dbc.Col([
                         # Dropdown for animal selection
-                        *get_animal_dropdown_component(vis_name, global_data),
+                        *get_animal_dropdown_component(vis_name, global_data, 'UnityTrackwise'),
                         # Dropdown for session selection
                         *get_session_dropdown_component(vis_name),
                         # Radioitems for metric selection
@@ -145,7 +145,7 @@ def render(app: Dash, global_data: dict, vis_name: str) -> html.Div:
                         *get_filter_checklist_component(vis_name),
                         html.Hr(),
                         # Display options checklist
-                        *get_display_options_checklist_component(vis_name),
+                        *get_display_options_checklist_component(vis_name, initial_value=80),
                     ], width=4),
                 ]),
                 

@@ -157,14 +157,15 @@ def _compute_analytic(analytic, session_fullfname):
     
     elif analytic == "UnityTrialwiseMetrics":
         data = m2a.get_UnityTrialwiseMetrics(session_fullfname)
-        exit()
+        # exit()
         # unity_framewise = get_analytics(analytic="UnityFramewise", 
         #                                 sessionlist_fullfnames=[session_fullfname])
         # data = integr_analytics.get_UnityTrialwiseMetrics(unity_framewise)
         # data_table = C.UNITY_TRIALWISE_METRICS_TABLE
     
-    data = data.reindex(columns=data_table.keys())
-    data = data.astype(data_table)        
+    if analytic != "UnityTrialwiseMetrics":
+        data = data.reindex(columns=data_table.keys())
+        data = data.astype(data_table)        
     return data
 
 def _extract_id_from_sessionname(session_name):
@@ -401,9 +402,20 @@ if __name__ == "__main__":
     L.spacer()
     
     # get_analytics(**kwargs)
+    # d = get_analytics("UnityFramewise", mode="set", sessionlist_fullfnames=["/Volumes/large/BMI/VirtualReality/SpatialSequenceLearning/RUN_rYL006/rYL006_P1000/2024-11-04_16-13_rYL006_P1000_MotorLearningStop_22min/2024-11-04_16-13_rYL006_P1000_MotorLearningStop_22min.hdf5"])
+    # d.frame_pc_timestamp -= d.frame_pc_timestamp.iloc[0]
+    # d.frame_ephys_timestamp -= d.frame_ephys_timestamp.iloc[0]
+    # print(d.frame_ephys_timestamp)
+    # import matplotlib.pyplot as plt
+    # plt.plot((d.frame_pc_timestamp*1e-6) /60, (d.frame_ephys_timestamp*1e-6) /60)
+    # plt.ylabel("Ephys Time (?)")
+    # plt.xlabel("PC Time (min)")
+    # plt.show()  
+    
+    
     # d = get_analytics("SessionMetadata", mode="recompute", animal_ids=[1], 
     #                   paradigm_ids=[800])
-    d = get_analytics("UnityTrackwise", mode="recompute", animal_ids=[6], 
-                      paradigm_ids=[1100], session_ids=None, )#from_date='2024-12-01')
-    # d = get_analytics("UnityTrialwiseMetrics", mode="recompute", animal_ids=[1], 
-    #                   paradigm_ids=[800], session_ids=None)
+    # d = get_analytics("UnityTrackwise", mode="recompute", animal_ids=[6], 
+    #                   paradigm_ids=[1100], session_ids=None, )#from_date='2024-12-01')
+    d = get_analytics("UnityTrialwiseMetrics", mode="recompute", animal_ids=[1], 
+                      paradigm_ids=[800], session_ids=None)

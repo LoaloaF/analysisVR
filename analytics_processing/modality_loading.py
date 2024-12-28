@@ -8,7 +8,7 @@ from CustomLogger import CustomLogger as Logger
 
 import analytics_processing.modality_transformations as mT
 from analytics_processing import metadata_loading
-import analytics_processing.analytics_constants as C
+# import analytics_processing.analytics_constants as C
 
 def _load_cam_frames(session_file, key):
     #TODO implement this
@@ -45,6 +45,8 @@ def session_modality_from_nas(session_fullfname, key, where=None, start=None,
         # data = pd.read_hdf(session_fullfname, key=key, mode='r', start=start, 
         #                    stop=stop, where=where, columns=columns)
         L.logger.debug(f"Successfully accessed {key}")
+        L.logger.debug(f"Data: \n{data}")
+        L.logger.debug(f"Data: \n{data.iloc[:2].T}")
     except KeyError:
         L.logger.error(f"Key {key} not found in session data")
         data = None

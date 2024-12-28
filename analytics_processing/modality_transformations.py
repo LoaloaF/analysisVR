@@ -34,6 +34,7 @@ def data_modality_rename2oldkeys(data, key):
     #TODO doesn't have all modalities
     if key == "unity_frame":
         rename_dict = {
+            
             'frame_id': 'ID',
             'frame_pc_timestamp': 'PCT',
             'frame_x_position': 'X',
@@ -69,7 +70,8 @@ def data_modality_rename2oldkeys(data, key):
         cam_name = key.split("_")[0]
         rename_dict = {
             f'{cam_name}_image_id': "ID", 
-            f'{cam_name}_image_pc_timestamp': "frame_pc_timestamp",
+            f'{cam_name}_image_pc_timestamp': "PCT",
+            f'{cam_name}_image_ephys_timestamp': "ET",
         }
         
     elif key in ["event", "ballvelocity"]:
@@ -281,6 +283,7 @@ def calc_staytimes(trials, frames, track_details):
             return pd.Series(dtype='int64')
 
         staytimes = {}
+        outside_R_avg_velocties = []
         for zone, zone_details in track_details.items():
             zone_frames = trial_frames.loc[(trial_frames["frame_z_position"] >= zone_details["start_pos"]) & 
                                            (trial_frames["frame_z_position"] < zone_details["end_pos"])]
@@ -288,7 +291,6 @@ def calc_staytimes(trials, frames, track_details):
                 zone_staytime = 0
             else:
                 zone_staytime = zone_frames["frame_pc_timestamp"].iloc[-1] - zone_frames["frame_pc_timestamp"].iloc[0]
-            staytimes["staytime_"+zone] = zone_staytime
             
             # check if the zone is a reward zone and if the trial was correct or incorrect
             cue = trials[trials["trial_id"] == trial_id]["cue"].item()
@@ -296,14 +298,21 @@ def calc_staytimes(trials, frames, track_details):
                 staytimes["staytime_correct_r"] = zone_staytime
             elif (zone == "reward2" and cue == 1) or (zone == "reward1" and cue == 2):
                 staytimes["staytime_incorrect_r"] = zone_staytime
+            else:
+                if zone_staytime != 0:
+                    avg_vel = (zone_details['end_pos']-zone_details['start_pos']) /zone_staytime/1e-6
+                    outside_R_avg_velocties.append(avg_vel)
                 
             # add the time of entry into the reward zone
             if zone == 'reward1' or zone == 'reward2':
+                # print("Rewardzone size: ", zone_details['end_pos']-zone_details['start_pos'])
                 if zone_frames.empty:
                     staytimes[f"enter_{zone}"] = np.nan
                     Logger().logger.warning(f"Trial {trial_id} has no frames in {zone}")
                 else:
                     staytimes[f"enter_{zone}"] = zone_frames["frame_pc_timestamp"].iloc[0]
+        staytimes['baseline_velocity'] = np.median(outside_R_avg_velocties)
+
         return pd.Series(staytimes)
     result = frames.groupby("trial_id").apply(_calc_trial_staytimes).unstack().reset_index(drop=True)
     return result

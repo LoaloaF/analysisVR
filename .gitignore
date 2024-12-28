@@ -1,4 +1,5 @@
 *.png
+*.svg
 *.pkl
 ephys/impedance*
 

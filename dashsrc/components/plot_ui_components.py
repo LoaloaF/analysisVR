@@ -1,22 +1,24 @@
-# FILE: plot_ui_components.py
 import pandas as pd
 from dash import html, dcc, Input, Output
 
-def get_paradigm_dropdown_component(vis_name, global_data):
+def get_paradigm_dropdown_component(vis_name, global_data, analytic):
+    data = global_data[analytic]
     return [
         html.Label("Select paradigm", style={"marginTop": 15}),
         dcc.Dropdown(
             id=f'paradigm-dropdown-{vis_name}',
-            options=[] if global_data['UnityTrackwise'] is None else [{'label': f'Paradigm {i:02}', 'value': i} for i in global_data['UnityTrackwise'].index.unique("paradigm_id")],
+            options=[] if data is None else [{'label': f'Paradigm {i:02}', 'value': i} for i in data.index.unique("paradigm_id")],
             placeholder="Paradigm ID"
         )
     ]
-def get_animal_dropdown_component(vis_name, global_data, multi=False):
+
+def get_animal_dropdown_component(vis_name, global_data, analytic, multi=False):
+    data = global_data[analytic]
     return [
         html.Label("Select animal", style={"marginTop": 15}),
         dcc.Dropdown(
             id=f'animal-dropdown-{vis_name}',
-            options=[] if global_data['UnityTrackwise'] is None else [{'label': f'Animal {i:02}', 'value': i} for i in global_data['UnityTrackwise'].index.unique("animal_id")],
+            options=[] if data is None else [{'label': f'Animal {i:02}', 'value': i} for i in data.index.unique("animal_id")],
             placeholder="Animal ID",
             multi=multi,
         )
@@ -67,8 +69,8 @@ def get_variance_radioitems_component(vis_name):
         )
     ]
 
-def get_filter_checklist_component(vis_name):
-    return [
+def get_filter_checklist_component(vis_name, with_trial_group=True):
+    elements = [
         html.Label("Filter", style={"marginTop": 15}),
         dcc.Checklist(
             id=f'outcome-group-filter-{vis_name}',
@@ -84,17 +86,21 @@ def get_filter_checklist_component(vis_name):
             inline=True,
             inputStyle={"margin-right": "7px", "margin-left": "3px"}
         ),
-        dcc.Checklist(
-            id=f'trial-group-filter-{vis_name}',
-            options=['1/3', '2/3', '3/3'],
-            value=['1/3', '2/3', '3/3'],
-            inline=True,
-            inputStyle={"margin-right": "7px", "margin-left": "3px"}
-        )
     ]
+    if with_trial_group:
+        elements.append(
+            dcc.Checklist(
+                id=f'trial-group-filter-{vis_name}',
+                options=['1/3', '2/3', '3/3'],
+                value=['1/3', '2/3', '3/3'],
+                inline=True,
+                inputStyle={"margin-right": "7px", "margin-left": "3px"}
+            )
+        )
+    return elements
 
-def get_display_options_checklist_component(vis_name):
-    return [
+def get_display_options_checklist_component(vis_name, initial_value, with_smooth=True):
+    elements = [
         html.Label("Display options", style={"marginTop": 0}),
         dcc.Checklist(
             ['Smooth'],
@@ -107,45 +113,104 @@ def get_display_options_checklist_component(vis_name):
         dcc.Input(
             id=f'max-metric-value-{vis_name}',
             type='number',
-            value=80,
+            value=initial_value,
             style={"width": "60%"}
         )
     ]
+    if not with_smooth:
+        elements = elements[2:]
+    return elements
+    
 
 def get_trial_range_slider_component(vis_name):
     return [
         html.Label("Select a range of trials", style={"marginTop": 15}),
         dcc.RangeSlider(
             0, 100,
+            step=1,
             value=[0, 100],
             id=f'trial-range-slider-{vis_name}'
         )
     ]
 
-def register_animal_dropdown_callback(app, global_data, vis_name):
+def get_session_range_slider_component(vis_name):
+    return [
+        html.Label("Select a range of sessions", style={"marginTop": 15}),
+        dcc.RangeSlider(
+            0, 10,
+            value=[0, 10],
+            step=1,
+            id=f'session-range-slider-{vis_name}'
+        )
+    ]
+    
+    
+def get_width_input(vis_name):
+    return [
+        html.Label("Width", style={"marginTop": 15}),
+        dcc.Input(
+            id=f'width-input-{vis_name}',
+            type='number',
+            value=-1,
+            style={"width": "40%", "marginLeft": "5px"},
+            debounce = True,
+        )
+    ]
+
+def get_height_input(vis_name):
+    return [
+        html.Label("Height", style={"marginTop": 15}),
+        dcc.Input(
+            id=f'height-input-{vis_name}',
+            type='number',
+            value=-1,
+            style={"width": "40%", "marginLeft": "5px"},
+            debounce = True,
+        )
+    ]
+
+def register_animal_dropdown_callback(app, global_data, analytic, vis_name):
     @app.callback(
         Output(f'animal-dropdown-{vis_name}', 'options'),
         Input('data-loaded', 'data'),
     )
     def update_animal_options(data_loaded):
-        if data_loaded:
-            animal_ids = global_data['UnityTrackwise'].index.unique("animal_id")
+        data = global_data[analytic]
+        if data_loaded and data is not None:
+            animal_ids = data.index.unique("animal_id")
             return [{'label': f'Animal {i:02}', 'value': i} for i in animal_ids]
         return []
 
-def register_session_dropdown_callback(app, global_data, vis_name):
+def register_session_dropdown_callback(app, global_data, analytic, vis_name):
     @app.callback(
         Output(f'session-dropdown-{vis_name}', 'options'),
         Input(f'animal-dropdown-{vis_name}', 'value')
     )
     def update_session_dropdown(selected_animal):
-        if not selected_animal:
+        data = global_data[analytic]
+        if not selected_animal or data is None:
             return []
-        sessions = global_data['UnityTrackwise'].loc[pd.IndexSlice[:,selected_animal,:,:]].index.unique('session_id')
+        sessions = data.loc[pd.IndexSlice[:,selected_animal,:,:]].index.unique('session_id')
         session_ids = [{'label': f'Session {i}', 'value': i} for i in sessions]
         return session_ids
 
-def register_trial_slider_callback(app, global_data, vis_name):
+def register_session_slider_callback(app, global_data, analytic, vis_name):
+    @app.callback(
+        Output(f'session-range-slider-{vis_name}', 'min'),
+        Output(f'session-range-slider-{vis_name}', 'max'),
+        Output(f'session-range-slider-{vis_name}', 'value'),
+        Input(f'animal-dropdown-{vis_name}', 'value'),
+    )
+    def update_session_slider(selected_animal):
+        data = global_data[analytic]
+        if selected_animal is None or data is None:
+            return 0, 10, (0,10)
+        print("updated session slider")
+        
+        last_session_id = data.index.unique("session_id").max()
+        return 1, last_session_id, (1, last_session_id)
+
+def register_trial_slider_callback(app, global_data, analytic, vis_name):
     @app.callback(
         Output(f'trial-range-slider-{vis_name}', 'min'),
         Output(f'trial-range-slider-{vis_name}', 'max'),
@@ -154,20 +219,23 @@ def register_trial_slider_callback(app, global_data, vis_name):
         Input(f'session-dropdown-{vis_name}', 'value')
     )
     def update_trial_slider(selected_animal, selected_session):
-        if selected_animal is None or selected_session is None:
+        data = global_data[analytic]
+        if selected_animal is None or selected_session is None or data is None:
             return 0, 100, (0,100)
         print("updated trial slider")
         
-        last_trial_id = global_data['UnityTrackwise'].loc[pd.IndexSlice[:,selected_animal,selected_session,:]]['trial_id'].max()
+        last_trial_id = data.loc[pd.IndexSlice[:,selected_animal,selected_session,:]]['trial_id'].max()
         return 1, last_trial_id, (1, last_trial_id)
 
-def register_paradigm_dropdown_callback(app, global_data, vis_name):
+def register_paradigm_dropdown_callback(app, global_data, analytic, vis_name):
     @app.callback(
         Output(f'paradigm-dropdown-{vis_name}', 'options'),
         Input('data-loaded', 'data'),
     )
     def update_paradigm_options(data_loaded):
-        if data_loaded:
-            paradigm_ids = global_data['UnityTrackwise'].index.unique("paradigm_id")
+        data = global_data[analytic]
+        print("in paradigm callback ", vis_name, data)
+        if data_loaded and data is not None:
+            paradigm_ids = data.index.unique("paradigm_id")
             return [{'label': f'Paradigm {i:04}', 'value': i} for i in paradigm_ids]
         return []

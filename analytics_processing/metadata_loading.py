@@ -4,7 +4,9 @@ import ast
 
 from CustomLogger import CustomLogger as Logger
 
-from analysis_core import PROJECT_DIR
+# from analysis_core import PROJECT_DIR
+from analysis_utils import device_paths
+
 # from analysis_utils import str2list
 
 def extract_metadata(metadata, session_name):
@@ -263,6 +265,7 @@ def env_metadata2track_details(env_metadata):
 
 
 def _get_default_P0800_env_metadata():
+    _, _, PROJECT_DIR = device_paths()
     path = os.path.join(PROJECT_DIR, "analysisVR", "data_loading")
     with open(os.path.join(path,"/P0800_env_metadata.json"), 'r') as f:
         metadata = json.load(f)

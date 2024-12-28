@@ -2,6 +2,7 @@ import plotly.express as px
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import pandas as pd
+import json
 
 from .plot_constants import *
 from .plot_utils import make_discr_trial_cmap
@@ -11,34 +12,57 @@ def _parse_args(metric, metric_max):
     if metric == 'Velocity':
         metric_col = 'posbin_z_velocity'
         y_axis_label = 'Velocity [cm/s]'
-        y_axis_range = 0, metric_max
-        cmap = px.colors.sequential.Plotly3
+        z_axis_range = 0, metric_max
+        cmap = px.colors.sequential.Plotly3_r
     elif metric == 'Acceleration':
         metric_col = 'posbin_z_acceleration'
         y_axis_label = 'Acceleration [cm/s^2]'
-        y_axis_range = -metric_max, metric_max
+        z_axis_range = -metric_max, metric_max
         cmap = px.colors.diverging.Tropic_r
-    return metric_col, y_axis_label, y_axis_range, cmap
+    return metric_col, y_axis_label, z_axis_range, cmap
 
-def _make_figure():
+def _make_figure(nsessions, height):
+    if height == -1:
+        height = KINEMATICS_HEATMAP_DEFAULT_HEIGHT
+    # absolute px for top t2o axes, track illustration
+    track_height_prop = TRACK_VISUALIZATION_HEIGHT/height
+    hm_label_height_prop = KINEMATICS_HEATMAP_XLABELSIZE_HEIGHT/height
+    hm_height = 1 - track_height_prop*2 - hm_label_height_prop
+    
     # Create subplots with a slim top axis
+    rowwidth = 1 /(nsessions+1)
     fig = make_subplots(
-        rows=2, cols=1,
-        row_heights=[0.07, 0.93],  # Slim top axis
+        rows=3, cols=1,
+        row_heights=[track_height_prop*2,hm_height,hm_label_height_prop],
         shared_xaxes=True,
-        vertical_spacing=0.02
+        vertical_spacing=0,
     )
   
     return fig
 
-def _configure_axis(fig, y_axis_range):
+def _configure_axis(fig, session_ids, width, height):
     # Update layout for the main axis
+    kwargs = {}
+    if height != -1:
+        kwargs['height'] = height
+    if width != -1:
+        kwargs['width'] = width
+        
     fig.update_layout(
         plot_bgcolor='white',
         paper_bgcolor='white',
-        # width=800, height=400,
-        margin=dict(l=50, r=20, t=50, b=50)  # Adjust margins as needed
+        autosize=True,
+        margin=dict(l=0, r=0, t=0, b=0),  # Adjust margins as needed
+        **kwargs,
     )
+    
+    # move legend to the bottom of plot
+    fig.update_layout(legend=dict(
+        orientation='h',
+        yanchor='bottom',
+        xanchor='right',
+        x=1
+    ))
     
     fig.update_xaxes(
         showgrid=False,  # No x grid lines
@@ -46,9 +70,10 @@ def _configure_axis(fig, y_axis_range):
         title_text='Position [cm]',
         row=2, col=1
     )
-    
+    print(session_ids)
     fig.update_yaxes(
-        range=y_axis_range,
+        range=[session_ids[-1]+.5, session_ids[0]-.55],
+        tickvals=session_ids,
         zeroline=False,
         ticks='outside',
         title_text="Session ID",
@@ -78,14 +103,96 @@ def _draw_percentile_area_plot(fig, upper_perc, lower_perc, metric_col, transp_c
         line=dict(color='rgba(0,0,0,0)'),
         name='80th perc.',
     ), row=2, col=1)
+
+def draw_track_illustration(fig, row, col, track_details, draw_cues=[1,2]):
+    track_details = [pd.Series(details, name=zone) for zone, details in track_details.items()]
+    track_details = pd.concat(track_details, axis=1).T
+    min_track, max_track = track_details['start_pos'].min(), track_details['end_pos'].max()
     
-def render_plot(all_data, metric, metric_max, smooth_data):
-    print(all_data)
+    # draw the bars indicating track zones/ wall textures
+    # iterate the two different type of tracks
+    for track_type in (1, 2):
+        fig.update_yaxes(row=1, col=1, range=(2,0), ticks='', showticklabels=False,)
+        fig.update_xaxes(range=(min_track, max_track), row=1, col=1, ticks='outside', 
+                         showticklabels=False)
+        
+        # iterate early and late cues
+        for cue in draw_cues:
+            cuezone_width = track_details.loc[f'cue{cue}', 'end_pos'] - track_details.loc[f'cue{cue}', 'start_pos']
+            cuezone_center = track_details.loc[f'cue{cue}', 'start_pos'] +cuezone_width/2
+
+            # cue bars
+            yloc, yloc_offset = track_type-1, .17
+            color, width = CUE_COL_MAP[track_type], 10
+            fig.add_trace(go.Scatter(
+                x=track_details.loc[f'cue{cue}', ['start_pos', 'end_pos', 'start_pos', 'start_pos', 'end_pos']],
+                y=[yloc+yloc_offset, yloc+yloc_offset, None, yloc+1-yloc_offset, yloc+1-yloc_offset],
+                line=dict(color=color, width=width),
+                marker=dict(color=color, size=width, symbol='circle'),
+                showlegend=False, mode='lines+markers',
+            ), row=row, col=col)
+        
+        # iterate reward locations
+        for r in (1, 2):
+            # draw the reward zones
+            yloc, yloc_offset = track_type-1, .12
+            color, width = REWARD_LOCATION_COL_MAP[r], 7
+            fig.add_trace(go.Scatter(
+                x=track_details.loc[f'reward{r}', ['start_pos', 'end_pos', 'start_pos', 'start_pos', 'end_pos']],
+                y=[yloc+yloc_offset, yloc+yloc_offset, None, yloc+1-yloc_offset, yloc+1-yloc_offset],
+                line=dict(color=color, width=width),
+                showlegend=False, mode='lines',
+            ), row=row, col=col)
+
+        # reward location annotation `Stop -> R`
+        r_width = track_details.loc[f'reward{track_type}', 'end_pos'] - track_details.loc[f'reward{track_type}', 'start_pos']
+        r_center = track_details.loc[f'reward{track_type}', 'start_pos'] + r_width/2
+        annotations = [
+            ([r_center-8], [track_type-1+.42], 'Stop', {}),
+            ([r_center-8], [track_type-1+.65], '→', {'size': 20}),
+            ([r_center-8], [track_type-1+.54], '        R', {'size': 16, 'weight': 'bold', 
+                                                      'color': OUTCOME_COL_MAP[1]}),
+        ]
+        text_args = {'mode': 'text', 'textposition': 'middle center', 'showlegend': False}
+        for x, y, text, font_dict in annotations:
+            fig.add_trace(go.Scatter(
+                x=x, y=y, text=text, **text_args, textfont=font_dict,
+            ), row=row, col=col)
+        
+    # trial type annotation at start of track
+    fig.add_trace(go.Scatter(
+        x=[min_track], y=[.98],
+        text=f'50% of<br>trials',
+        mode='text', textposition='middle right',
+        showlegend=False,
+    ), row=row, col=col)
+    
+    # draw track borders
+    x = [min_track, max_track, None, min_track, max_track, None, min_track, max_track]
+    y = [0, 0, None, 1, 1, None, 2, 2]
+    fig.add_trace(go.Scatter(
+        x=x, y=y,
+        mode='lines', line=dict(color='black', width=1),
+        showlegend=False, zorder=20,
+    ), row=row, col=col)
+
+    # Cue annotation white text
+    fig.add_trace(go.Scatter(
+        text=f'Cue', 
+        x=[cuezone_center], y=[1], mode='text',
+        textposition='middle center', textfont=dict(size=12, weight='bold', color='white'),
+        showlegend=False, zorder=30,
+    ), row=1, col=1)
+        
+def render_plot(all_data, metadata, metric, metric_max, smooth_data, width, height):
+    print(metadata)
     print("================")
     
-    fig = _make_figure()
+    session_ids = all_data.index.unique('session_id')
+    fig = _make_figure(nsessions=len(session_ids),
+                       height=height)
     # parse the arguments
-    metric_col, y_axis_label, y_axis_range, cmap = _parse_args(metric, metric_max)
+    metric_col, y_axis_label, z_axis_range, cmap = _parse_args(metric, metric_max)
     
     all_median_values = []
     for session_id, data in all_data.groupby(level='session_id'):
@@ -103,19 +210,11 @@ def render_plot(all_data, metric, metric_max, smooth_data):
         med_values.name = session_id
         all_median_values.append(med_values)
 
-        # print(med_values)
-        # # Add the mean trace to the main plot
-        # mean_trace = go.Scatter(
-        #     x=med_values['from_z_position_bin'],
-        #     y=med_values[metric_col],
-        #     mode='lines',
-        #     line=dict(color='black', width=3),
-        #     name='Median'
-        # )
-        # fig.add_trace(mean_trace, row=2, col=1)
     heatmap_data = pd.concat(all_median_values, axis=1).T
     heatmap_data.index.name = 'session_id'
-    print(heatmap_data)
+    # print(heatmap_data)
+    
+    draw_track_illustration(fig, row=1, col=1,  track_details=json.loads(metadata.iloc[0]['track_details']))
     
     # Draw a heatmap of the median values
     heatmap = go.Heatmap(
@@ -123,11 +222,12 @@ def render_plot(all_data, metric, metric_max, smooth_data):
         x=heatmap_data.columns,
         y=heatmap_data.index,
         colorscale=cmap,
-        zmin=y_axis_range[0],
-        zmax=y_axis_range[1],
+        zmin=z_axis_range[0],
+        zmax=z_axis_range[1],
         showscale=False,
     )
     fig.add_trace(heatmap, row=2, col=1)
     
-    fig = _configure_axis(fig, y_axis_range=(max(heatmap_data.index), min(heatmap_data.index)))
+    
+    fig = _configure_axis(fig, session_ids, width, height)
     return fig

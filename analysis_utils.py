@@ -47,7 +47,7 @@ import os
 def device_paths():
     which_os = platform.system()
     user = os.getlogin()
-    print(f"OS: {which_os}, User: {user}")
+    # print(f"OS: {which_os}, User: {user}")
     
     if which_os == 'Linux' and user == 'houmanjava':
         nas_dir = "/mnt/SpatialSequenceLearning/"

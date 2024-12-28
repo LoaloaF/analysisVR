@@ -75,8 +75,6 @@ def get_UnityTrialwiseMetrics(session_fullfname):
         unity_frames = session_modality_from_nas(session_fullfname, "unity_frame",
                                                 columns=cols)
         staytimes = mT.calc_staytimes(trialdata, unity_frames, track_details)
-        print(staytimes)
         trialdata = pd.concat([trialdata, staytimes], axis=1)
-    print(trialdata)
     
     return trialdata

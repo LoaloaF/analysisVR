@@ -144,9 +144,11 @@ def _compute_analytic(analytic, session_fullfname):
         
     elif analytic == "UnityFramewise":
         data = m2a.get_UnityFramewise(session_fullfname)
-        # TODO
         behavior_event_data = m2a.get_BehaviorEvents(session_fullfname)
+        # behavior_event_data = get_analytics(analytic="BehaviorEvents", 
+        #                                     sessionlist_fullfnames=[session_fullfname])
         data = integr_analytics.merge_behavior_events_with_frames(data, behavior_event_data)
+        # TODO: Add pose to merge
         data_table = C.UNITY_FAMEWISE_TABLE
         
     elif analytic == "UnityTrackwise":
@@ -391,7 +393,7 @@ if __name__ == "__main__":
     argParser.add_argument("--recompute", action="store_true", default=False)
     argParser.add_argument("--from_date", default=None)
     argParser.add_argument("--to_date", default=None)
-    argParser.add_argument("--logging_level", default="INFO")
+    argParser.add_argument("--logging_level", default="DEBUG")
     argParser.add_argument("--nas_dir", default=None)
     kwargs = vars(argParser.parse_args())
     
@@ -415,7 +417,13 @@ if __name__ == "__main__":
     
     # d = get_analytics("SessionMetadata", mode="recompute", animal_ids=[1], 
     #                   paradigm_ids=[800])
-    # d = get_analytics("UnityTrackwise", mode="recompute", animal_ids=[6], 
-    #                   paradigm_ids=[1100], session_ids=None, )#from_date='2024-12-01')
-    d = get_analytics("UnityTrialwiseMetrics", mode="recompute", animal_ids=[1], 
-                      paradigm_ids=[800], session_ids=None)
+    # d = get_analytics("BehaviorEvents", mode="recompute", animal_ids=[6], 
+    #                 paradigm_ids=[1100], session_ids=None, )#from_date='2024-12-01')
+    d = get_analytics("UnityFramewise", mode="recompute", animal_ids=[6], 
+                    paradigm_ids=[1100], session_ids=None, )#from_date='2024-12-01')
+    d = get_analytics("UnityTrackwise", mode="recompute", animal_ids=[6], 
+                      paradigm_ids=[1100], session_ids=None, )#from_date='2024-12-01')
+    # d = get_analytics("BehaviorEvents", mode="recompute", sessionlist_fullfnames=["/mnt/SpatialSequenceLearning/RUN_rYL006/rYL006_P1100/2024-11-22_16-01_rYL006_P1100_LinearTrackStop_24min/2024-11-22_16-01_rYL006_P1100_LinearTrackStop_24min.hdf5"] )#from_date='2024-12-01')
+    
+    # d = get_analytics("UnityTrialwiseMetrics", mode="recompute", animal_ids=[1], 
+    #                   paradigm_ids=[800], session_ids=None)

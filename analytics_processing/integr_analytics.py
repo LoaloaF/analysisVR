@@ -13,18 +13,53 @@ def get_UnityTrialwiseMetrics(unity_framewise):
     # return unity_framewise.groupby('trial_id').first()
 
 def merge_behavior_events_with_frames(unity_framewise, behavior_events):
-    return unity_framewise
-    # raise NotImplementedError
+    # exclude the ball velocity events
+    behavior_events = behavior_events[behavior_events["event_name"] != "B"]
+    
+    # decide which timestamp to use
+    if unity_framewise["frame_ephys_timestamp"].isna().any():
+        frame_time_col = "frame_pc_timestamp"
+        behavior_time_col = "event_pc_timestamp"
+    else:
+        frame_time_col = "frame_ephys_timestamp"
+        behavior_time_col = "event_ephys_timestamp"
+    
+    # get the unique event types
+    event_types = behavior_events["event_name"].unique()
+    event_batch = 15000
+    
+    for each_event in event_types:
+        certain_event = behavior_events[behavior_events["event_name"] == each_event]
+        
+        frame_timestamps = unity_framewise[frame_time_col].values
+        # event_timestamps = certain_event[behavior_time_col].values
 
-    # #  events = session_modality_from_nas(*session_dir_tuple, "event")
-    #     # reward, lick = sT.frame_wise_events(data, events)
-    #     # data['frame_reward'] = reward
-    #     # data['frame_lick'] = lick
-    #     # insert ball velocity
-    #     # ball_vel = session_modality_from_nas(*session_dir_tuple, "ballvelocity")
-    #     # raw_yaw_pitch = sT.frame_wise_ball_velocity(data, ball_vel)
-    #     # data = pd.concat([data, raw_yaw_pitch], axis=1)
-    # return pd.DataFrame([])
+        # # get the closest frame to each event
+        # abs_diff_event = np.abs(frame_timestamps[:, np.newaxis] - event_timestamps)
+        # closest_unity_indices = np.argmin(abs_diff_event, axis=0)
+        # counts = np.bincount(closest_unity_indices)
+
+        # unity_framewise[f'{each_event}_count'] = 0
+        # for index, count in enumerate(counts):
+        #     if index < len(unity_framewise):
+        #         unity_framewise.at[index, f'{each_event}_count'] = count
+        unity_framewise[f'{each_event}_count'] = 0
+
+        # Process in batches
+        for start in range(0, len(certain_event), event_batch):
+            end = start + event_batch
+            event_timestamps = certain_event[behavior_time_col].values[start:end]
+
+            # get the closest frame to each event
+            abs_diff_event = np.abs(frame_timestamps[:, np.newaxis] - event_timestamps)
+            closest_unity_indices = np.argmin(abs_diff_event, axis=0)
+            counts = np.bincount(closest_unity_indices, minlength=len(frame_timestamps))
+
+            for index, count in enumerate(counts):
+                if index < len(unity_framewise):
+                    unity_framewise.at[index, f'{each_event}_count'] += count
+
+    return unity_framewise
 
 def transform_to_position_bin_index(data):
     Logger().logger.debug(f"Transforming {data.shape[0]} unity frames to 1cm "
@@ -71,6 +106,10 @@ def transform_to_position_bin_index(data):
             "zone", "posbin_state",  
         ]
         data.loc[:,const_cols] = data.loc[:,const_cols].ffill().bfill()
+        
+        # fill the events with zeros
+        event_cols = ["L_count", "R_count", "S_count", "V_count"]
+        data.loc[:,event_cols] = data.loc[:,event_cols].fillna(0)
         return data
         
     def proc_trial_data(trial_data):
@@ -81,7 +120,8 @@ def transform_to_position_bin_index(data):
         # collapse the unity frames corresponding to the same spatial bin, 1cm in size
         def proc_pos_bin(pos_bin_data):
             # average over all frames in the spatial bin
-            mean_cols = ['frame_z_position', 'frame_z_velocity', 'frame_z_acceleration']
+            mean_cols = ['frame_z_position', 'frame_z_velocity', 'frame_z_acceleration',
+                         'L_count', 'R_count', 'S_count', 'V_count']
             agg_bin_data = pos_bin_data[mean_cols].mean()
             
             # number of frames in the spatial bin
@@ -122,6 +162,7 @@ def transform_to_position_bin_index(data):
         # print(bin_trial_data)
         bin_trial_data = interp_missing_pos_bins(bin_trial_data)
         return bin_trial_data
+
     # first, group into trials
     posbin_data = data.groupby('trial_id').apply(proc_trial_data)
     

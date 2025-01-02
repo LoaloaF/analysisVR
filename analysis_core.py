@@ -30,9 +30,17 @@ def _delfault_paths():
     
     elif which_os == "Darwin" and user == "root":
         nas_dir = "/Volumes/large/BMI/VirtualReality/SpatialSequenceLearning/"
-        local_data_dir = "/Users/loaloa/local_data/analysisVR_cache"
-        project_dir = "/Users/loaloa/homedataAir/phd/ratvr/VirtualReality/"
-    
+        
+        folders = [f for f in os.listdir("/Users") if os.path.isdir(os.path.join("/Users", f))]
+
+        if "loaloa" in folders:
+            local_data_dir = "/Users/loaloa/local_data/analysisVR_cache"
+            project_dir = "/Users/loaloa/homedataAir/phd/ratvr/VirtualReality/"
+        elif "yaohaotian" in folders:
+            local_data_dir = "/Users/yaohaotian/Downloads/Study/BME/Research/MasterThesis/code/data/analysisVR_cache"
+            project_dir = "/Users/yaohaotian/Downloads/Study/BME/Research/MasterThesis/code/"
+        else:
+            raise ValueError("Unknown MacOS user")
     else:
         nas_dir, local_data_dir, project_dir = None, None, None
         raise ValueError("Unknown OS or user")

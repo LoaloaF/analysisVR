@@ -19,6 +19,11 @@ def _parse_args(metric, metric_max):
         y_axis_label = 'Acceleration [cm/s^2]'
         z_axis_range = -metric_max, metric_max
         cmap = px.colors.diverging.Tropic_r
+    elif metric == 'Lick':
+        metric_col = 'L_count'
+        y_axis_label = 'Lick count'
+        z_axis_range = 0, metric_max
+        cmap = px.colors.sequential.Blues
     return metric_col, y_axis_label, z_axis_range, cmap
 
 def _make_figure(nsessions, height):
@@ -205,7 +210,8 @@ def render_plot(all_data, metadata, metric, metric_max, smooth_data, width, heig
         data = data[(data['from_z_position_bin'] > min_max_pos_bin[0]) &
                     (data['from_z_position_bin'] < min_max_pos_bin[1])]
 
-        med_values = data.groupby('from_z_position_bin')[metric_col].median().reset_index()
+        # Here we use mean instead of median (otherwise it will all be 0 for lick)
+        med_values = data.groupby('from_z_position_bin')[metric_col].mean().reset_index()
         med_values = med_values.set_index('from_z_position_bin').iloc[:,0]
         med_values.name = session_id
         all_median_values.append(med_values)

@@ -415,14 +415,14 @@ if __name__ == "__main__":
     # plt.show()  
     
     
-    # d = get_analytics("SessionMetadata", mode="recompute", animal_ids=[1], 
-    #                   paradigm_ids=[800])
+    d = get_analytics("SessionMetadata", mode="recompute", animal_ids=[6], 
+                      paradigm_ids=[1100])
     # d = get_analytics("BehaviorEvents", mode="recompute", animal_ids=[6], 
     #                 paradigm_ids=[1100], session_ids=None, )#from_date='2024-12-01')
-    d = get_analytics("UnityFramewise", mode="recompute", animal_ids=[6], 
-                    paradigm_ids=[1100], session_ids=None, )#from_date='2024-12-01')
-    d = get_analytics("UnityTrackwise", mode="recompute", animal_ids=[6], 
-                      paradigm_ids=[1100], session_ids=None, )#from_date='2024-12-01')
+    # d = get_analytics("UnityFramewise", mode="recompute", animal_ids=[6], 
+    #                 paradigm_ids=[1100], session_ids=None, )#from_date='2024-12-01')
+    # d = get_analytics("UnityTrackwise", mode="recompute", animal_ids=[6], 
+    #                   paradigm_ids=[1100], session_ids=None, )#from_date='2024-12-01')
     # d = get_analytics("BehaviorEvents", mode="recompute", sessionlist_fullfnames=["/mnt/SpatialSequenceLearning/RUN_rYL006/rYL006_P1100/2024-11-22_16-01_rYL006_P1100_LinearTrackStop_24min/2024-11-22_16-01_rYL006_P1100_LinearTrackStop_24min.hdf5"] )#from_date='2024-12-01')
     
     # d = get_analytics("UnityTrialwiseMetrics", mode="recompute", animal_ids=[1], 

@@ -37,7 +37,7 @@ def get_metric_radioitems_component(vis_name):
     return [
         html.Label("Metric", style={"marginTop": 15}),
         dcc.RadioItems(
-            ['Velocity', 'Acceleration'],
+            ['Velocity', 'Acceleration', 'Lick'],
             inputStyle={"margin-right": "5px"},
             style={"marginLeft": 5},
             value='Velocity',

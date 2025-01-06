@@ -208,7 +208,7 @@ def register_session_slider_callback(app, global_data, analytic, vis_name):
         print("updated session slider")
         
         last_session_id = data.index.unique("session_id").max()
-        return 1, last_session_id, (1, last_session_id)
+        return 0, last_session_id, (0, last_session_id)
 
 def register_trial_slider_callback(app, global_data, analytic, vis_name):
     @app.callback(

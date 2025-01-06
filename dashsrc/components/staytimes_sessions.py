@@ -4,20 +4,17 @@ import pandas as pd
 import numpy as np
 # from data_loading.animal_loading import get_animal_modality
 # from analysis_core import get_default_nas_dir
-from dashsrc.plots import kinematics_plot
+from dashsrc.plots import staytimes_plot_sessions as staytimes_plot_session
 from .constants import *
-
 from .plot_ui_components import (
     get_animal_dropdown_component,
     get_paradigm_dropdown_component,
     get_metric_radioitems_component,
-    # get_groupby_radioitems_component,
+    get_groupby_radioitems_component,
     get_filter_checklist_component,
     get_display_options_checklist_component,
     get_session_range_slider_component,
-    get_width_input,
-    get_height_input,
-    
+    # get_trial_range_slider_component,
     register_animal_dropdown_callback,
     register_paradigm_dropdown_callback,
     register_session_slider_callback
@@ -26,61 +23,51 @@ from .plot_components import get_track_graph_component
 
 def render(app: Dash, global_data: dict, vis_name: str) -> html.Div:
     # Register the callbacks
-    register_paradigm_dropdown_callback(app, global_data, 'UnityTrackwise', vis_name)
-    register_animal_dropdown_callback(app, global_data, 'UnityTrackwise', vis_name)
-    register_session_slider_callback(app, global_data, 'UnityTrackwise', vis_name)
-    
-    # register_session_dropdown_callback(app, global_data, vis_name)
-    # register_trial_slider_callback(app, global_data, vis_name)
+    register_paradigm_dropdown_callback(app, global_data, 'UnityTrialwiseMetrics', vis_name)
+    register_animal_dropdown_callback(app, global_data, 'UnityTrialwiseMetrics', vis_name)
+    register_session_slider_callback(app, global_data, 'UnityTrialwiseMetrics', vis_name)
 
     @app.callback(
         Output(f'figure-{vis_name}', 'figure'),
         Input(f'animal-dropdown-{vis_name}', 'value'),
         Input(f'session-range-slider-{vis_name}', 'value'),
-        
-        # Input(f'trial-range-slider-{vis_name}', 'value'),
-        Input(f'metric-{vis_name}', 'value'),
+        # Input(f'group-by-{vis_name}', 'value'),
+        # Input(f'metric-{vis_name}', 'value'),
         Input(f'max-metric-value-{vis_name}', 'value'),
-        Input(f'smooth-data-{vis_name}', 'value'),
+        # Input(f'smooth-data-{vis_name}', 'value'),
         Input(f'outcome-group-filter-{vis_name}', 'value'),
         Input(f'cue-group-filter-{vis_name}', 'value'),
         Input(f'trial-group-filter-{vis_name}', 'value'),
+        Input(f'var-vis-{vis_name}', 'value'),
+        Input(f'dr-filter-{vis_name}', 'value'),
         
-        Input(f'width-input-{vis_name}', 'value'),
-        Input(f'height-input-{vis_name}', 'value'),
     )
-    def update_plot(selected_animals, session_range,
-                    metric, metric_max, smooth_data,
-                    outcome_filter, cue_filter, trial_filter,
-                    width, height):
+    def update_plot(selected_animals, session_range, # group_by, metric,
+                    metric_max, outcome_filter, cue_filter, trial_filter, var_vis,
+                    double_reward_filter):
         
         if not all((selected_animals, metric_max)):
             return {}
         
         selected_sessions = np.arange(int(session_range[0]), int(session_range[1]) + 1)
-        # TODO fix later
-        selected_sessions = [s for s in selected_sessions if s in global_data['UnityTrackwise'].index.unique('session_id')]
-        
-        
+        # TODO fix later 
+        selected_sessions = [s for s in selected_sessions if s in global_data['UnityTrialwiseMetrics'].index.unique('session_id')]
         # animal and session filtering
-        data = global_data['UnityTrackwise'].loc[pd.IndexSlice[:,selected_animals,selected_sessions,:]]
-        print(data)
+        data = global_data['UnityTrialwiseMetrics'].loc[pd.IndexSlice[:,selected_animals,selected_sessions,:]]
         
-        data, group_by_values = group_filter_data(data, outcome_filter, cue_filter, trial_filter)
-        
-        # trial slider filtering
-        # n_trials = data['trial_id'].max().item()
-        # data = data[data.trial_id.isin(np.arange(int(trial_range[0]), int(trial_range[1]) + 1))]
-        
-        
+        filtered_data = []
+        for s_id in selected_sessions:
+            d, group_by_values = group_filter_data(data.loc[pd.IndexSlice[:,:,s_id:s_id,:]], 
+                                                   outcome_filter, cue_filter, trial_filter)
+            filtered_data.append(d)
+        data = pd.concat(filtered_data)
         
         # list to single value
-        if len(smooth_data) == 1:
-            smooth_data = True
-            
-        fig = kinematics_plot.render_plot(data, global_data['SessionMetadata'], 
-                                          metric, metric_max, 
-                                          smooth_data, width, height)
+        # if len(smooth_data) == 1:
+        #     smooth_data = True
+
+        fig = staytimes_plot_session.render_plot(data, metric_max, var_vis,
+                                                 double_reward_filter=double_reward_filter)
         return fig
     
     return html.Div([
@@ -88,8 +75,8 @@ def render(app: Dash, global_data: dict, vis_name: str) -> html.Div:
         dbc.Row([
             # Left side for plots
             dbc.Col([
-                get_track_graph_component(vis_name, fixed_width=None, fixed_height=None),
-            ], width=8),
+                get_track_graph_component(vis_name),
+            ], width=7),
 
             # Right side for UI controls
             dbc.Col([
@@ -101,40 +88,56 @@ def render(app: Dash, global_data: dict, vis_name: str) -> html.Div:
                 dbc.Row([
                     dbc.Col([
                         # Dropdown for paradigm selection
-                        *get_paradigm_dropdown_component(vis_name, global_data, 'UnityTrackwise'),
+                        *get_paradigm_dropdown_component(vis_name, global_data, 'UnityTrialwiseMetrics'),
                         # Dropdown for animal selection
-                        *get_animal_dropdown_component(vis_name, global_data, 'UnityTrackwise'),
+                        *get_animal_dropdown_component(vis_name, global_data, 'UnityTrialwiseMetrics'),
                         # Radioitems for metric selection
-                        *get_metric_radioitems_component(vis_name),
+                        # *get_metric_radioitems_component(vis_name),
+                    ], width=4),
+                    
+                    # Other options in middle column
+                    dbc.Col([
+                        # Radioitems for group by selection
+                        # *get_groupby_radioitems_component(vis_name),
+                        # html.Label("Group by", style={"marginTop": 15}),
+                        dcc.RadioItems(
+                            ['Distribution', 'Average', ],
+                            inputStyle={"margin-right": "5px"},
+                            style={"marginLeft": 5},
+                            value='Average',
+                            id=f'var-vis-{vis_name}'
+                        ),
+                        
+                        html.Label("Double Rewards", style={"marginTop": 15}),
+                        dcc.Checklist(
+                            id=f'dr-filter-{vis_name}',
+                            options=['Early R', 'Late R'],
+                            value=['Early R', 'Late R'],
+                            inline=True,
+                            inputStyle={"margin-right": "7px", "margin-left": "3px"}
+                        ),
+                        
+                        
                     ], width=4),
                     
                     # Other options in right column
                     dbc.Col([
                         # Filter checklist
-                        *get_filter_checklist_component(vis_name),
+                        *get_filter_checklist_component(vis_name, with_trial_group=True),
                         html.Hr(),
-                        # Display options checklist
-                        *get_display_options_checklist_component(vis_name,
-                                                                 initial_value=80),
-                    ], width=4),
-                    
-                    # Other options in right column
-                    dbc.Col([
-                        # Filter checklist
-                        *get_width_input(vis_name),
-                        # Display options checklist
-                        *get_height_input(vis_name),
+                        # Display options checklist, smooth and max metric
+                        *get_display_options_checklist_component(vis_name, with_smooth=False,
+                                                                 initial_value=8),
                     ], width=4),
                 ]),
                 
                 # Range slider for trial selection
-                # *get_trial_range_slider_component(vis_name)
-                # Range slider for trial selection
                 *get_session_range_slider_component(vis_name),
-            ], width=4)
+            ], width=5)
         ]),
         html.Hr()
     ], id=f"{vis_name}-container")  # Initial state is hidden
+    
     
 def group_filter_data(data, outcome_filter, cue_filter, trial_filter, group_by="None"):
     group_values = {}
@@ -150,7 +153,6 @@ def group_filter_data(data, outcome_filter, cue_filter, trial_filter, group_by="
     data = data[data['trial_outcome'].isin(np.concatenate(list(group_values.values())))]
     if group_by == 'Outcome':
         group_by_values = group_values
-    
     
     # cue filtering
     group_values = {}

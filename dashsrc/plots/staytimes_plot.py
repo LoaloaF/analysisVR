@@ -116,10 +116,10 @@ def _draw_violin_plots(fig, all_data, metric_max, indicate_outcome):
 
             # single points for each trial
             if not indicate_outcome:
-                marker = dict(color='rgba(0,0,0,0)', symbol='circle', size=7, 
+                marker = dict(color='rgba(0,0,0,0)', symbol='circle', size=4, 
                               line=dict(color=cor_color, width=3))
             else:
-                marker = dict(color=d.outcome_color, symbol='circle', size=10)
+                marker = dict(color=d.outcome_color, symbol='circle', size=6)
                 
             fig.add_trace(go.Scatter(
                 x=[cor_side_point_pos_x] * len(d),
@@ -148,7 +148,7 @@ def _draw_violin_plots(fig, all_data, metric_max, indicate_outcome):
                 x=[incor_side_point_pos_x] * len(d),
                 y=d.staytime_incorrect_r,
                 mode='markers',
-                marker=dict(color="rgba(0,0,0,0)", symbol='circle', size=7, 
+                marker=dict(color="rgba(0,0,0,0)", symbol='circle', size=4, 
                             line=dict(color=incor_color, width=3)),
                 name='Incorrect location points',
                 legendgroup='Incorrect location points',

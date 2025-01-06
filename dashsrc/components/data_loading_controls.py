@@ -4,7 +4,6 @@ import dash_bootstrap_components as dbc
 import pandas as pd
 
 # from data_loading.animal_loading import get_animal_modality
-from analysis_core import NAS_DIR
 # from .constants import *
 from . import constants as C
 
@@ -25,10 +24,10 @@ def render(app: Dash, data: dict) -> html.Div:
             return {"marginTop": 15, "backgroundColor": "green"}, True
         return {"marginTop": 15, "backgroundColor": "blue"}, False
     
-    default_animals = [1]
-    default_paradigms = [800]
-    # default_analytics = ['UnityTrialwiseMetrics', 'SesssionMetadata']
-    default_analytics = ['UnityTrackwise', 'SessionMetadata']
+    default_animals = [9]
+    default_paradigms = [1100]
+    default_analytics = ['UnityTrialwiseMetrics', 'SesssionMetadata']
+    # default_analytics = ['UnityTrackwise', 'SessionMetadata']
     # default_animals = C.ANIMALS[-2:]
     # default_paradigms = C.PARADIGMS
     # default_analytics = list(data.keys())[0:1]

@@ -79,7 +79,8 @@ def _get_sessionlist_fullfnames(paradigm_ids, animal_ids, session_ids=None,
                                  if fname.endswith("min.hdf5")]
                 if len(session_fname) != 1:
                     print(f"Expected 1 session file for {session_dir}, found "
-                          f"{len(session_fname)}, {session_fname}")
+                          f"{len(session_fname)}, {session_fname} in "
+                          f"{os.path.join(parad_animal_subdir, session_dir)}")
                     continue
                 session_fname = session_fname[0]
                 
@@ -157,6 +158,11 @@ def _compute_analytic(analytic, session_fullfname):
     
     elif analytic == "UnityTrialwiseMetrics":
         data = m2a.get_UnityTrialwiseMetrics(session_fullfname)
+        print(data['trial_outcome'])
+        print()
+        print()
+        print()
+        print()
         # exit()
         # unity_framewise = get_analytics(analytic="UnityFramewise", 
         #                                 sessionlist_fullfnames=[session_fullfname])
@@ -200,7 +206,7 @@ def get_analytics(analytic, mode="set", paradigm_ids=None, animal_ids=None,
         
         elif mode == "set":
             if not os.path.exists(analytics_fname):
-                print(f"Analytic not does not exist for {identif}, compute first.")
+                print(f"Analytic `{analytic}` not does not exist for {identif}, compute first.")
                 continue
             data = pd.read_parquet(analytics_fname, columns=columns)
             midx = [(*identif, i) for i in range(data.shape[0])]

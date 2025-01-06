@@ -311,6 +311,7 @@ def calc_staytimes(trials, frames, track_details):
                     Logger().logger.warning(f"Trial {trial_id} has no frames in {zone}")
                 else:
                     staytimes[f"enter_{zone}"] = zone_frames["frame_pc_timestamp"].iloc[0]
+                    staytimes[f"staytime_{zone}"] = zone_staytime
         staytimes['baseline_velocity'] = np.median(outside_R_avg_velocties)
 
         return pd.Series(staytimes)

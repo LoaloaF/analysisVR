@@ -17,6 +17,8 @@ OUTCOME_COL_MAP = {
     4: convert_colors_to_same_type("#00ff4f")[0][0],
     5: convert_colors_to_same_type("#62ff00")[0][0],
 }
+extension = {outc: OUTCOME_COL_MAP[max(outc//10, outc%5)] for outc in range(6, 56)}
+OUTCOME_COL_MAP.update(extension)
 
 CUE_COL_MAP = {
     0: convert_colors_to_same_type('#dbdbdb')[0][0], # unexpcted/ error

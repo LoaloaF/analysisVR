@@ -10,6 +10,7 @@ from . import data_loading_controls
 import dashsrc.components.trial_wise_kinematics as trial_wise_kinematics
 import dashsrc.components.kinematics as kinematics
 import dashsrc.components.staytimes as staytimes
+import dashsrc.components.staytimes_sessions as staytimes_sessions
 import dashsrc.components.constants as C
 
 def create_sessionwise_vis_containers(app: Dash, global_data: dict):
@@ -33,6 +34,8 @@ def create_multisession_vis_containers(app: Dash, global_data: dict):
                 analysis_div = kinematics.render(app, global_data, vis_name=vis_name)
             case "Staytimes":
                 analysis_div = staytimes.render(app, global_data, vis_name=vis_name)
+            case "Staytimes-Performance":
+                analysis_div = staytimes_sessions.render(app, global_data, vis_name=vis_name)
             case _:
                 analysis_div = html.Div([html.H5(vis_name)], id=f'{vis_name}-container', 
                                         style={'display': 'none', 'backgroundColor': 'gray'})

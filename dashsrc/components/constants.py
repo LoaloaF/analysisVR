@@ -5,7 +5,7 @@ PARADIGMS = 800, 1100
 
 
 SESSION_WISE_VISS = ('Velocity-Heatmap', 'Trial-Wise-Kinematics', 'Sucessrate',  'Trial-Wise-Staytimes')
-MULTISESSION_VISS = {'Kinematics', 'Staytimes', 'Session-Wise-PCA', 'Session-Wise-Clustering', 'Session-Wise-PCA-Clustering'}
+MULTISESSION_VISS = {'Staytimes-Performance', 'Staytimes', }
 # ROW2_ANALYSISS = ('Trial-Metrics-Corr', "Trial-Metrics-PCA", "Trial-Metrics-Clustering", "Trial-Metrics-PCA-Clustering")
 
 # html ids

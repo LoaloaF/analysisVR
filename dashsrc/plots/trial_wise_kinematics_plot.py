@@ -2,6 +2,9 @@ import plotly.express as px
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import pandas as pd
+from .kinematics_plot import draw_track_illustration
+from .kinematics_plot import make_kinematics_figure
+import json
 
 from .plot_constants import *
 from .plot_utils import make_discr_trial_cmap
@@ -33,27 +36,51 @@ def _parse_args(n_trials, group_by, metric, metric_max):
                         for k,v in cmap.items()}
     return metric_col, y_axis_label, y_axis_range, group_col, cmap, cmap_transparent
 
-def _make_figure():
-    # Create subplots with a slim top axis
-    fig = make_subplots(
-        rows=2, cols=1,
-        row_heights=[0.07, 0.93],  # Slim top axis
-        shared_xaxes=True,
-        vertical_spacing=0.02
-    )
-    return fig
+# def _make_figure():
+    
+#     # Create subplots with a slim top axis
+#     fig = make_subplots(
+#         rows=2, cols=1,
+#         row_heights=[0.07, 0.93],  # Slim top axis
+#         shared_xaxes=True,
+#         vertical_spacing=0.02
+#     )
+#     return fig
 
-def _configure_axis(fig, y_axis_range, y_axis_label):
+def _configure_axis(fig, height, width, y_axis_range, y_axis_label):
+    # Update layout for the main axis
+    kwargs = {}
+    if height != -1:
+        kwargs['height'] = height
+    if width != -1:
+        kwargs['width'] = width
+        
+    fig.update_layout(
+        plot_bgcolor='white',
+        paper_bgcolor='white',
+        autosize=True,
+        margin=dict(l=0, r=0, t=0, b=0),  # Adjust margins as needed
+        **kwargs,
+    )
+    
     # Update layout for the main axis
     fig.update_layout(
         plot_bgcolor='white',
         paper_bgcolor='white',
+        margin=dict(l=0, r=0, t=0, b=0),  # Adjust margins as needed
         # width=800, height=400,
     )
+    # fig.update_layout(
+    #     plot_bgcolor='white',
+    #     paper_bgcolor='white',
+    #     autosize=True,
+    #     **kwargs,
+    # )
     
     fig.update_xaxes(
         showgrid=False,  # No x grid lines
         zeroline=False,
+        showticklabels=True,
         title_text='Position [cm]',
         row=2, col=1
     )
@@ -94,19 +121,18 @@ def _draw_percentile_area_plot(fig, upper_perc, lower_perc, metric_col, transp_c
         name='80th perc.',
     ), row=2, col=1)
     
-def render_plot(all_data, n_trials, group_by, group_by_values, metric, metric_max, 
-                smooth_data, var_viz):
+def render_plot(all_data, metadata, n_trials, group_by, group_by_values, metric, 
+                metric_max, smooth_data, var_viz, width=-1, height=-1):
     print(all_data)
     print(all_data.iloc[0:2].T)
     print("================")
-    
-    fig = _make_figure()
+        
+    fig = make_kinematics_figure(height=height)
     # parse the arguments
     _ = _parse_args(n_trials, group_by, metric, metric_max)
     metric_col, y_axis_label, y_axis_range, group_col, cmap, cmap_transparent = _
     
     for session_id, data in all_data.groupby(level='session_id'):
-        print(data.T)
         # handle the data
         # Smooth the data with exponential moving average
         if smooth_data:
@@ -116,6 +142,21 @@ def render_plot(all_data, n_trials, group_by, group_by_values, metric, metric_ma
         # min_max_pos_bin = data['from_z_position_bin'].min(), data['from_z_position_bin'].max()
         # data = data[(data['from_z_position_bin'] > min_max_pos_bin[0]) &
         #             (data['from_z_position_bin'] < min_max_pos_bin[1])]
+            
+        # # TODO handle this properly
+        # # deal with double outcomes
+        # outcome_r1 = all_data['trial_outcome'] // 10 
+        # outcome_r2 = all_data['trial_outcome'] % 10
+        # print(all_data['trial_outcome'])
+        # print(outcome_r1)
+        # print(outcome_r2)
+        # outcome_r1.loc[:] = np.max([outcome_r1, outcome_r2], axis=0)
+        # print(outcome_r1)
+        
+        #TODO if P1100: choice_str='Stop', if DR == 1 draw_cues=[]
+        min_track, max_track = data['from_z_position_bin'].min(), data['from_z_position_bin'].max()
+        draw_track_illustration(fig, row=1, col=1,  track_details=json.loads(metadata.iloc[0]['track_details']), 
+                                min_track=min_track, max_track=max_track, choice_str='Stop', draw_cues=[], double_rewards=True)
 
 
         if var_viz == 'Single trials':
@@ -173,5 +214,6 @@ def render_plot(all_data, n_trials, group_by, group_by_values, metric, metric_ma
                     lower_perc = group_data.groupby('from_z_position_bin')[metric_col].quantile(0.1).reset_index().dropna()
                     _draw_percentile_area_plot(fig, upper_perc, lower_perc, metric_col, transp_color)
                 
-    fig = _configure_axis(fig, y_axis_range, y_axis_label)
+    fig = _configure_axis(fig, height, width, y_axis_range, y_axis_label)
+    
     return fig

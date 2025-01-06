@@ -37,9 +37,11 @@ def render(app: Dash, global_data: dict, vis_name: str) -> html.Div:
         # Input(f'smooth-data-{vis_name}', 'value'),
         Input(f'outcome-group-filter-{vis_name}', 'value'),
         Input(f'cue-group-filter-{vis_name}', 'value'),
+        Input(f'trial-group-filter-{vis_name}', 'value'),
+        
     )
     def update_plot(selected_animals, session_range, # group_by, metric,
-                    metric_max, outcome_filter, cue_filter):
+                    metric_max, outcome_filter, cue_filter, trial_filter):
         
         if not all((selected_animals, metric_max)):
             return {}
@@ -49,6 +51,9 @@ def render(app: Dash, global_data: dict, vis_name: str) -> html.Div:
         selected_sessions = [s for s in selected_sessions if s in global_data['UnityTrialwiseMetrics'].index.unique('session_id')]
         # animal and session filtering
         data = global_data['UnityTrialwiseMetrics'].loc[pd.IndexSlice[:,selected_animals,selected_sessions,:]]
+        
+        data, group_by_values = group_filter_data(data, outcome_filter, cue_filter, trial_filter)
+        
         
         # list to single value
         # if len(smooth_data) == 1:
@@ -91,7 +96,7 @@ def render(app: Dash, global_data: dict, vis_name: str) -> html.Div:
                     # Other options in right column
                     dbc.Col([
                         # Filter checklist
-                        *get_filter_checklist_component(vis_name, with_trial_group=False),
+                        *get_filter_checklist_component(vis_name, with_trial_group=True),
                         html.Hr(),
                         # Display options checklist, smooth and max metric
                         *get_display_options_checklist_component(vis_name, with_smooth=False,
@@ -105,3 +110,49 @@ def render(app: Dash, global_data: dict, vis_name: str) -> html.Div:
         ]),
         html.Hr()
     ], id=f"{vis_name}-container")  # Initial state is hidden
+    
+    
+def group_filter_data(data, outcome_filter, cue_filter, trial_filter, group_by="None"):
+    group_values = {}
+    # outcome filtering
+    one_r_outcomes = [1,11,21,31,41,51,10,20,30,40,50]
+    if '1 R' in outcome_filter:
+        # group_values['1 R'] = [1]
+        group_values['1 R'] = one_r_outcomes
+    if '1+ R' in outcome_filter:
+        group_values['1+ R'] = [i for i in range(1,56) if i not in one_r_outcomes]
+    if 'no R' in outcome_filter:
+        group_values['no R'] = [0]
+    data = data[data['trial_outcome'].isin(np.concatenate(list(group_values.values())))]
+    if group_by == 'Outcome':
+        group_by_values = group_values
+    
+    # cue filtering
+    group_values = {}
+    if 'Early R' in cue_filter:
+        group_values['Early R'] = [1]
+    if 'Late R' in cue_filter:
+        group_values['Late R'] = [2]
+    data = data[data['cue'].isin(np.concatenate(list(group_values.values())))]
+    if group_by == 'Cue':
+        group_by_values = group_values
+        
+    # trial filtering
+    group_values = {}
+    # get the 1st, 2nd, 3rd proportion of trials/ split in thirds
+    trial_groups = np.array_split(data['trial_id'].unique(), 3)
+    if "1/3" in trial_filter:
+        group_values["1/3"] = trial_groups[0]
+    if "2/3" in trial_filter:
+        group_values["2/3"] = trial_groups[1]
+    if "3/3" in trial_filter:
+        group_values["3/3"] = trial_groups[2]
+    incl_trials = np.concatenate([tg for tg in group_values.values()])
+    data = data[data['trial_id'].isin(incl_trials)]
+    if group_by == 'Part of session':
+        group_by_values = group_values
+        
+    if group_by == 'None':
+        group_by_values = None
+    
+    return data, group_by_values

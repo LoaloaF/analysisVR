@@ -10,30 +10,30 @@ from analytics_processing import analytics
 
 output_dir = "./outputs/yl/"
 
-analytic = 'UnityTrialwiseMetrics'
-data = {}
-# rat1_sessions = [*range(8), *range(12,20)]
-rat6_sessions = None
-data[analytic] = analytics.get_analytics(analytic, mode='set', 
-                                         animal_ids=[6], session_ids=rat6_sessions,
-                                         paradigm_ids=[1100])
-
-
-fig = staytimes_plot.render_plot(data[analytic], 10.0)
-fig.write_image(f"{output_dir}/rYL001_successrate_staytimes.pdf", )
-fig.write_image(f"{output_dir}/rYL001_successrate_staytimes.png", )
-fig.show()
-
-
-
-# analytic = 'UnityTrackwise'
+# analytic = 'UnityTrialwiseMetrics'
 # data = {}
+# # rat1_sessions = [*range(8), *range(12,20)]
+# rat6_sessions = None
 # data[analytic] = analytics.get_analytics(analytic, mode='set', 
-#                                          animal_ids=[1,], session_ids=[1,2,3,4],
-#                                          paradigm_ids=[800])
-# data['SessionMetadata'] = analytics.get_analytics('SessionMetadata', mode='set', 
-#                                                   animal_ids=[1], session_ids=None,
-#                                                   paradigm_ids=[800])
+#                                          animal_ids=[6], session_ids=rat6_sessions,
+#                                          paradigm_ids=[1100])
+
+
+# fig = staytimes_plot.render_plot(data[analytic], 10.0)
+# fig.write_image(f"{output_dir}/rYL001_successrate_staytimes.pdf", height=300, width=400)
+# # fig.write_image(f"{output_dir}/rYL001_successrate_staytimes.png", )
+# fig.show()
+
+
+
+analytic = 'UnityTrackwise'
+data = {}
+data[analytic] = analytics.get_analytics(analytic, mode='compute', 
+                                         animal_ids=[8,], session_ids=None,
+                                         paradigm_ids=[800])
+data['SessionMetadata'] = analytics.get_analytics('SessionMetadata', mode='compute', 
+                                                  animal_ids=[8, ], session_ids=None,
+                                                  paradigm_ids=[800])
 
 # width = 250
 # height = 190

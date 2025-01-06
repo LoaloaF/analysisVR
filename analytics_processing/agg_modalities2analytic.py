@@ -1,7 +1,7 @@
 # import numpy as np
 import json
 import pandas as pd
-
+import numpy as np
 from CustomLogger import CustomLogger as Logger
 import analytics_processing.analytics_constants as C
 
@@ -17,8 +17,45 @@ def get_SesssionMetadata(session_fullfname):
     data = pd.Series(data, name=0).to_frame().T
     return data
 
+# TDOO: add pose parquet generation
+# Take into facecam images and fed into pre-trained model
+
 def get_BehaviorEvents(session_fullfname):
-    return pd.DataFrame([])
+    eventdata = session_modality_from_nas(session_fullfname, "event")
+    balldata = session_modality_from_nas(session_fullfname, "ballvelocity")
+    
+    # process event
+    eventdata.drop(columns=['event_portenta_timestamp', 'trial_id'], inplace=True)
+    # adjus the lick start time
+    lick_value = eventdata[eventdata["event_name"] == "L"]["event_value"]
+    eventdata.loc[eventdata["event_name"] == "L", "event_pc_timestamp"] += lick_value
+    if not eventdata["event_ephys_timestamp"].isna().any():
+        eventdata.loc[eventdata["event_name"] == "L", "event_ephys_timestamp"] += lick_value
+        eventdata.loc[eventdata["event_name"] == "L", "event_ephys_timestamp"] = round(eventdata.loc[eventdata["event_name"] == "L", "event_ephys_timestamp"]/50) * 50
+    eventdata.loc[eventdata["event_name"] == "L", "event_value"] *= -1
+    # check the patched indicator
+    if "event_ephys_patched" not in eventdata.columns:
+        eventdata["event_ephys_patched"] = np.nan
+    
+    # process ball velocity
+    balldata.drop(columns=['ballvelocity_portenta_timestamp', 'trial_id'], inplace=True)
+    balldata["event_name"] = "B"
+    balldata["event_value"] = balldata["ballvelocity_raw"].astype(str) + "," + balldata["ballvelocity_yaw"].astype(str) + "," + balldata["ballvelocity_pitch"].astype(str)
+    balldata.drop(columns=['ballvelocity_raw', 'ballvelocity_yaw', 'ballvelocity_pitch'], inplace=True)
+    balldata.rename(columns={'ballvelocity_pc_timestamp': 'event_pc_timestamp', 
+                             'ballvelocity_ephys_timestamp': 'event_ephys_timestamp',
+                             'ballvelocity_package_id': 'event_package_id'}, inplace=True)
+    if "ballvelocity_ephys_patched" in balldata.columns:
+        balldata.rename(columns={'ballvelocity_ephys_patched': 'event_ephys_patched'}, inplace=True)
+    else:
+        balldata["event_ephys_patched"] = np.nan
+    
+    behavior_events = pd.concat([eventdata, balldata], ignore_index=True)
+    behavior_events.reset_index(drop=True, inplace=True)
+    return behavior_events
+    # event_name; event_package_id; event_pc; event_ephys; event_value(string);
+    # ball_sensor; Lick; Sound; Reward; Sucktion
+    
     # raise NotImplementedError
     # #TODO process licks poerperly, make reward timeline with vacuum
     # #TODO add pose estimation

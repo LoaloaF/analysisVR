@@ -43,6 +43,15 @@ SESSION_METADATA_TABLE = OrderedDict([
     ("metadata", pd.StringDtype()),
 ])
 
+BEHAVIOR_EVENT_TABLE = OrderedDict([
+    ("event_name", pd.StringDtype()),
+    ("event_package_id", pd.Int64Dtype()),
+    ("event_pc_timestamp", pd.Int64Dtype()),
+    ("event_ephys_timestamp", pd.Int64Dtype()),
+    ("event_value", pd.StringDtype()),
+    ("event_ephys_patched", pd.Int8Dtype()),
+])
+
 # Define the schema with pandas dtypes
 UNITY_FAMEWISE_TABLE = OrderedDict([
     ("frame_x_position", pd.Float32Dtype()),
@@ -65,6 +74,11 @@ UNITY_FAMEWISE_TABLE = OrderedDict([
     
     ("zone", pd.StringDtype()),
     ("frame_state", pd.Int16Dtype()),
+    
+    ("L_count", pd.Int16Dtype()),
+    ("R_count", pd.Int16Dtype()),
+    ("S_count", pd.Int16Dtype()),
+    ("V_count", pd.Int16Dtype()),
     
     ("from_z_position_bin", pd.Int16Dtype()),  # Nullable integer
     ("to_z_position_bin", pd.Int16Dtype()),    # Nullable integer
@@ -141,6 +155,11 @@ UNITY_TRACKWISE_TABLE = OrderedDict([
     ("to_z_position_bin", pd.Int16Dtype()),
     
     ("nframes_in_bin", pd.Int16Dtype()),
+    
+    ("L_count", pd.Int16Dtype()),
+    ("R_count", pd.Int16Dtype()),
+    ("S_count", pd.Int16Dtype()),
+    ("V_count", pd.Int16Dtype()),
     
     ("posbin_z_position", pd.Float32Dtype()),
     ("posbin_z_velocity", pd.Float32Dtype()), # Nullable float

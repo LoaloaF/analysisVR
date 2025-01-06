@@ -19,6 +19,10 @@ def _parse_args(n_trials, group_by, metric, metric_max):
         metric_col = 'posbin_z_acceleration'
         y_axis_label = 'Acceleration [cm/s^2]'
         y_axis_range = -metric_max, metric_max
+    elif metric == 'Lick':
+        metric_col = 'L_count'
+        y_axis_label = 'Lick count'
+        y_axis_range = 0, metric_max
     
     # Determine the color column and color mapping
     if group_by == 'Outcome':

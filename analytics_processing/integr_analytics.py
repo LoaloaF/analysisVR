@@ -12,6 +12,35 @@ def get_UnityTrialwiseMetrics(unity_framewise):
     # raise NotImplementedError
     # return unity_framewise.groupby('trial_id').first()
 
+def merge_facecam_poses_with_frames(unity_framewise, facecam_poses):
+    # decide which timestamp to use
+    if unity_framewise["frame_ephys_timestamp"].isna().any():
+        frame_time_col = "frame_pc_timestamp"
+        facecam_time_col = "facecam_image_pc_timestamp"
+    else:
+        frame_time_col = "frame_ephys_timestamp"
+        facecam_time_col = "facecam_image_ephys_timestamp"
+    
+    facecam_batch = 10000
+    frame_timestamps = unity_framewise[frame_time_col].values
+    # unity_framewise[f'{each_event}_count'] = 0
+
+    # Process in batches
+    for start in range(0, len(facecam_poses), facecam_batch):
+        end = start + facecam_batch
+        event_timestamps = facecam_poses[facecam_time_col].values[start:end]
+
+        # get the closest frame to each event
+        abs_diff_event = np.abs(frame_timestamps[:, np.newaxis] - event_timestamps)
+        closest_unity_indices = np.argmin(abs_diff_event, axis=0)
+        # counts = np.bincount(closest_unity_indices, minlength=len(frame_timestamps))
+
+        # for index, count in enumerate(counts):
+        #     if index < len(unity_framewise):
+        #         unity_framewise.at[index, f'{each_event}_count'] += count
+
+    return unity_framewise
+
 def merge_behavior_events_with_frames(unity_framewise, behavior_events):
     # exclude the ball velocity events
     behavior_events = behavior_events[behavior_events["event_name"] != "B"]

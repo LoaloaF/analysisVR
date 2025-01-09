@@ -21,23 +21,32 @@ def merge_facecam_poses_with_frames(unity_framewise, facecam_poses):
         frame_time_col = "frame_ephys_timestamp"
         facecam_time_col = "facecam_image_ephys_timestamp"
     
-    facecam_batch = 10000
+    facecam_poses_data = facecam_poses.drop(columns=['facecam_image_ephys_timestamp', 
+                                                     'facecam_image_pc_timestamp'])
+    facecam_poses_data = facecam_poses_data.apply(pd.to_numeric, errors='coerce')
+
+    facecam_batch = 2000
     frame_timestamps = unity_framewise[frame_time_col].values
-    # unity_framewise[f'{each_event}_count'] = 0
 
     # Process in batches
     for start in range(0, len(facecam_poses), facecam_batch):
         end = start + facecam_batch
-        event_timestamps = facecam_poses[facecam_time_col].values[start:end]
+        facecam_timestamps = facecam_poses[facecam_time_col].values[start:end]
 
         # get the closest frame to each event
-        abs_diff_event = np.abs(frame_timestamps[:, np.newaxis] - event_timestamps)
+        abs_diff_event = np.abs(frame_timestamps[:, np.newaxis] - facecam_timestamps)
         closest_unity_indices = np.argmin(abs_diff_event, axis=0)
-        # counts = np.bincount(closest_unity_indices, minlength=len(frame_timestamps))
 
-        # for index, count in enumerate(counts):
-        #     if index < len(unity_framewise):
-        #         unity_framewise.at[index, f'{each_event}_count'] += count
+        batch_df = facecam_poses_data.iloc[start:end].copy()
+        batch_df['closest_unity_index'] = closest_unity_indices
+        mean_facecam_data = batch_df.groupby('closest_unity_index').mean()
+        
+        for idx, row in mean_facecam_data.iterrows():
+            for col in row.index:
+                unity_framewise.at[idx, col] = row[col]
+
+    columns_to_interpolate = facecam_poses_data.columns
+    unity_framewise[columns_to_interpolate] = unity_framewise[columns_to_interpolate].interpolate(method='linear')
 
     return unity_framewise
 
@@ -55,7 +64,7 @@ def merge_behavior_events_with_frames(unity_framewise, behavior_events):
     
     # get the unique event types
     event_types = behavior_events["event_name"].unique()
-    event_batch = 15000
+    event_batch = 2000
     
     for each_event in event_types:
         certain_event = behavior_events[behavior_events["event_name"] == each_event]
@@ -115,6 +124,12 @@ def transform_to_position_bin_index(data):
         kinematic_cols = ["posbin_z_position", "posbin_z_velocity", "posbin_z_acceleration",]
         data.loc[:,kinematic_cols] = data.loc[:,kinematic_cols].interpolate(method='linear', 
                                                                             limit_direction='both')
+        
+        # Interpolate facecam pose columns
+        facecam_pose_cols = [col for col in data.columns if col.startswith('facecam_pose_')]
+        data.loc[:,facecam_pose_cols] = data.loc[:,facecam_pose_cols].interpolate(method='linear', 
+                                                                                  limit_direction='both')
+
         # and timestamps
         time_cols = ["posbin_to_pc_timestamp", "posbin_from_pc_timestamp",
             "posbin_from_ephys_timestamp", "posbin_to_ephys_timestamp"]
@@ -151,6 +166,12 @@ def transform_to_position_bin_index(data):
             # average over all frames in the spatial bin
             mean_cols = ['frame_z_position', 'frame_z_velocity', 'frame_z_acceleration',
                          'L_count', 'R_count', 'S_count', 'V_count']
+            
+            # add all the facecam pose columns
+            facecam_pose_cols = [col for col in pos_bin_data.columns 
+                                 if col.startswith('facecam_pose_')]
+            mean_cols.extend(facecam_pose_cols)
+
             agg_bin_data = pos_bin_data[mean_cols].mean()
             
             # number of frames in the spatial bin

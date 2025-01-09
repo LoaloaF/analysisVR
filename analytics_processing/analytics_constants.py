@@ -52,13 +52,6 @@ BEHAVIOR_EVENT_TABLE = OrderedDict([
     ("event_ephys_patched", pd.Int8Dtype()),
 ])
 
-FACECAM_POSES_TABLE = OrderedDict([
-    ("nose_x", pd.Float32Dtype()),
-    ("nose_y", pd.Float32Dtype()),
-    ("nose_likelihood", pd.Float32Dtype()),
-    {"neck_x", pd.Float32Dtype()},
-    
-])
 
 # Define the schema with pandas dtypes
 UNITY_FAMEWISE_TABLE = OrderedDict([

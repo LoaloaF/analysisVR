@@ -71,6 +71,7 @@ def get_FacecamPoses(session_fullfname):
     df_pose.columns = new_columns
     df_pose = df_pose.iloc[2:]
     df_pose.reset_index(drop=True, inplace=True)
+    df_pose = df_pose.add_prefix("facecam_pose_")
 
     df_pose["facecam_image_pc_timestamp"] = data["facecam_image_pc_timestamp"]
     df_pose["facecam_image_ephys_timestamp"] = data["facecam_image_ephys_timestamp"]

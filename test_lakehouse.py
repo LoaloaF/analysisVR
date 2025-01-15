@@ -47,4 +47,4 @@ df.show()
 
 # Display the Pandas DataFrame
 pd_df = df.toPandas()
-print(pd_df.columns)
+print(pd_df)

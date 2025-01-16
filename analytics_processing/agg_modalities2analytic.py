@@ -11,6 +11,7 @@ import analytics_processing.modality_transformations as mT
 import analytics_processing.analytics_utils as aU
 from analysis_utils import device_paths
 from analytics_processing.modality_loading import session_modality_from_nas
+import mat73
 
 def get_SesssionMetadata(session_fullfname):
     data = session_modality_from_nas(session_fullfname, "metadata")
@@ -172,3 +173,35 @@ def get_UnityTrialwiseMetrics(session_fullfname):
         trialdata = pd.concat([trialdata, staytimes], axis=1)
     
     return trialdata
+
+
+def get_Spikes(session_fullfname):
+    session_dir = os.path.dirname(session_fullfname)
+    analytics_dir = os.path.join(session_dir, "session_analytics")
+    
+    ephys_res = [file for file in os.listdir(analytics_dir) if "ephys" in file and file.endswith("_res.mat")]
+    
+    if not ephys_res:
+        Logger().logger.warning(f"No ephys file found in {analytics_dir}")
+        return None
+    
+    ephys_res = os.path.join(analytics_dir, ephys_res[0])
+    ephys_res_mat = mat73.loadmat(ephys_res)
+
+    # TODO: include more fields to this parquet
+    clusters = ephys_res_mat["spikeClusters"] 
+    spikeTimes = ephys_res_mat["spikeTimes"]
+    cluster_sites = ephys_res_mat["clusterSites"]
+
+    spikes = pd.DataFrame({
+    "cluster_id": clusters,
+    "spike_time": spikeTimes
+    })
+    
+    # Create a mapping from cluster to site
+    cluster_to_site = {cluster_id: site_id for cluster_id, site_id in enumerate(cluster_sites)}
+    spikes['site_id'] = spikes['cluster_id'].map(cluster_to_site)
+
+    return spikes
+
+

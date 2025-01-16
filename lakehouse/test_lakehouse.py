@@ -1,8 +1,6 @@
 import pandas as pd
 import numpy as np
 import os
-from pyspark.sql import SparkSession
-from pyspark.sql.functions import input_file_name
 from delta import *
 import pyspark
 from pyspark.sql.functions import lit
@@ -19,13 +17,16 @@ builder = pyspark.sql.SparkSession.builder.appName("MyApp") \
     
 spark = configure_spark_with_delta_pip(builder).getOrCreate()
 
-lakehouse_type = "SessionMetadata"
+lakehouse_type = "Spikes"
 lakehouse_folder = f"/mnt/SpatialSequenceLearning/RUN_rYL006/lakehouse/delta_catalog/{lakehouse_type}"
 
 data_path = "/mnt/SpatialSequenceLearning/RUN_rYL006/rYL006_P1100/"
-data_files = [file for file in os.listdir(data_path) if "DS_Store" not in file]
+# data_files = [file for file in os.listdir(data_path) if "DS_Store" not in file]
+data_files = ["2024-11-21_17-22_rYL006_P1100_LinearTrackStop_25min"]
+sorted_data_files = sorted(data_files)
 
-for data_file in data_files:
+
+for data_file in sorted_data_files:
     print("Processing file: ", data_file)
     parquet_path = f"{data_path}/{data_file}/session_analytics/{lakehouse_type}.parquet"
 
@@ -40,11 +41,7 @@ for data_file in data_files:
         if df.filter(df.source_file == data_file).count() > 0:
             print("File already processed, skipping")
         else:
-            parquet_df.write.format("delta").mode("append").save(lakehouse_folder)
+            parquet_df.write.format("delta").option("mergeSchema", "true").mode("append").save(lakehouse_folder)
 
 df = spark.read.format("delta").load(lakehouse_folder)
 df.show()
-
-# Display the Pandas DataFrame
-pd_df = df.toPandas()
-print(pd_df)

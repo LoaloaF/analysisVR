@@ -189,6 +189,11 @@ def _compute_analytic(analytic, session_fullfname):
         # data = integr_analytics.get_UnityTrialwiseMetrics(unity_framewise)
         # data_table = C.UNITY_TRIALWISE_METRICS_TABLE
     
+    elif analytic == "Spikes":
+        data = m2a.get_Spikes(session_fullfname)
+        data_table = C.SPIKE_TABLE
+
+
     if analytic != "UnityTrialwiseMetrics":
         data = data.reindex(columns=data_table.keys())
         data = data.astype(data_table)        
@@ -447,8 +452,10 @@ if __name__ == "__main__":
     #                 paradigm_ids=[1100], session_ids=None, )#from_date='2024-12-01')
     # d = get_analytics("UnityFramewise", mode="recompute", animal_ids=[6], 
     #                 paradigm_ids=[1100], session_ids=None, )#from_date='2024-12-01')
-    d = get_analytics("UnityTrackwise", mode="recompute", animal_ids=[6], 
-                      paradigm_ids=[1100], session_ids=None, )#from_date='2024-12-01')
+    # d = get_analytics("UnityTrackwise", mode="recompute", animal_ids=[6], 
+    #                   paradigm_ids=[1100], session_ids=None, )#from_date='2024-12-01')
+    d = get_analytics("Spikes", mode="recompute", 
+                      sessionlist_fullfnames = ["/mnt/SpatialSequenceLearning/RUN_rYL006/rYL006_P1100/2024-11-21_17-22_rYL006_P1100_LinearTrackStop_25min/2024-11-21_17-22_rYL006_P1100_LinearTrackStop_25min.hdf5"])
     # d = get_analytics("BehaviorEvents", mode="recompute", sessionlist_fullfnames=["/mnt/SpatialSequenceLearning/RUN_rYL006/rYL006_P1100/2024-11-22_16-01_rYL006_P1100_LinearTrackStop_24min/2024-11-22_16-01_rYL006_P1100_LinearTrackStop_24min.hdf5"] )#from_date='2024-12-01')
     
     # d = get_analytics("UnityTrialwiseMetrics", mode="recompute", animal_ids=[1], 

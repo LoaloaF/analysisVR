@@ -202,7 +202,7 @@ def extract_ephys(cluster_file):
 
 
 # nas_dir = "/mnt/SpatialSequenceLearning/"
-nas_dir = "/Volumes/large/BMI/VirtualReality/SpatialSequenceLearning"
+nas_dir = "/mnt/SpatialSequenceLearning"
 session_dir = "RUN_rYL006/rYL006_P1100/2024-11-21_17-22_rYL006_P1100_LinearTrackStop_25min"
 
 event_file = os.path.join(nas_dir, session_dir, "session_analytics/BehaviorEvents.parquet")

@@ -20,35 +20,41 @@ builder = pyspark.sql.SparkSession.builder.appName("MyApp") \
 spark = configure_spark_with_delta_pip(builder).getOrCreate()
 
 lakehouse_folder = "/mnt/SpatialSequenceLearning/RUN_rYL006/lakehouse/delta_catalog/"
-session_name = "2024-11-21_17-22_rYL006_P1100_LinearTrackStop_25min"
 
 behavior_table = os.path.join(lakehouse_folder, "BehaviorEvents")
 unity_table = os.path.join(lakehouse_folder, "UnityFramewise")
 metadata_table = os.path.join(lakehouse_folder, "SessionMetadata")
 spike_table = os.path.join(lakehouse_folder, "Spikes")
 
-# delta.DeltaTable.forPath(spark, behavior_table).optimize().executeZOrderBy("event_pc_timestamp")
-# delta.DeltaTable.forPath(spark, spike_table).optimize().executeZOrderBy("spike_time")
 behavior_df = spark.read.format("delta").load(behavior_table)
 spike_df = spark.read.format("delta").load(spike_table)
 
 
 spike_df_partitioned = spike_df.withColumn(
-    "spike_time_second", floor(col("spike_time") / 1_000_000)  # Convert microseconds to seconds
+    "spike_time_minute", floor((col("spike_time") / 1_000_000).cast("long") / 60)  # Convert microminutes to minutes
 )
 
 # Write the spike data into a partitioned Delta table
 spike_df_partitioned.write.format("delta") \
     .mode("overwrite") \
-    .partitionBy("spike_time_second") \
-    .save(spike_table)
+    .option("overwriteSchema", "true") \
+    .partitionBy("spike_time_minute") \
+    .save(spike_table)\
+
+
+delta_table = DeltaTable.forPath(spark, spike_table)
+delta_table.optimize()
 
 behavior_df_partitioned = behavior_df.withColumn(
-    "event_ephys_second", floor(col("event_ephys_timestamp") / 1_000_000)  # Convert microseconds to seconds
+    "event_ephys_minute", floor((col("event_ephys_timestamp") / 1_000_000).cast("long") / 60)  # Convert microminutes to minutes
 )
 
-# Write the spike data into a partitioned Delta table
 behavior_df_partitioned.write.format("delta") \
     .mode("overwrite") \
-    .partitionBy("event_ephys_second") \
+    .option("overwriteSchema", "true") \
+    .partitionBy("event_ephys_minute") \
     .save(behavior_table)
+
+
+delta_table = DeltaTable.forPath(spark, behavior_table)
+delta_table.optimize()

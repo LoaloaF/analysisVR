@@ -119,4 +119,8 @@ spike_df_filtered = spike_df.filter(spike_df.source_file == session_name)
 lick_df_filtered.cache()
 spike_df_filtered.cache()
 
-test_spikes(lick_df_filtered, spike_df_filtered)
+lick_df_filtered.show()
+unity_df_filtered.show()
+
+
+# test_spikes(lick_df_filtered, spike_df_filtered)

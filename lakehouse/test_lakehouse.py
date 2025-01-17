@@ -17,12 +17,12 @@ builder = pyspark.sql.SparkSession.builder.appName("MyApp") \
     
 spark = configure_spark_with_delta_pip(builder).getOrCreate()
 
-lakehouse_type = "Spikes"
+lakehouse_type = "UnityFramewise"
 lakehouse_folder = f"/mnt/SpatialSequenceLearning/RUN_rYL006/lakehouse/delta_catalog/{lakehouse_type}"
 
 data_path = "/mnt/SpatialSequenceLearning/RUN_rYL006/rYL006_P1100/"
-# data_files = [file for file in os.listdir(data_path) if "DS_Store" not in file]
-data_files = ["2024-11-21_17-22_rYL006_P1100_LinearTrackStop_25min"]
+data_files = [file for file in os.listdir(data_path) if "DS_Store" not in file]
+# data_files = ["2024-11-21_17-22_rYL006_P1100_LinearTrackStop_25min"]
 sorted_data_files = sorted(data_files)
 
 

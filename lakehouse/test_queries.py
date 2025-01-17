@@ -10,6 +10,14 @@ from pyspark.sql import SparkSession
 import delta
 from pyspark.sql.functions import broadcast
 
+# Ways to optimize the queries:
+# 1. test either using query or spark built in functions (see test_lick and test_spikes),
+#    usually spark built in functions are faster
+# 2. use partitioning to speed up the queries (see test_partitioning.py)
+#    choose wisely to partition by minute or seconds
+# 3. cache the dataframes to memory to speed up further
+
+
 def test_lick(lick_df_filtered, unity_df_filtered):
 
     lick_df_filtered.select("event_ephys_timestamp").show()
@@ -69,6 +77,8 @@ def test_spikes(lick_df_filtered, spike_df_filtered):
     result_df = lick_df_filtered.alias("l") \
         .join(
             spike_df_filtered.alias("s"),
+            (col("s.spike_time_minute") >= col("l.event_ephys_minute") - 1) &  # Include 1 minute before
+            (col("s.spike_time_minute") <= col("l.event_ephys_minute") + 1) &  # Include 1 minute after
             (col("s.spike_time") >= col("l.event_ephys_timestamp") - 10000) & 
             (col("s.spike_time") <= col("l.event_ephys_timestamp") + 10000)
         ) \
@@ -80,8 +90,6 @@ def test_spikes(lick_df_filtered, spike_df_filtered):
     # End timing
     end_time = time.time()
     print(f"Time taken: {end_time - start_time} seconds")
-
-
 
 
 builder = pyspark.sql.SparkSession.builder.appName("MyApp") \
@@ -99,17 +107,9 @@ unity_table = os.path.join(lakehouse_folder, "UnityFramewise")
 metadata_table = os.path.join(lakehouse_folder, "SessionMetadata")
 spike_table = os.path.join(lakehouse_folder, "Spikes")
 
-# delta.DeltaTable.forPath(spark, behavior_table).optimize().executeZOrderBy("event_pc_timestamp")
-# delta.DeltaTable.forPath(spark, spike_table).optimize().executeZOrderBy("spike_time")
-
-
 lick_df = spark.read.format("delta").load(behavior_table)
 unity_df = spark.read.format("delta").load(unity_table)
 spike_df = spark.read.format("delta").load(spike_table)
-
-# spark.sql(f"OPTIMIZE delta.`{behavior_table}` ZORDER BY (event_pc_timestamp)")
-# spark.sql(f"OPTIMIZE delta.`{unity_table}` ZORDER BY (frame_pc_timestamp)")
-# spark.sql(f"OPTIMIZE delta.`{spike_table}` ZORDER BY (spike_time)")
 
 lick_df_filtered = lick_df.filter((lick_df.source_file == session_name) & (lick_df.event_name == "L"))
 unity_df_filtered = unity_df.filter(unity_df.source_file == session_name)
@@ -119,8 +119,4 @@ spike_df_filtered = spike_df.filter(spike_df.source_file == session_name)
 lick_df_filtered.cache()
 spike_df_filtered.cache()
 
-lick_df_filtered.show()
-unity_df_filtered.show()
-
-
-# test_spikes(lick_df_filtered, spike_df_filtered)
+test_spikes(lick_df_filtered, spike_df_filtered)

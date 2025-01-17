@@ -24,15 +24,35 @@ builder = pyspark.sql.SparkSession.builder.appName("MyApp") \
 spark = configure_spark_with_delta_pip(builder).getOrCreate()
 
 lakehouse_folder = "/mnt/SpatialSequenceLearning/RUN_rYL006/lakehouse/delta_catalog/"
+session_name = "2024-11-21_17-22_rYL006_P1100_LinearTrackStop_25min"
 
-behavior_table = os.path.join(lakehouse_folder, "BehaviorEvents")
 unity_table = os.path.join(lakehouse_folder, "UnityFramewise")
-metadata_table = os.path.join(lakehouse_folder, "SessionMetadata")
-spike_table = os.path.join(lakehouse_folder, "Spikes")
-
-behavior_df = spark.read.format("delta").load(behavior_table)
-spike_df = spark.read.format("delta").load(spike_table)
 unity_df = spark.read.format("delta").load(unity_table)
+unity_df_filtered = unity_df.filter(unity_df.source_file == session_name)
 
+start_ephys_time = unity_df_filtered.select("frame_ephys_timestamp").first().frame_ephys_timestamp
+time_interval = 33333
 
+# Loop to process data in chunks of 33333 microseconds
+while True:
+    end_ephys_time = start_ephys_time + time_interval
+
+    start_time = time.time()
+
+    filtered_df = unity_df_filtered.filter(
+        (unity_df_filtered.frame_ephys_timestamp >= start_ephys_time) &
+        (unity_df_filtered.frame_ephys_timestamp <= end_ephys_time)
+    )
+
+    end_time = time.time()
+    print(f"Time taken for interval {start_ephys_time} to {end_ephys_time}: {end_time - start_time} seconds")
+
+    # Check if there is no more data to process
+    if filtered_df.count() == 0:
+        break
+
+    # Update the start time for the next iteration
+    start_ephys_time = end_ephys_time
+
+print("done")
 

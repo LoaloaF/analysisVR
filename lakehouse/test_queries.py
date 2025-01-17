@@ -115,4 +115,8 @@ lick_df_filtered = lick_df.filter((lick_df.source_file == session_name) & (lick_
 unity_df_filtered = unity_df.filter(unity_df.source_file == session_name)
 spike_df_filtered = spike_df.filter(spike_df.source_file == session_name)
 
+# by caching it to memory we can speed up further
+lick_df_filtered.cache()
+spike_df_filtered.cache()
+
 test_spikes(lick_df_filtered, spike_df_filtered)

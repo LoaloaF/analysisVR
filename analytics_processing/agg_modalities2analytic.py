@@ -181,7 +181,7 @@ def get_Spikes(session_fullfname):
 
     # TODO: include more fields to this parquet
     clusters = ephys_res_mat["spikeClusters"] 
-    spikeTimes = ephys_res_mat["spikeTimes"]
+    spikeTimes = ephys_res_mat["spikeTimes"] * 50 # TODO: check if this is correct to multiply 50
     cluster_sites = ephys_res_mat["clusterSites"]
 
     spikes = pd.DataFrame({

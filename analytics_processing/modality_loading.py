@@ -33,20 +33,34 @@ def session_modality_from_nas(session_fullfname, key, where=None, start=None,
                         if key is not None}
                 argsmsg = "with "+L.fmtmsg(args) if args else ""
                 L.logger.debug(f"Accessing {key} from table {argsmsg}")
+
+                # check if columns are valid keys, skip otw
+                if columns is not None:
+                    columns = list(columns) # if tuple is passed
+                    valid_cols = store.select(key, start=0, stop=0).columns
+                    for i in range(len(columns)):
+                        if columns[i] not in valid_cols:
+                            L.logger.warning(f"Column `{columns[i]}` not found in {key}, skipping")
+                            columns.pop(i)
+                
                 data = store.select(key, start=start, stop=stop, where=where, 
                                     columns=columns)
             # very old data (non-patched) may not be in table format, can't read with select
             else:
-                L.logger.debug(f"Accessing {key}...")
-                if columns is not None:
-                    L.logger.warning(f"Data not in table format, `columns` will be ignored")
-                data = store.select(key)
+                L.logger.error(f"Data not in table format; deprecated format")
+                raise KeyError(f"Data not in table format")
+                
+                # L.logger.debug(f"Accessing {key}...")
+                # if columns is not None:
+                #     L.logger.warning(f"Data not in table format, `columns` will be ignored")
+                # data = store.select(key)
             L.logger.debug(f"Got data with shape ({data.shape[0]:,}, {data.shape[1]:,})")
         # data = pd.read_hdf(session_fullfname, key=key, mode='r', start=start, 
         #                    stop=stop, where=where, columns=columns)
+        mid_iloc = data.shape[0] // 2
         L.logger.debug(f"Successfully accessed {key}")
-        L.logger.debug(f"Data: \n{data}")
-        L.logger.debug(f"Data: \n{data.iloc[:2].T}")
+        L.logger.debug(f"Data:\n{data}")
+        L.logger.debug(f"Rows {mid_iloc}, {mid_iloc}+1:\n{data.iloc[mid_iloc:mid_iloc+2].T}")
     except KeyError:
         L.logger.error(f"Key {key} not found in session data")
         data = None

@@ -1,8 +1,5 @@
-
-# MODALITIES = 'unity_trial', 'unity_frame', 'event', 'ballvelocity'
 ANIMALS = 1,2,3, 5,7, 8, 6,9
 PARADIGMS = 800, 1100
-
 
 SESSION_WISE_VISS = ('Velocity-Heatmap', 'Trial-Wise-Kinematics', 'Sucessrate',  'Trial-Wise-Staytimes')
 MULTISESSION_VISS = {'Staytimes-Performance', 'Staytimes', }

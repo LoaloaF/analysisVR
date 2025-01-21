@@ -122,6 +122,35 @@ def data_modality_us2s(data):
 # portenta modality transformations
 # =============================================================================
 
+# the licksensor saves events as the time when the lick stopped + a ngative 
+# interval of lick duration. Convert here to start time and duration
+def event_modality_stoplick2startlick(eventdata):
+    lick_events_mask = eventdata["event_name"] == "L"
+    lick_length = eventdata.loc[lick_events_mask, "event_value"] * -1
+    lick_length = round(lick_length/50) * 50 # round the ephys sampling rate (20KHz)
+    eventdata.loc[lick_events_mask, "event_value"] = lick_length
+    # lick length is not positive, subtract it from the stop time to make start stime
+    eventdata.loc[lick_events_mask, "event_pc_timestamp"] -= lick_length
+    if eventdata["event_ephys_timestamp"].notna().all():
+        # ephys data exists
+        eventdata.loc[lick_events_mask, "event_ephys_timestamp"] += lick_length
+    return eventdata
+
+def ballvel_modality_split_ball_velocity(balldata):
+    # split the ballvelocity into 3 different tables, merge them with events later
+    yaw_data = balldata.copy().drop(columns=['ballvelocity_raw', 'ballvelocity_pitch'])
+    raw_data = balldata.copy().drop(columns=['ballvelocity_yaw', 'ballvelocity_pitch'])
+    pitch_data = balldata.copy().drop(columns=['ballvelocity_raw', 'ballvelocity_yaw'])
+    # name becomes indicative for raw yaw pitch
+    yaw_data['ballvelocity_name'] = "B_forward"
+    raw_data['ballvelocity_name'] = "B_rotate"
+    pitch_data['ballvelocity_name'] = "B_sideway"
+    # the value is the current sensor value/ ball velocity
+    yaw_data.rename(columns={'ballvelocity_yaw': 'ballvelocity_value'}, inplace=True)
+    raw_data.rename(columns={'ballvelocity_raw': 'ballvelocity_value'}, inplace=True)
+    pitch_data.rename(columns={'ballvelocity_pitch': 'ballvelocity_value'}, inplace=True)
+    return yaw_data, raw_data, pitch_data
+
 def event_modality_calc_timeintervals_around_lick(lickdata, interval):
     # check if data is in seconds or microseconds
     unit = 'us' if lickdata["event_pc_timestamp"].iloc[0] > 1e10 else "s"

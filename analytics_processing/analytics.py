@@ -1,5 +1,6 @@
 from datetime import datetime
 import json
+from time import sleep
 import sys
 import os
 import argparse
@@ -140,6 +141,10 @@ def _compute_analytic(analytic, session_fullfname):
         data = m2a.get_SesssionMetadata(session_fullfname)
         data_table = C.SESSION_METADATA_TABLE
     
+    elif analytic == "Portenta":
+        data = m2a.get_Portenta(session_fullfname)
+        data_table = C.BEHAVIOR_EVENT_TABLE
+    
     elif analytic == "BehaviorEvents":
         data = m2a.get_BehaviorEvents(session_fullfname)
         data_table = C.BEHAVIOR_EVENT_TABLE
@@ -193,7 +198,7 @@ def _compute_analytic(analytic, session_fullfname):
         data = m2a.get_Spikes(session_fullfname)
         data_table = C.SPIKE_TABLE
 
-
+    #TODO fix later
     if analytic != "UnityTrialwiseMetrics":
         data = data.reindex(columns=data_table.keys())
         data = data.astype(data_table)        
@@ -216,22 +221,29 @@ def get_analytics(analytic, mode="set", paradigm_ids=None, animal_ids=None,
     else:
         ids = [_extract_id_from_sessionname(os.path.basename(s))
                for s in sessionlist_fullfnames]
+    L.logger.debug(f"Requested analytics: {analytic}, mode: {mode}, "
+                   f"Paradigm_ids: {paradigm_ids}, animal_ids: {animal_ids}, "
+                   f"session_ids: {session_ids}, from_date: {from_date}, "
+                   f"to_date: {to_date}\n\t"
+                   f"Processing {len(sessionlist_fullfnames)} sessions\n")
 
     aggr = []
     for session_fullfname, identif in zip(sessionlist_fullfnames, ids):
+        L.logger.debug(f"Processing {identif} {os.path.basename(session_fullfname)}")
         analytics_fname = _get_analytics_fname(os.path.dirname(session_fullfname),
                                                analysis_name=analytic)
         
         if mode.endswith('compute'):
             if os.path.exists(analytics_fname) and mode != "recompute":
-                print(f"Output exists, skipping.")
+                L.logger.info(f"Output exists, skipping.")
                 continue
             data = _compute_analytic(analytic, session_fullfname)
             data.to_parquet(analytics_fname, index=False)
         
         elif mode == "set":
             if not os.path.exists(analytics_fname):
-                print(f"Analytic `{analytic}` not does not exist for {identif}, compute first.")
+                L.logger.info(f"Analytic `{analytic}` not does not exist for"
+                              f" {identif}, compute first.")
                 continue
             data = pd.read_parquet(analytics_fname, columns=columns)
             midx = [(*identif, i) for i in range(data.shape[0])]
@@ -240,16 +252,16 @@ def get_analytics(analytic, mode="set", paradigm_ids=None, animal_ids=None,
             aggr.append(data)
             
         elif mode == "available":
-            print(analytics_fname)
             if os.path.exists(analytics_fname):
                 aggr.append(identif)
         
         elif mode == 'clear':
             if os.path.exists(analytics_fname):
+                L.logger.warning(f"Permantly DELETING {analytics_fname}in 3s !")
+                sleep(3)
                 os.remove(analytics_fname)
-                # print("del: ", analytics_fname)
             else:
-                print(f"File {analytics_fname} does not exist, skipping.")
+                L.logger.warning(f"File {analytics_fname} does not exist, skipping.")
         
         else:
             raise ValueError(f"Unknown mode {mode}")
@@ -448,14 +460,16 @@ if __name__ == "__main__":
     #                   paradigm_ids=[1100])
     # d = get_analytics("FacecamPoses", mode="recompute", animal_ids=[6], 
     #                   paradigm_ids=[1100])
-    # d = get_analytics("BehaviorEvents", mode="recompute", animal_ids=[6], 
-    #                 paradigm_ids=[1100], session_ids=None, )#from_date='2024-12-01')
+    d = get_analytics("Portenta", mode="recompute", animal_ids=[6], 
+                    #   paradigm_ids=[1100], session_ids=None, to_date='2024-10-28')
+                      paradigm_ids=[1100], session_ids=[20], )
+    print(d)
     # d = get_analytics("UnityFramewise", mode="recompute", animal_ids=[6], 
     #                 paradigm_ids=[1100], session_ids=None, )#from_date='2024-12-01')
     # d = get_analytics("UnityTrackwise", mode="recompute", animal_ids=[6], 
     #                   paradigm_ids=[1100], session_ids=None, )#from_date='2024-12-01')
-    d = get_analytics("Spikes", mode="recompute", 
-                      sessionlist_fullfnames = ["/mnt/SpatialSequenceLearning/RUN_rYL006/rYL006_P1100/2024-11-21_17-22_rYL006_P1100_LinearTrackStop_25min/2024-11-21_17-22_rYL006_P1100_LinearTrackStop_25min.hdf5"])
+    # d = get_analytics("Spikes", mode="recompute", 
+    #                   sessionlist_fullfnames = ["/mnt/SpatialSequenceLearning/RUN_rYL006/rYL006_P1100/2024-11-21_17-22_rYL006_P1100_LinearTrackStop_25min/2024-11-21_17-22_rYL006_P1100_LinearTrackStop_25min.hdf5"])
     # d = get_analytics("BehaviorEvents", mode="recompute", sessionlist_fullfnames=["/mnt/SpatialSequenceLearning/RUN_rYL006/rYL006_P1100/2024-11-22_16-01_rYL006_P1100_LinearTrackStop_24min/2024-11-22_16-01_rYL006_P1100_LinearTrackStop_24min.hdf5"] )#from_date='2024-12-01')
     
     # d = get_analytics("UnityTrialwiseMetrics", mode="recompute", animal_ids=[1], 

@@ -79,50 +79,41 @@ def get_FacecamPoses(session_fullfname):
     return df_pose 
 
 def get_BehaviorEvents(session_fullfname):
-    eventdata = session_modality_from_nas(session_fullfname, "event")
-    balldata = session_modality_from_nas(session_fullfname, "ballvelocity")
-    
-    # process event
-    eventdata.drop(columns=['event_portenta_timestamp', 'trial_id'], inplace=True)
-    # adjus the lick start time
-    lick_value = eventdata[eventdata["event_name"] == "L"]["event_value"]
-    eventdata.loc[eventdata["event_name"] == "L", "event_pc_timestamp"] += lick_value
-    if not eventdata["event_ephys_timestamp"].isna().any():
-        eventdata.loc[eventdata["event_name"] == "L", "event_ephys_timestamp"] += lick_value
-        eventdata.loc[eventdata["event_name"] == "L", "event_ephys_timestamp"] = round(eventdata.loc[eventdata["event_name"] == "L", "event_ephys_timestamp"]/50) * 50
-    eventdata.loc[eventdata["event_name"] == "L", "event_value"] *= -1
+    # deprecated, use get_Portenta
+    return get_Portenta(session_fullfname)
+
+def get_Portenta(session_fullfname):
+    # event data
+    cols = ("event_pc_timestamp","event_value","event_name",
+            "event_ephys_timestamp","event_ephys_patched")
+    eventdata = session_modality_from_nas(session_fullfname, "event", columns=cols)
+
+    eventdata = mT.event_modality_stoplick2startlick(eventdata)
     # check the patched indicator
     if "event_ephys_patched" not in eventdata.columns:
         eventdata["event_ephys_patched"] = np.nan
+    renamer = {col_name: col_name.replace("event", "portenta") 
+               for col_name in eventdata.columns}
+    eventdata.rename(columns=renamer, inplace=True)
     
-    # process ball velocity
-    balldata.drop(columns=['ballvelocity_portenta_timestamp', 'trial_id'], inplace=True)
-    balldata["event_name"] = "B"
-    balldata["event_value"] = balldata["ballvelocity_raw"].astype(str) + "," + balldata["ballvelocity_yaw"].astype(str) + "," + balldata["ballvelocity_pitch"].astype(str)
-    balldata.drop(columns=['ballvelocity_raw', 'ballvelocity_yaw', 'ballvelocity_pitch'], inplace=True)
-    balldata.rename(columns={'ballvelocity_pc_timestamp': 'event_pc_timestamp', 
-                             'ballvelocity_ephys_timestamp': 'event_ephys_timestamp',
-                             'ballvelocity_package_id': 'event_package_id'}, inplace=True)
-    if "ballvelocity_ephys_patched" in balldata.columns:
-        balldata.rename(columns={'ballvelocity_ephys_patched': 'event_ephys_patched'}, inplace=True)
-    else:
-        balldata["event_ephys_patched"] = np.nan
+    # ball velocity data    
+    cols = ("ballvelocity_pc_timestamp","ballvelocity_ephys_timestamp",
+            "ballvelocity_raw","ballvelocity_yaw","ballvelocity_pitch",
+            "ballvelocity_ephys_patched")
+    balldata = session_modality_from_nas(session_fullfname, "ballvelocity", columns=cols)
+    # split single ball sensor reading event into 3 separate rows for RAW, YAW, PITCH
+    raw_data, yaw_data, pitch_data = mT.ballvel_modality_split_ball_velocity(balldata)
+    # for merging all tables at the end, start with eventdata
+    portenta = [eventdata]
+    for d in (yaw_data, raw_data, pitch_data):
+        renamer = {col_name: col_name.replace("ballvelocity", "portenta") 
+                for col_name in d.columns}
+        portenta.append(d.rename(columns=renamer))
     
-    behavior_events = pd.concat([eventdata, balldata], ignore_index=True)
-    behavior_events.reset_index(drop=True, inplace=True)
-    return behavior_events
-    # event_name; event_package_id; event_pc; event_ephys; event_value(string);
-    # ball_sensor; Lick; Sound; Reward; Sucktion
-    
-    # raise NotImplementedError
-    # #TODO process licks poerperly, make reward timeline with vacuum
-    # #TODO add pose estimation
-    # events_data = session_modality_from_nas(session_fullfname, "events")
-    # ballvel_data = session_modality_from_nas(session_fullfname, "ballvelocity")
-    # facecam_data = session_modality_from_nas(session_fullfname, "facecam")
-    
-    # lickdata = data.loc[data['event_name'] == "L"]
-    # licks = mT.event_modality_calc_timeintervals_around_lick(lickdata, C.LICK_MERGE_INTERVAL)
+    # merge and return
+    portenta = pd.concat(portenta, ignore_index=True)
+    portenta = portenta.sort_values(by=['portenta_pc_timestamp', 'portenta_name'])
+    return portenta.reset_index(drop=True)
     
 def get_UnityFramewise(session_fullfname):
     framedata = session_modality_from_nas(session_fullfname, "unity_frame")

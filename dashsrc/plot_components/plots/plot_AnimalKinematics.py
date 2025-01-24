@@ -4,8 +4,8 @@ from plotly.subplots import make_subplots
 import pandas as pd
 import json
 
-from .plot_constants import *
-from .plot_utils import make_discr_trial_cmap
+from dashsrc.components.dashvis_constants import *
+# from .plot_utils import make_discr_trial_cmap
 
 def _parse_args(metric, metric_max):
     # parse arguemnts and set defaults    

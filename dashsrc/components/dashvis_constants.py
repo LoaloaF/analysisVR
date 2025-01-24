@@ -1,13 +1,17 @@
 import plotly.express as px
 from plotly.colors import convert_colors_to_same_type
-#   --error-color: rgb(205, 20, 20);
-#   --good-color: rgb(64,202,114);
-#   --outcome-0-color: var(--error-color);
-#   --outcome-1-color: var(--good-color);
-#   --outcome-2-color: #2cde6eff;
-#   --outcome-3-color: #19ed6bff;
-#   --outcome-4-color: #00ff4fff;
-#   --outcome-5-color: #62ff00ff;
+
+# html ids used across the app
+
+ANIMALS = 1,2,3, 5,7, 8, 6,9
+PARADIGMS = 800, 1100
+
+SESSION_WISE_VISS = ('SessionKinematics', )
+ANIMAL_WISE_VISS = ('Kinematics', 'StayPerformance', 'StayRatio')
+DATA_LOADED_SessionKinematics_ID = 'SessionKinematics-data-loaded'
+DATA_LOADED_Kinematics_ID = 'Kinematics-data-loaded'
+DATA_LOADED_StayRatio_ID = 'Staytimes-data-loaded'
+DATA_LOADED_StayPerformance_ID = 'Staytimes-Performance-data-loaded'
 
 OUTCOME_COL_MAP = {
     0: convert_colors_to_same_type("#CD1414")[0][0],

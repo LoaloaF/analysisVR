@@ -1,9 +1,39 @@
 import pandas as pd
-from analysis_core import init_analysis
-from data_loading.paradigm_loading import get_paradigm_modality
+# from data_loading.paradigm_loading import get_paradigm_modality
 import matplotlib.pyplot as plt
 
-from analysis_core import PARADIGM_COLORS, PARADIGM_VISIBLE_NAMES
+
+PARADIGM_COLORS = {
+    0: "#ccccccff", # AutoLickReward
+    100: "#666666ff", # Spout Association
+
+    500: "#ff72a4ff", # Motor Learning
+    900: "#cc72ffff", # Motor Lick Learning
+    1000: "#7279ffff", # Motor Stop Learning
+
+    200: "#1577d6ff", # 2D arena 1 Pillar
+    400: "#2f15d6ff", # 2D arena 4 Pillars
+
+    800: "#0ee1beff", # 1D track, Cue1 Cue2
+    801: "#0ee136ff", # 1D track, Cue1 Cue2, Lick triggered
+    1100: "#d64215ff", # 1D track, first both rewarded, then Cue1 Cue2, Stop triggered
+}
+
+PARADIGM_VISIBLE_NAMES = {
+    0: "learn-Spout-Licking",
+    100: "learn-Sound->R-Association",
+    
+    500: "learn-Ball-Control",
+    900: "learn-Lick-Triggers-Reward",
+    1000: "learn-Complete-Stopping",
+    
+    200: "2D-Arena: One-Pillar",
+    400: "2D-Arena: Four-Pillars",
+    
+    800: "1D-Track: slowing -> R1 or R2",
+    801: "1D-Track: lick -> R1 or R2",
+    1100: "1D-Track: stopping -> R1 and R2, then or",
+}
 
 def get_all_sessions_metadata(excl_paradigms=[]):
     paradigms = [p for p in range(0,1200,100) if p not in excl_paradigms]
@@ -116,7 +146,6 @@ def draw_all_sessions(metadata):
     
 
 if __name__ == "__main__":
-    init_analysis("INFO")
     all_data = get_all_sessions_metadata(excl_paradigms=[100,300,600,700])
     rewrite_metadata(all_data)
     draw_all_sessions(all_data)

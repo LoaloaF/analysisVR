@@ -3,7 +3,7 @@ import dash_bootstrap_components as dbc
 
 import pandas as pd
 
-from .constants import *
+from dashsrc.components.dashvis_constants import *
 
 def render(app: Dash) -> html.Div:
     @app.callback(

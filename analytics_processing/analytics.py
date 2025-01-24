@@ -46,6 +46,8 @@ def _parse_paradigm_animals_from_nas(paradigm_id, nas_dir):
 
 def _get_sessionlist_fullfnames(paradigm_ids, animal_ids, session_ids=None,
                                 from_date=None, to_date=None):
+    L = Logger()
+    
     nas_dir, _, _ = device_paths()
     sessionlist_fullfnames = []
     from_date = datetime.strptime(from_date, "%Y-%m-%d") if from_date is not None else None
@@ -80,7 +82,7 @@ def _get_sessionlist_fullfnames(paradigm_ids, animal_ids, session_ids=None,
                 session_fname = [fname for fname in os.listdir(os.path.join(parad_animal_subdir, session_dir))
                                  if fname.endswith("min.hdf5")]
                 if len(session_fname) != 1:
-                    print(f"Expected 1 session file for {session_dir}, found "
+                    L.logger.warning(f"Expected 1 session file for {session_dir}, found "
                           f"{len(session_fname)}, {session_fname} in "
                           f"{os.path.join(parad_animal_subdir, session_dir)}")
                     continue
@@ -90,7 +92,7 @@ def _get_sessionlist_fullfnames(paradigm_ids, animal_ids, session_ids=None,
                 sessionlist_fullfnames.append(fullfname)
                 identifier.append((p_id, animal_id, s_id))
                 
-    # print(f"For paradigms {paradigm_ids}, animals {animal_ids}, found\n{np.array(identifier)}")
+    L.logger.debug(f"For paradigms {paradigm_ids}, animals {animal_ids}, found\n{np.array(identifier)}")
     return sessionlist_fullfnames, identifier
 
 def _get_analytics_fname(session_dir, analysis_name):
@@ -229,7 +231,8 @@ def get_analytics(analytic, mode="set", paradigm_ids=None, animal_ids=None,
 
     aggr = []
     for session_fullfname, identif in zip(sessionlist_fullfnames, ids):
-        L.logger.debug(f"Processing {identif} {os.path.basename(session_fullfname)}")
+        L.logger.debug(f"Processing {identif} {os.path.basename(session_fullfname)}"
+                       f"\n{os.path.dirname(session_fullfname)}")
         analytics_fname = _get_analytics_fname(os.path.dirname(session_fullfname),
                                                analysis_name=analytic)
         
@@ -267,7 +270,16 @@ def get_analytics(analytic, mode="set", paradigm_ids=None, animal_ids=None,
             raise ValueError(f"Unknown mode {mode}")
     
     if mode == "set":
-        return pd.concat(aggr)
+        aggr = pd.concat(aggr)
+        
+        session_ids = aggr.index.unique("session_id").tolist()
+        paradigm_ids = aggr.index.unique("paradigm_id").tolist()
+        animal_ids = aggr.index.unique("animal_id").tolist()
+        mid_iloc = aggr.shape[0] // 2
+        L.logger.info(f"Returning {analytic} for {len(session_ids)} sessions.")
+        L.logger.debug(f"Paradigm_ids: {paradigm_ids}, Animal_ids: {animal_ids}"
+                       f"\n{aggr}\n{aggr.iloc[mid_iloc:mid_iloc+1].T}")
+        return aggr
     elif mode == "available":
         return np.array(aggr)
             
@@ -460,9 +472,15 @@ if __name__ == "__main__":
     #                   paradigm_ids=[1100])
     # d = get_analytics("FacecamPoses", mode="recompute", animal_ids=[6], 
     #                   paradigm_ids=[1100])
-    d = get_analytics("Portenta", mode="recompute", animal_ids=[6], 
-                    #   paradigm_ids=[1100], session_ids=None, to_date='2024-10-28')
-                      paradigm_ids=[1100], session_ids=[20], )
+    
+    # d = get_analytics("Portenta", mode="recompute", animal_ids=[6], 
+    #                   paradigm_ids=[1100], session_ids=[20], )
+    
+    # d = get_analytics("FacecamPoses", mode="compute", animal_ids=[6], 
+    #                   paradigm_ids=[1100], session_ids=[20], )
+    d = get_analytics("FacecamPoses", mode="recompute", animal_ids=[6], 
+                      paradigm_ids=[1100], session_ids=[3], )
+    
     print(d)
     # d = get_analytics("UnityFramewise", mode="recompute", animal_ids=[6], 
     #                 paradigm_ids=[1100], session_ids=None, )#from_date='2024-12-01')

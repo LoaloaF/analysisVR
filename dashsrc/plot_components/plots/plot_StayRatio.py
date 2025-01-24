@@ -4,8 +4,8 @@ import plotly.graph_objects as go
 import pandas as pd
 import numpy as np
 
-from .plot_constants import *
-from .plot_utils import make_discr_trial_cmap
+from dashsrc.components.dashvis_constants import *
+# from .plot_utils import make_discr_trial_cmap
 
 def _draw_single_trials(fig, all_data):
     # draw single staytimes scatter plots

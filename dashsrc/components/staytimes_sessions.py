@@ -3,9 +3,11 @@ import dash_bootstrap_components as dbc
 import pandas as pd
 import numpy as np
 # from data_loading.animal_loading import get_animal_modality
-# from analysis_core import get_default_nas_dir
-from dashsrc.plots import staytimes_plot_sessions as staytimes_plot_session
-from .constants import *
+
+from dashsrc.plot_components import staytimes_plot_sessions as staytimes_plot_session
+from dashsrc.components.dashvis_constants import *
+import dashsrc.components.dashvis_constants as C
+
 from .plot_ui_components import (
     get_animal_dropdown_component,
     get_paradigm_dropdown_component,
@@ -19,7 +21,7 @@ from .plot_ui_components import (
     register_paradigm_dropdown_callback,
     register_session_slider_callback
 )
-from .plot_components import get_track_graph_component
+from .dcc_graphs import get_general_graph_component
 
 def render(app: Dash, global_data: dict, vis_name: str) -> html.Div:
     # Register the callbacks
@@ -71,11 +73,11 @@ def render(app: Dash, global_data: dict, vis_name: str) -> html.Div:
         return fig
     
     return html.Div([
-        dcc.Store(id='data-loaded', data=False),  # Store to track data loading state
+        dcc.Store(id=C.DATA_LOADED_StayPerformance_ID, data=False),  # Store to track data loading state
         dbc.Row([
             # Left side for plots
             dbc.Col([
-                get_track_graph_component(vis_name),
+                get_general_graph_component(vis_name)[1],
             ], width=7),
 
             # Right side for UI controls

@@ -7,9 +7,8 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import plotly.io as pio
 
-from dashsrc.plots import trial_wise_kinematics_plot as trial_wise_kinematics_plot
-from dashsrc.plots import kinematics_plot as kinematics_plot
-
+from dashsrc.plot_components.plots import plot_SessionKinematics
+from dashsrc.plot_components import kinematics_plot as kinematics_plot
 from analytics_processing import analytics
 
 

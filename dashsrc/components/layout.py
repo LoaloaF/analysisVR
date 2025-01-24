@@ -1,47 +1,50 @@
 from dash import Dash, html
 import dash_bootstrap_components as dbc
 
-import pandas as pd
-
+from . import dashvis_constants as C
 from . import session_wise_vis_buttons
 from . import multisession_vis_buttons
 from . import data_loading_controls
 
-import dashsrc.components.trial_wise_kinematics as trial_wise_kinematics
-import dashsrc.components.kinematics as kinematics
-import dashsrc.components.staytimes as staytimes
-import dashsrc.components.staytimes_sessions as staytimes_sessions
-import dashsrc.components.constants as C
+from ..plot_components.plot_wrappers import wrapper_SessionKinematics
+from ..plot_components.plot_wrappers import wrapper_AnimalKinematics
+from ..plot_components.plot_wrappers import wrapper_StayPerformance
+from ..plot_components.plot_wrappers import wrapper_StayRatio
 
 def create_sessionwise_vis_containers(app: Dash, global_data: dict):
     viss_row_container = []
     for i, vis_name in enumerate(C.SESSION_WISE_VISS):
         match vis_name:
-            case 'Trial-Wise-Kinematics':
-                analysis_div = trial_wise_kinematics.render(app, global_data, vis_name=vis_name)
+            case 'SessionKinematics':
+                analysis_div = wrapper_SessionKinematics.render(app, global_data, 
+                                                                vis_name=vis_name)
             case _:
                 analysis_div = html.Div([html.H5(vis_name)], id=f'{vis_name}-container', 
-                                        style={'display': 'none', 'backgroundColor': 'gray'})
+                                        style={'display': 'none', 
+                                               'backgroundColor': 'gray'})
                 
         viss_row_container.append(analysis_div)
-    return html.Div(viss_row_container, id='vis_name-container')
+    return html.Div(viss_row_container)
 
 def create_multisession_vis_containers(app: Dash, global_data: dict):
     viss_row_container = []
-    for i, vis_name in enumerate(C.MULTISESSION_VISS):
+    for i, vis_name in enumerate(C.ANIMAL_WISE_VISS):
         match vis_name:
             case "Kinematics":
-                analysis_div = kinematics.render(app, global_data, vis_name=vis_name)
-            case "Staytimes":
-                analysis_div = staytimes.render(app, global_data, vis_name=vis_name)
-            case "Staytimes-Performance":
-                analysis_div = staytimes_sessions.render(app, global_data, vis_name=vis_name)
+                analysis_div = wrapper_AnimalKinematics.render(app, global_data, 
+                                                               vis_name=vis_name)
+            case "StayRatio":
+                analysis_div = wrapper_StayRatio.render(app, global_data, 
+                                                        vis_name=vis_name)
+            case "StayPerformance":
+                analysis_div = wrapper_StayPerformance.render(app, global_data, 
+                                                              vis_name=vis_name)
             case _:
                 analysis_div = html.Div([html.H5(vis_name)], id=f'{vis_name}-container', 
                                         style={'display': 'none', 'backgroundColor': 'gray'})
         
         viss_row_container.append(analysis_div)
-    return html.Div(viss_row_container, id='vis_name-container')
+    return html.Div(viss_row_container)
 
 def create_layout(app: Dash, global_data: dict) -> html.Div:
     return dbc.Container([
@@ -63,7 +66,7 @@ def create_layout(app: Dash, global_data: dict) -> html.Div:
         # header row
         dbc.Row([
             dbc.Col([           
-                html.H3("VR Multi-Session", style={"textAlign": "center"}),
+                html.H3("VR Animal Wise", style={"textAlign": "center"}),
             ], width=2),
             dbc.Col([
                 multisession_vis_buttons.render(app),

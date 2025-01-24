@@ -1,25 +1,27 @@
 import dash
 import dash_bootstrap_components as dbc
-
-import analysis_core
-from CustomLogger import CustomLogger as Logger
+import argparse
 
 from dashsrc.components.layout import create_layout
 
-import sys
-import os
-sys.path.append(os.path.join(os.path.dirname(__file__), 'pipelines'))
+from CustomLogger import CustomLogger as Logger
 
 def main():
-    analysis_core.init_analysis("DEBUG")
+    argParser = argparse.ArgumentParser("Run dash app for visualizing VR data")
+    # parse the first argument as the log level
+    argParser.add_argument("loglevel", help="Log level for the logger", type=str)
+    args = argParser.parse_args()
+    loglevel = args.loglevel
+    
+    Logger().init_logger(None, None, loglevel)
 
     global_data = {"UnityTrackwise": None, "UnityFramewise": None, 'UnityTrialwiseMetrics': None,
-                   "SessionMetadata":None}
+                   "SessionMetadata": None, "Portenta":None}
     
     # Initialize app
     app = dash.Dash(__name__, external_stylesheets=[dbc.themes.BOOTSTRAP])
     app.layout = create_layout(app, global_data)
-    app.run_server(host="0.0.0.0", port=8050, debug=False)
+    app.run_server(host="0.0.0.0", port=8050, debug=True)
 
 if __name__ == '__main__':
     main()

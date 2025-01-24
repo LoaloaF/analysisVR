@@ -4,10 +4,7 @@ import ast
 
 from CustomLogger import CustomLogger as Logger
 
-# from analysis_core import PROJECT_DIR
 from analysis_utils import device_paths
-
-# from analysis_utils import str2list
 
 def extract_metadata(metadata, session_name):
     L = Logger()

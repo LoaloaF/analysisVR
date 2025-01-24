@@ -1,6 +1,9 @@
 import pandas as pd
 from dash import html, dcc, Input, Output
 
+import dashsrc.components.dashvis_constants as C
+
+
 def get_paradigm_dropdown_component(vis_name, global_data, analytic):
     data = global_data[analytic]
     return [
@@ -170,13 +173,15 @@ def get_height_input(vis_name):
     ]
 
 def register_animal_dropdown_callback(app, global_data, analytic, vis_name):
+    data_loaded_id = get_vis_name_data_loaded_id(vis_name)
+    
     @app.callback(
         Output(f'animal-dropdown-{vis_name}', 'options'),
-        Input('data-loaded', 'data'),
+        Input(data_loaded_id, 'data'),
     )
-    def update_animal_options(data_loaded):
+    def update_animal_options(data_loaded_id):
         data = global_data[analytic]
-        if data_loaded and data is not None:
+        if data_loaded_id and data is not None:
             animal_ids = data.index.unique("animal_id")
             return [{'label': f'Animal {i:02}', 'value': i} for i in animal_ids]
         return []
@@ -228,14 +233,41 @@ def register_trial_slider_callback(app, global_data, analytic, vis_name):
         return 1, last_trial_id, (1, last_trial_id)
 
 def register_paradigm_dropdown_callback(app, global_data, analytic, vis_name):
+    data_loaded_id = get_vis_name_data_loaded_id(vis_name)
+    
     @app.callback(
         Output(f'paradigm-dropdown-{vis_name}', 'options'),
-        Input('data-loaded', 'data'),
+        Input(data_loaded_id, 'data'),
     )
-    def update_paradigm_options(data_loaded):
+    def update_paradigm_options(data_loaded_id):
         data = global_data[analytic]
-        print("in paradigm callback ", vis_name, data)
-        if data_loaded and data is not None:
+        if data_loaded_id and data is not None:
             paradigm_ids = data.index.unique("paradigm_id")
             return [{'label': f'Paradigm {i:04}', 'value': i} for i in paradigm_ids]
         return []
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+def get_vis_name_data_loaded_id(vis_name):
+    match vis_name:
+        case 'Kinematics':
+            data_loaded_id = C.DATA_LOADED_Kinematics_ID
+        case 'StayPerformance':
+            print("in")
+            data_loaded_id = C.DATA_LOADED_StayPerformance_ID
+        case 'SessionKinematics':
+            data_loaded_id = C.DATA_LOADED_SessionKinematics_ID
+        case 'StayRatio':
+            data_loaded_id = C.DATA_LOADED_StayRatio_ID
+        case _:
+            raise ValueError(f"Unknown vis_name: {vis_name} for matching "
+                            "with its data_loaded_id")
+    return data_loaded_id

@@ -6,13 +6,11 @@ import numpy as np
 
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 
-from dashsrc.plots import staytimes_plot as staytimes_plot
-from dashsrc.plots import staytimes_plot_sessions as staytimes_plot_sessions
-from dashsrc.plots import kinematics_plot as kinematics_plot
-from dashsrc.plots import trial_wise_kinematics_plot as trial_wise_kinematics_plot
+from dashsrc.plot_components import staytimes_plot as staytimes_plot
+from dashsrc.plot_components import staytimes_plot_sessions as staytimes_plot_sessions
+from dashsrc.plot_components import kinematics_plot as kinematics_plot
+from dashsrc.plot_components.plots import plot_SessionKinematics
 from analytics_processing import analytics
-
-from analysis_core import init_analysis
 
 def group_filter_data(data, outcome_filter, cue_filter, trial_filter, group_by="None"):
     group_values = {}
@@ -60,7 +58,6 @@ def group_filter_data(data, outcome_filter, cue_filter, trial_filter, group_by="
     return data, group_by_values
 
 output_dir = "./outputs/yl/"
-init_analysis("DEBUG")
 data = {}
 
 

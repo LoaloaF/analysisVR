@@ -1,0 +1,343 @@
+from dash import dcc
+from dash import html, dcc, Input, Output
+
+import dashsrc.components.dashvis_constants as C
+import pandas as pd
+    
+def _get_vis_name_data_loaded_id(vis_name):
+    match vis_name:
+        case 'SessionKinematics':
+            data_loaded_id = C.DATA_LOADED_SessionKinematics_ID
+        case 'Kinematics':
+            data_loaded_id = C.DATA_LOADED_Kinematics_ID
+        case 'StayPerformance':
+            data_loaded_id = C.DATA_LOADED_StayPerformance_ID
+        case 'StayRatio':
+            data_loaded_id = C.DATA_LOADED_StayRatio_ID
+        case _:
+            raise ValueError(f"Unknown vis_name: {vis_name} for matching "
+                            "with its data_loaded_id")
+    return data_loaded_id
+
+def paradigm_dropdown_component(vis_name, global_data, analytic):
+    data = global_data[analytic]
+    component_id = f'paradigm-dropdown-{vis_name}'
+    return [
+        html.Label("Select paradigm", style={"marginTop": 15}),
+        dcc.Dropdown(
+            id=component_id,
+            options=[] if data is None else [{'label': f'Paradigm {i:02}', 'value': i} 
+                                             for i in data.index.unique("paradigm_id")],
+            placeholder="Paradigm ID"
+        )
+    ], component_id
+
+def animal_dropdown_component(vis_name, global_data, analytic, multi=False):
+    data = global_data[analytic]
+    component_id = f'animal-dropdown-{vis_name}'
+    return [
+        html.Label("Select animal", style={"marginTop": 15}),
+        dcc.Dropdown(
+            id=component_id,
+            options=[] if data is None else [{'label': f'Animal {i:02}', 'value': i} 
+                                             for i in data.index.unique("animal_id")],
+            placeholder="Animal ID",
+            multi=multi,
+        )
+    ], component_id
+
+def session_dropdown_component(vis_name, global_data, analytic):
+    data = global_data[analytic]
+    component_id = f'session-dropdown-{vis_name}'
+    return [
+        html.Label("Select session", style={"marginTop": 15}),
+        dcc.Dropdown(
+            id=component_id,
+            options=[] if data is None else [{'label': f'Session {i:02}', 'value': i} 
+                                             for i in data.index.unique("session_id")],
+            placeholder="Session ID"
+        )
+    ], component_id
+
+def metric_radioitems_component(vis_name):
+    component_id = f'metric-{vis_name}'
+    return [
+        html.Label("Metric", style={"marginTop": 15}),
+        dcc.RadioItems(
+            ['Velocity', 'Acceleration', 'Lick'],
+            inputStyle={"margin-right": "5px"},
+            style={"marginLeft": 5},
+            value='Velocity',
+            id=component_id
+        )
+    ], component_id
+
+def groupby_radioitems_component(vis_name):
+    component_id = f'group-by-{vis_name}'
+    return [
+        html.Label("Group by", style={"marginTop": 15}),
+        dcc.RadioItems(
+            ['Outcome', 'Cue', 'Part of session', 'None'],
+            inputStyle={"margin-right": "5px"},
+            style={"marginLeft": 5},
+            value='None',
+            id=component_id
+        )
+    ], component_id
+
+def variance_radioitems_component(vis_name):
+    component_id = f'variance-vis-{vis_name}'
+    return [
+        html.Label("Variance vis.", style={"marginTop": 15}),
+        dcc.RadioItems(
+            ['Single trials', '80th percent.', "None"],
+            inputStyle={"margin-right": "5px"},
+            style={"marginLeft": 5},
+            value='Single trials',
+            id=component_id
+        )
+    ], component_id
+
+def outcome_group_filter_component(vis_name):
+    component_id = f'outcome-group-filter-{vis_name}'
+    return [
+        html.Label("Filter", style={"marginTop": 15}),
+        dcc.Checklist(
+            id=component_id,
+            options=['1 R', '1+ R', 'no R'],
+            value=['1 R', '1+ R', 'no R'],
+            inline=True,
+            inputStyle={"margin-right": "7px", "margin-left": "3px"}
+        )
+    ], component_id
+
+def cue_group_filter_component(vis_name):
+    component_id = f'cue-group-filter-{vis_name}'
+    return [
+        html.Label("Filter", style={"marginTop": 15}),
+        dcc.Checklist(
+            id=component_id,
+            options=['Early R', 'Late R'],
+            value=['Early R', 'Late R'],
+            inline=True,
+            inputStyle={"margin-right": "7px", "margin-left": "3px"}
+        )
+    ], component_id
+
+def trial_group_filter_component(vis_name):
+    component_id = f'trial-group-filter-{vis_name}'
+    return [
+        html.Label("Filter", style={"marginTop": 15}),
+        dcc.Checklist(
+            id=component_id,
+            options=['1/3', '2/3', '3/3'],
+            value=['1/3', '2/3', '3/3'],
+            inline=True,
+            inputStyle={"margin-right": "7px", "margin-left": "3px"}
+        )
+    ], component_id
+
+def smooth_checklist_component(vis_name):
+    component_id = f'smooth-data-{vis_name}'
+    return [
+        html.Label("Display options", style={"marginTop": 0}),
+        dcc.Checklist(
+            ['Smooth'],
+            inputStyle={"margin-right": "5px"},
+            style={"marginLeft": 5, "marginTop": 5},
+            value=[],
+            id=component_id
+        )
+    ], component_id
+
+def max_metric_input_component(vis_name, initial_value):
+    component_id = f'max-metric-value-{vis_name}'
+    return [
+        html.Label("Max Metric", style={"marginTop": 10}),
+        dcc.Input(
+            id=component_id,
+            type='number',
+            value=initial_value,
+            style={"width": "60%"}
+        )
+    ], component_id
+    
+
+def trial_range_slider_component(vis_name):
+    component_id = f'trial-range-slider-{vis_name}'
+    return [
+        html.Label("Select a range of trials", style={"marginTop": 15}),
+        dcc.RangeSlider(
+            0, 100,
+            step=1,
+            value=[0, 100],
+            id=component_id
+        )
+    ], component_id
+
+def session_range_slider_component(vis_name):
+    component_id = f'session-range-slider-{vis_name}'
+    return [
+        html.Label("Select a range of sessions", style={"marginTop": 15}),
+        dcc.RangeSlider(
+            0, 10,
+            value=[0, 10],
+            step=1,
+            id=component_id
+        )
+    ], component_id
+    
+    
+def figure_width_input_component(vis_name):
+    component_id = f'width-input-{vis_name}'
+    return [
+        html.Label("Width", style={"marginTop": 15}),
+        dcc.Input(
+            id=component_id,
+            type='number',
+            value=-1,
+            style={"width": "40%", "marginLeft": "5px"},
+            debounce=True,
+        )
+    ], component_id
+
+def figure_height_input_component(vis_name):
+    component_id = f'height-input-{vis_name}'
+    return [
+        html.Label("Height", style={"marginTop": 15}),
+        dcc.Input(
+            id=component_id,
+            type='number',
+            value=-1,
+            style={"width": "40%", "marginLeft": "5px"},
+            debounce=True,
+        )
+    ], component_id
+    
+def plot_type_component(vis_name):
+    component_id = f'var-vis-{vis_name}'
+    return [
+        html.Label("Plot type", style={"marginTop": 15}),
+        dcc.RadioItems(
+            ['Distribution', 'Average'],
+            inputStyle={"margin-right": "5px"},
+            style={"marginLeft": 5},
+            value='Average',
+            id=component_id
+        )
+    ], component_id
+
+def p1100_double_rewards_filter_component(vis_name):
+    component_id = f'double_r-filter-{vis_name}'
+    return [
+        html.Label("Double Rewards", style={"marginTop": 15}),
+        dcc.Checklist(
+            id=component_id,
+            options=['Early R', 'Late R'],
+            value=['Early R', 'Late R'],
+            inline=True,
+            inputStyle={"margin-right": "7px", "margin-left": "3px"}
+        )
+    ], component_id
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+def register_paradigm_dropdown_callback(app, vis_name, global_data, analytic):
+    # html not used, just ensure that callcack is linked to correct component
+    _, paradigm_dropd_comp_id = paradigm_dropdown_component(vis_name, global_data, analytic)
+    data_loaded_id = _get_vis_name_data_loaded_id(vis_name)
+    
+    @app.callback(
+        Output(paradigm_dropd_comp_id, 'options'),
+        Input(data_loaded_id, 'data'),
+    )
+    def update_paradigm_options(data_loaded_id):
+        data = global_data[analytic]
+        if data_loaded_id and data is not None:
+            paradigm_ids = data.index.unique("paradigm_id")
+            return [{'label': f'Paradigm {i:04}', 'value': i} for i in paradigm_ids]
+        return []
+    
+def register_animal_dropdown_callback(app, vis_name, global_data, analytic):
+    data_loaded_id = _get_vis_name_data_loaded_id(vis_name)
+    # html not used, just ensure that callcack is linked to correct component
+    _, animal_dropd_comp_id = animal_dropdown_component(vis_name, global_data, analytic)
+    
+    @app.callback(
+        Output(animal_dropd_comp_id, 'options'),
+        Input(data_loaded_id, 'data'),
+    )
+    def update_animal_options(data_loaded):
+        data = global_data[analytic]
+        if data_loaded and data is not None:
+            animal_ids = data.index.unique("animal_id")
+            return [{'label': f'Animal {i:02}', 'value': i} for i in animal_ids]
+        return []
+
+def register_session_dropdown_callback(app, vis_name, global_data, analytic):
+    # html not used, just ensure that callcack is linked to correct component
+    _, session_dropd_comp_id = session_dropdown_component(vis_name, global_data, analytic)
+    _, animal_dropd_comp_id = animal_dropdown_component(vis_name, global_data, analytic)
+    @app.callback(
+        Output(session_dropd_comp_id, 'options'),
+        Input(animal_dropd_comp_id, 'value')
+    )
+    def update_session_dropdown(selected_animal):
+        data = global_data[analytic]
+        if not selected_animal or data is None:
+            return []
+        sessions = data.loc[pd.IndexSlice[:,selected_animal,:,:]].index.unique('session_id')
+        session_ids = [{'label': f'Session {i}', 'value': i} for i in sessions]
+        return session_ids
+
+def register_session_slider_callback(app, vis_name, global_data, analytic):
+    # html not used, just ensure that callcack is linked to correct component
+    _, session_slider_comp_id = session_range_slider_component(vis_name)
+    _, animal_dropd_comp_id = animal_dropdown_component(vis_name, global_data, analytic)
+    @app.callback(
+        Output(session_slider_comp_id, 'min'),
+        Output(session_slider_comp_id, 'max'),
+        Output(session_slider_comp_id, 'value'),
+        Input(animal_dropd_comp_id, 'value'),
+    )
+    def update_session_slider(selected_animal):
+        data = global_data[analytic]
+        if selected_animal is None or data is None:
+            return 0, 10, (0,10)
+        
+        last_session_id = data.index.unique("session_id").max()
+        return 0, last_session_id, (0, last_session_id)
+
+def register_trial_slider_callback(app, vis_name, global_data, analytic):
+    # html not used, just ensure that callcack is linked to correct component
+    _, trial_slider_comp_id = trial_range_slider_component(vis_name)
+    _, animal_dropd_comp_id = animal_dropdown_component(vis_name, global_data, analytic)
+    _, session_dropd_comp_id = session_dropdown_component(vis_name, global_data, analytic)
+    
+    @app.callback(
+        Output(trial_slider_comp_id, 'min'),
+        Output(trial_slider_comp_id, 'max'),
+        Output(trial_slider_comp_id, 'value'),
+        Input(animal_dropd_comp_id, 'value'),
+        Input(session_dropd_comp_id, 'value')
+    )
+    def update_trial_slider(selected_animal, selected_session):
+        data = global_data[analytic]
+        if selected_animal is None or selected_session is None or data is None:
+            return 0, 100, (0,100)
+        
+        last_trial_id = data.loc[pd.IndexSlice[:,selected_animal,selected_session,:]]['trial_id'].max()
+        return 1, last_trial_id, (1, last_trial_id)

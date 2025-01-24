@@ -2,9 +2,9 @@ import os
 import sys
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 
-from dashsrc.plots import staytimes_plot_sessions as staytimes_plot_sessions
-from dashsrc.plots import kinematics_plot as kinematics_plot
-from dashsrc.plots import trial_wise_kinematics_plot as trial_wise_kinematics_plot
+from dashsrc.plot_components import staytimes_plot_sessions as staytimes_plot_sessions
+from dashsrc.plot_components import kinematics_plot as kinematics_plot
+from dashsrc.plot_components.plots import plot_SessionKinematics
 from analytics_processing import analytics
 
 output_dir = "./outputs/yl/"

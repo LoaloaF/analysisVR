@@ -4,8 +4,8 @@ sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 
 import pandas as pd
 
-from dashsrc.plots import staytimes_plot as staytimes_plot
-from dashsrc.plots import kinematics_plot as kinematics_plot
+from dashsrc.plot_components import staytimes_plot as staytimes_plot
+from dashsrc.plot_components import kinematics_plot as kinematics_plot
 from analytics_processing import analytics
 
 output_dir = "./outputs/yl/"

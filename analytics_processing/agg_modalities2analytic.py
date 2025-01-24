@@ -21,12 +21,14 @@ def get_SesssionMetadata(session_fullfname):
     data = pd.Series(data, name=0).to_frame().T
     return data
 
+def get_AnimalPose(session_fullfname):
+    pass    
+    
 def get_FacecamPoses(session_fullfname):
     data = session_modality_from_nas(session_fullfname, "facecam_packages")
     nas_dir, _, _ = device_paths()
     project_path = os.path.join(nas_dir, "pose_estimation", "ratvt_butt-Haotian-2024-10-04") # modify based on the model
     project_yaml_path = os.path.join(project_path, "config.yaml")
-
     # modify the project_path in the yaml file based on the current nas_dir
     with open(project_yaml_path, 'r') as file:
         yaml_content = yaml.safe_load(file)

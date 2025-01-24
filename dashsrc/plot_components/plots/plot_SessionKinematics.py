@@ -1,13 +1,15 @@
-import plotly.express as px
-import plotly.graph_objects as go
-from plotly.subplots import make_subplots
 import pandas as pd
-from .kinematics_plot import draw_track_illustration
-from .kinematics_plot import make_kinematics_figure
 import json
 
-from .plot_constants import *
-from .plot_utils import make_discr_trial_cmap
+import plotly.graph_objects as go
+import plotly.express as px
+from plotly.subplots import make_subplots
+
+from .general_plot_helpers import draw_track_illustration
+from .general_plot_helpers import make_kinematics_figure
+from .general_plot_helpers import make_discr_trial_cmap
+
+from dashsrc.components.dashvis_constants import *
 
 def _parse_args(n_trials, group_by, metric, metric_max):
     # parse arguemnts and set defaults    

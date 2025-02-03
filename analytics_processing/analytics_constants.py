@@ -5,43 +5,148 @@ import pandas as pd
 # ALL_ANIMAL_IDS = [1,2,3,4,5,6,7,8,9]
 LICK_MERGE_INTERVAL = 0.03
 
-# TODO check dtypes
+MODALITY_KEYS = ['ephys_traces', 'event', 'ballvelocity', 'metadata',
+                 'unitycam_packages', 'facecam_packages', 'bodycam_packages',
+                 'unity_frame', 'unity_trial', 'paradigm_variable', ]
+
 SESSION_METADATA_TABLE = OrderedDict([
-    ("trial_id", pd.Int16Dtype()),
+    ("trial_id", pd.Int32Dtype()),
     ("session_name", pd.StringDtype()),
     ("paradigm_name", pd.StringDtype()),
-    ("paradigm_id", pd.Int16Dtype()),
+    ("paradigm_id", pd.Int32Dtype()),
     ("animal_name", pd.StringDtype()),
-    ("animal_id", pd.Int16Dtype()),
-    ("animal_weight", pd.StringDtype()),
+    ("animal_id", pd.Int32Dtype()),
+    ("animal_weight", pd.Int32Dtype()),
     ("start_time", pd.StringDtype()),
     ("stop_time", pd.StringDtype()),
-    ("duration_minutes", pd.Float32Dtype()),
+    ("duration_minutes", pd.Int32Dtype()),
     ("notes", pd.StringDtype()),
-    ("rewardPostSoundDelay", pd.Float32Dtype()),
-    ("rewardAmount", pd.Float32Dtype()),
+    ("rewardPostSoundDelay", pd.Int32Dtype()),
+    ("rewardAmount", pd.Int32Dtype()),
     ("successSequenceLength", pd.Float32Dtype()),
-    ("trialPackageVariables", pd.StringDtype()),
-    ("trialPackageVariablesDefault", pd.StringDtype()),
+    ("trialPackageVariables", pd.StringDtype()),  # Lists are stored as strings
+    ("trialPackageVariablesDefault", pd.StringDtype()),  # Lists are stored as strings
+    ("trialPackageVariablesFullNames", pd.StringDtype()),  # Lists are stored as strings
+    ("configuration", pd.StringDtype()),  # Dicts are stored as strings
+    ("env_metadata", pd.StringDtype()),  # Dicts are stored as strings
+    ("fsm_metadata", pd.StringDtype()),  # Dicts are stored as strings
     ("track_details", pd.StringDtype()),
-    
-    ("GAP", pd.Float32Dtype()), # random keys from here on
-    ("session_id", pd.StringDtype()),
-    ("duration", pd.StringDtype()),
-    ("punishmentLength", pd.Float32Dtype()),
-    ("punishmentInactivationLength", pd.Float32Dtype()),
-    ("onWallZoneEntry", pd.StringDtype()),
-    ("onInterTrialInterval", pd.StringDtype()),
-    ("interTrialIntervalLength", pd.Float32Dtype()),
-    ("abortInterTrialIntervalLength", pd.Float32Dtype()),
-    ("maxiumTrialLength", pd.Float32Dtype()),
-    ("sessionFREEVAR2", pd.StringDtype()),
-    ("sessionDescription", pd.StringDtype()),
-    ("sessionFREEVAR4", pd.StringDtype()),
-    ("trialPackageVariablesFulllNames", pd.StringDtype()),
-    ("trialPackageVariablesFullNames", pd.StringDtype()),
-    ("metadata", pd.StringDtype()),
+    # ("GAP", pd.StringDtype()),  # NoneType is stored as string
+    # ("session_id", pd.StringDtype()),
+    # ("duration", pd.StringDtype()),
+    # ("punishmentLength", pd.Int32Dtype()),
+    # ("punishmentInactivationLength", pd.Int32Dtype()),
+    # ("onWallZoneEntry", pd.StringDtype()),
+    # ("onInterTrialInterval", pd.StringDtype()),
+    # ("interTrialIntervalLength", pd.Int32Dtype()),
+    # ("abortInterTrialIntervalLength", pd.Int32Dtype()),
+    # ("maxiumTrialLength", pd.Int32Dtype()),
+    # ("sessionFREEVAR2", pd.Int32Dtype()),
+    # ("sessionDescription", pd.Float32Dtype()),  # NaN is stored as float
+    ("ephys_traces_compressed", pd.BooleanDtype()),
+    ("ephys_traces_n_columns", pd.Int32Dtype()),
+    ("ephys_traces_n_rows", pd.Int32Dtype()),
+    ("ephys_traces_columns", pd.StringDtype()),  # Lists are stored as strings
+    ("event_n_columns", pd.Int32Dtype()),
+    ("event_n_rows", pd.Int32Dtype()),
+    ("event_columns", pd.StringDtype()),  # Lists are stored as strings
+    ("event_n_nan_ephys_timestamp", pd.Int32Dtype()),
+    ("event_no_nan_ephys_timestamps", pd.BooleanDtype()),
+    ("event_n_patched_ephys_timestamp", pd.Int32Dtype()),
+    ("event_no_patched_ephys_timestamps", pd.BooleanDtype()),
+    ("ballvelocity_n_columns", pd.Int32Dtype()),
+    ("ballvelocity_n_rows", pd.Int32Dtype()),
+    ("ballvelocity_columns", pd.StringDtype()),  # Lists are stored as strings
+    ("ballvelocity_n_nan_ephys_timestamp", pd.Int32Dtype()),
+    ("ballvelocity_no_nan_ephys_timestamps", pd.BooleanDtype()),
+    ("ballvelocity_n_patched_ephys_timestamp", pd.Int32Dtype()),
+    ("ballvelocity_no_patched_ephys_timestamps", pd.BooleanDtype()),
+    ("metadata_n_columns", pd.Int32Dtype()),
+    ("metadata_n_rows", pd.Int32Dtype()),
+    ("metadata_columns", pd.StringDtype()),  # Lists are stored as strings
+    ("unitycam_packages_missing_frame_keys", pd.StringDtype()),  # Lists are stored as strings
+    ("unitycam_packages_no_missing_frame_keys", pd.BooleanDtype()),
+    ("unitycam_packages_n_columns", pd.Int32Dtype()),
+    ("unitycam_packages_n_rows", pd.Int32Dtype()),
+    ("unitycam_packages_columns", pd.StringDtype()),  # Lists are stored as strings
+    ("unitycam_packages_n_nan_ephys_timestamp", pd.Int32Dtype()),
+    ("unitycam_packages_no_nan_ephys_timestamps", pd.BooleanDtype()),
+    ("unitycam_packages_n_patched_ephys_timestamp", pd.Int32Dtype()),
+    ("unitycam_packages_no_patched_ephys_timestamps", pd.BooleanDtype()),
+    ("facecam_packages_missing_frame_keys", pd.StringDtype()),  # Lists are stored as strings
+    ("facecam_packages_no_missing_frame_keys", pd.BooleanDtype()),
+    ("facecam_packages_n_columns", pd.Int32Dtype()),
+    ("facecam_packages_n_rows", pd.Int32Dtype()),
+    ("facecam_packages_columns", pd.StringDtype()),  # Lists are stored as strings
+    ("facecam_packages_n_nan_ephys_timestamp", pd.Int32Dtype()),
+    ("facecam_packages_no_nan_ephys_timestamps", pd.BooleanDtype()),
+    ("facecam_packages_n_patched_ephys_timestamp", pd.Int32Dtype()),
+    ("facecam_packages_no_patched_ephys_timestamps", pd.BooleanDtype()),
+    ("bodycam_packages_missing_frame_keys", pd.StringDtype()),  # Lists are stored as strings
+    ("bodycam_packages_no_missing_frame_keys", pd.BooleanDtype()),
+    ("bodycam_packages_n_columns", pd.Int32Dtype()),
+    ("bodycam_packages_n_rows", pd.Int32Dtype()),
+    ("bodycam_packages_columns", pd.StringDtype()),  # Lists are stored as strings
+    ("bodycam_packages_n_nan_ephys_timestamp", pd.Int32Dtype()),
+    ("bodycam_packages_no_nan_ephys_timestamps", pd.BooleanDtype()),
+    ("bodycam_packages_n_patched_ephys_timestamp", pd.Int32Dtype()),
+    ("bodycam_packages_no_patched_ephys_timestamps", pd.BooleanDtype()),
+    ("unity_frame_n_columns", pd.Int32Dtype()),
+    ("unity_frame_n_rows", pd.Int32Dtype()),
+    ("unity_frame_columns", pd.StringDtype()),  # Lists are stored as strings
+    ("unity_frame_n_nan_ephys_timestamp", pd.Int32Dtype()),
+    ("unity_frame_no_nan_ephys_timestamps", pd.BooleanDtype()),
+    ("unity_frame_n_patched_ephys_timestamp", pd.Int32Dtype()),
+    ("unity_frame_no_patched_ephys_timestamps", pd.BooleanDtype()),
+    ("unity_trial_n_columns", pd.Int32Dtype()),
+    ("unity_trial_n_rows", pd.Int32Dtype()),
+    ("unity_trial_columns", pd.StringDtype()),  # Lists are stored as strings
+    ("unity_trial_n_nan_ephys_timestamp", pd.Int32Dtype()),
+    ("unity_trial_no_nan_ephys_timestamps", pd.BooleanDtype()),
+    ("unity_trial_n_patched_ephys_timestamp", pd.Int32Dtype()),
+    ("unity_trial_no_patched_ephys_timestamps", pd.BooleanDtype()),
+    ("paradigm_variable_n_columns", pd.Int32Dtype()),
+    ("paradigm_variable_n_rows", pd.Int32Dtype()),
+    ("paradigm_variable_columns", pd.StringDtype()),  # Lists are stored as strings
 ])
+
+# # TODO check dtypes
+# SESSION_METADATA_TABLE = OrderedDict([
+#     ("trial_id", pd.Int16Dtype()),
+#     ("session_name", pd.StringDtype()),
+#     ("paradigm_name", pd.StringDtype()),
+#     ("paradigm_id", pd.Int16Dtype()),
+#     ("animal_name", pd.StringDtype()),
+#     ("animal_id", pd.Int16Dtype()),
+#     ("animal_weight", pd.StringDtype()),
+#     ("start_time", pd.StringDtype()),
+#     ("stop_time", pd.StringDtype()),
+#     ("duration_minutes", pd.Float32Dtype()),
+#     ("notes", pd.StringDtype()),
+#     ("rewardPostSoundDelay", pd.Float32Dtype()),
+#     ("rewardAmount", pd.Float32Dtype()),
+#     ("successSequenceLength", pd.Float32Dtype()),
+#     ("trialPackageVariables", pd.StringDtype()),
+#     ("trialPackageVariablesDefault", pd.StringDtype()),
+#     ("track_details", pd.StringDtype()),
+    
+#     ("GAP", pd.Float32Dtype()), # random keys from here on
+#     ("session_id", pd.StringDtype()),
+#     ("duration", pd.StringDtype()),
+#     ("punishmentLength", pd.Float32Dtype()),
+#     ("punishmentInactivationLength", pd.Float32Dtype()),
+#     ("onWallZoneEntry", pd.StringDtype()),
+#     ("onInterTrialInterval", pd.StringDtype()),
+#     ("interTrialIntervalLength", pd.Float32Dtype()),
+#     ("abortInterTrialIntervalLength", pd.Float32Dtype()),
+#     ("maxiumTrialLength", pd.Float32Dtype()),
+#     ("sessionFREEVAR2", pd.StringDtype()),
+#     ("sessionDescription", pd.StringDtype()),
+#     ("sessionFREEVAR4", pd.StringDtype()),
+#     ("trialPackageVariablesFulllNames", pd.StringDtype()),
+#     ("trialPackageVariablesFullNames", pd.StringDtype()),
+#     ("metadata", pd.StringDtype()),
+# ])
 
 BEHAVIOR_EVENT_TABLE = OrderedDict([
     ("event_name", pd.StringDtype()),

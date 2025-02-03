@@ -10,16 +10,52 @@ import analytics_processing.analytics_constants as C
 import analytics_processing.modality_transformations as mT
 import analytics_processing.analytics_utils as aU
 from analysis_utils import device_paths
-from analytics_processing.modality_loading import session_modality_from_nas
 import mat73
 
+from analytics_processing.modality_loading import session_modality_from_nas
+from analytics_processing.modality_loading import get_modality_summary
+
+def get_Portenta(session_fullfname):
+    # event data
+    cols = ("event_pc_timestamp","event_value","event_name",
+            "event_ephys_timestamp","event_ephys_patched")
+    eventdata = session_modality_from_nas(session_fullfname, "event", columns=cols)
+
+    eventdata = mT.event_modality_stoplick2startlick(eventdata)
+    # check the patched indicator
+    if "event_ephys_patched" not in eventdata.columns:
+        eventdata["event_ephys_patched"] = np.nan
+    renamer = {col_name: col_name.replace("event", "portenta") 
+               for col_name in eventdata.columns}
+    eventdata.rename(columns=renamer, inplace=True)
+    
+    # ball velocity data    
+    cols = ("ballvelocity_pc_timestamp","ballvelocity_ephys_timestamp",
+            "ballvelocity_raw","ballvelocity_yaw","ballvelocity_pitch",
+            "ballvelocity_ephys_patched")
+    balldata = session_modality_from_nas(session_fullfname, "ballvelocity", columns=cols)
+    # split single ball sensor reading event into 3 separate rows for RAW, YAW, PITCH
+    raw_data, yaw_data, pitch_data = mT.ballvel_modality_split_ball_velocity(balldata)
+    # for merging all tables at the end, start with eventdata
+    portenta = [eventdata]
+    for d in (yaw_data, raw_data, pitch_data):
+        renamer = {col_name: col_name.replace("ballvelocity", "portenta") 
+                for col_name in d.columns}
+        portenta.append(d.rename(columns=renamer))
+    
+    # merge and return
+    portenta = pd.concat(portenta, ignore_index=True)
+    portenta = portenta.sort_values(by=['portenta_pc_timestamp', 'portenta_name'])
+    return portenta.reset_index(drop=True)
+    
 def get_SesssionMetadata(session_fullfname):
     data = session_modality_from_nas(session_fullfname, "metadata")
-    # drop nested json-like fields
-    data = {k:v for k,v in data.items() 
-            if k not in ["env_metadata","fsm_metadata","configuration","log_file_content"]}
-    data = pd.Series(data, name=0).to_frame().T
-    return data
+    data = pd.Series(data, name=0)
+    
+    # append a summary of existing modalities for this session
+    modality_summary = get_modality_summary(session_fullfname)
+    data = pd.concat([data, modality_summary], axis=0)
+    return data.to_frame().T
 
 def get_AnimalPose(session_fullfname):
     pass    
@@ -84,39 +120,6 @@ def get_BehaviorEvents(session_fullfname):
     # deprecated, use get_Portenta
     return get_Portenta(session_fullfname)
 
-def get_Portenta(session_fullfname):
-    # event data
-    cols = ("event_pc_timestamp","event_value","event_name",
-            "event_ephys_timestamp","event_ephys_patched")
-    eventdata = session_modality_from_nas(session_fullfname, "event", columns=cols)
-
-    eventdata = mT.event_modality_stoplick2startlick(eventdata)
-    # check the patched indicator
-    if "event_ephys_patched" not in eventdata.columns:
-        eventdata["event_ephys_patched"] = np.nan
-    renamer = {col_name: col_name.replace("event", "portenta") 
-               for col_name in eventdata.columns}
-    eventdata.rename(columns=renamer, inplace=True)
-    
-    # ball velocity data    
-    cols = ("ballvelocity_pc_timestamp","ballvelocity_ephys_timestamp",
-            "ballvelocity_raw","ballvelocity_yaw","ballvelocity_pitch",
-            "ballvelocity_ephys_patched")
-    balldata = session_modality_from_nas(session_fullfname, "ballvelocity", columns=cols)
-    # split single ball sensor reading event into 3 separate rows for RAW, YAW, PITCH
-    raw_data, yaw_data, pitch_data = mT.ballvel_modality_split_ball_velocity(balldata)
-    # for merging all tables at the end, start with eventdata
-    portenta = [eventdata]
-    for d in (yaw_data, raw_data, pitch_data):
-        renamer = {col_name: col_name.replace("ballvelocity", "portenta") 
-                for col_name in d.columns}
-        portenta.append(d.rename(columns=renamer))
-    
-    # merge and return
-    portenta = pd.concat(portenta, ignore_index=True)
-    portenta = portenta.sort_values(by=['portenta_pc_timestamp', 'portenta_name'])
-    return portenta.reset_index(drop=True)
-    
 def get_UnityFramewise(session_fullfname):
     framedata = session_modality_from_nas(session_fullfname, "unity_frame")
     metad = session_modality_from_nas(session_fullfname, "metadata")

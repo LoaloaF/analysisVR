@@ -13,12 +13,14 @@ def render(app: Dash, global_data: dict) -> html.Div:
     D2M_ANALYTICS_DROPDOWN_ID = 'd2m-analytics-dropdown'
     D2M_LOAD_DATA_BUTTON_ID = 'd2m-load-data-button'
 
+    # outputs specifc for plot wise data selection
+    data_loaded_plot_outputs = [Output(C.get_vis_name_data_loaded_id(vis_name), 'data') 
+                                for vis_name in [*C.SESSION_WISE_VISS, *C.ANIMAL_WISE_VISS]]
+    n_plots = len(data_loaded_plot_outputs)
+
     @app.callback(
         Output(D2M_LOAD_DATA_BUTTON_ID, 'style'),
-        Output(C.DATA_LOADED_SessionKinematics_ID, 'data'),
-        Output(C.DATA_LOADED_StayPerformance_ID, 'data'),
-        Output(C.DATA_LOADED_StayRatio_ID, 'data'),
-        Output(C.DATA_LOADED_Kinematics_ID, 'data'),
+        *data_loaded_plot_outputs,
         Input(D2M_LOAD_DATA_BUTTON_ID, 'n_clicks'),
         State(D2M_ANALYTICS_DROPDOWN_ID, 'value'),
         State(D2M_PARADIGMS_DROPDOWN_ID, 'value'),
@@ -27,12 +29,12 @@ def render(app: Dash, global_data: dict) -> html.Div:
     def load_data(n_clicks, selected_analytics, selected_paradigms, selected_animals):
         if n_clicks and selected_analytics:
             _load_all_data(selected_analytics, global_data, selected_paradigms, selected_animals)
-            return {"marginTop": 15, "backgroundColor": "green"}, True, True, True, True
-        return {"marginTop": 15, "backgroundColor": "blue"}, False, False, False, False
+            return {"marginTop": 15, "backgroundColor": "green"}, *([True]*n_plots)
+        return {"marginTop": 15, "backgroundColor": "blue"}, *([False]*n_plots)
     
-    default_animals = [9]
-    default_paradigms = [1100]
-    default_analytics = ['UnityTrackwise', 'SessionMetadata']
+    default_animals = [1]
+    default_paradigms = None
+    default_analytics = ['SessionMetadata']
     
     return dbc.Row([
                 dbc.Col([
@@ -78,8 +80,8 @@ def _load_all_data(selected_analytics, global_data, selected_paradigms, selected
     L = Logger()
     
     for analytic in selected_analytics:
-        if len(selected_paradigms) == 0:
-            selected_paradigms = None
+        # if len(selected_paradigms) == 0:
+        #     selected_paradigms = None
         if len(selected_animals) == 0:
             selected_animals = None
         dat = analytics.get_analytics(analytic, mode='set', session_ids=None,

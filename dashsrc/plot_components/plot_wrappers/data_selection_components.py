@@ -1,24 +1,12 @@
+from datetime import date
+
 from dash import dcc
 from dash import html, dcc, Input, Output
+import dash_bootstrap_components as dbc
 
 import dashsrc.components.dashvis_constants as C
 import pandas as pd
     
-def _get_vis_name_data_loaded_id(vis_name):
-    match vis_name:
-        case 'SessionKinematics':
-            data_loaded_id = C.DATA_LOADED_SessionKinematics_ID
-        case 'Kinematics':
-            data_loaded_id = C.DATA_LOADED_Kinematics_ID
-        case 'StayPerformance':
-            data_loaded_id = C.DATA_LOADED_StayPerformance_ID
-        case 'StayRatio':
-            data_loaded_id = C.DATA_LOADED_StayRatio_ID
-        case _:
-            raise ValueError(f"Unknown vis_name: {vis_name} for matching "
-                            "with its data_loaded_id")
-    return data_loaded_id
-
 def paradigm_dropdown_component(vis_name, global_data, analytic):
     data = global_data[analytic]
     component_id = f'paradigm-dropdown-{vis_name}'
@@ -240,6 +228,60 @@ def p1100_double_rewards_filter_component(vis_name):
         )
     ], component_id
 
+def from_hour_input_component(vis_name):
+    component_id = f'from-hour-input-{vis_name}'
+    return [dcc.Input(
+                id=component_id,
+                type='number',
+                value=11,
+                min=0,
+                max=23,
+                style={"width": "15%", "marginLeft": "5px", 'marginRight': "5px"},
+            ),
+    ], component_id
+
+def to_hour_input_component(vis_name):
+    component_id = f'to-hour-input-{vis_name}'
+    return [dcc.Input(
+                id=component_id,
+                type='number',
+                value=20,
+                min=1,
+                max=24,
+                style={"width": "15%", "marginLeft": "5px", 'marginRight': "5px"},
+            ),
+    ], component_id
+    
+def date_range_slider_component(vis_name):
+    component_id = f'date-range-slider-{vis_name}'
+    from_date = date(C.MIN_DATE_YEAR, C.MIN_DATE_MONTH, C.MIN_DATE_DAY)
+    to_date = date(C.MAX_DATE_YEAR, C.MAX_DATE_MONTH, C.MAX_DATE_DAY)
+    return [
+        html.Label("Select a date range of sessions", style={"marginTop": 15}),
+        dcc.DatePickerRange(
+            id=component_id,
+            min_date_allowed=from_date,
+            max_date_allowed=to_date,
+            initial_visible_month=to_date,
+            start_date=from_date,
+            end_date=to_date,
+        )
+    ], component_id
+    
+def plot_type_selecter_component(vis_name):
+    component_id = f'plot-type-{vis_name}'
+    return [
+        html.Label("Plot type", style={"marginTop": 15}),
+        dcc.RadioItems(
+            ['Timeseries', 'Modalities', "Analytics"],
+            inputStyle={"margin-right": "3px"},
+            style={"marginLeft": 10},
+            value='Timeseries',
+            inline=True,
+            id=component_id
+        )
+    ], component_id
+        
 
 
 
@@ -258,7 +300,7 @@ def p1100_double_rewards_filter_component(vis_name):
 def register_paradigm_dropdown_callback(app, vis_name, global_data, analytic):
     # html not used, just ensure that callcack is linked to correct component
     _, paradigm_dropd_comp_id = paradigm_dropdown_component(vis_name, global_data, analytic)
-    data_loaded_id = _get_vis_name_data_loaded_id(vis_name)
+    data_loaded_id = C.get_vis_name_data_loaded_id(vis_name)
     
     @app.callback(
         Output(paradigm_dropd_comp_id, 'options'),
@@ -272,7 +314,7 @@ def register_paradigm_dropdown_callback(app, vis_name, global_data, analytic):
         return []
     
 def register_animal_dropdown_callback(app, vis_name, global_data, analytic):
-    data_loaded_id = _get_vis_name_data_loaded_id(vis_name)
+    data_loaded_id = C.get_vis_name_data_loaded_id(vis_name)
     # html not used, just ensure that callcack is linked to correct component
     _, animal_dropd_comp_id = animal_dropdown_component(vis_name, global_data, analytic)
     

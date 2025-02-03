@@ -8,6 +8,7 @@ from collections import OrderedDict
 
 # when executed as a process add parent project dir to path
 sys.path.insert(1, os.path.join(sys.path[0], '..'))
+# sys.path.insert(1, os.path.join(sys.path[0], '..', '..', 'ephysVR'))
 
 import pandas as pd
 import numpy as np
@@ -47,6 +48,7 @@ def _parse_paradigm_animals_from_nas(paradigm_id, nas_dir):
 def _get_sessionlist_fullfnames(paradigm_ids, animal_ids, session_ids=None,
                                 from_date=None, to_date=None):
     L = Logger()
+    L.logger.debug("Searching NAS for applicable sesseions...")
     
     nas_dir, _, _ = device_paths()
     sessionlist_fullfnames = []
@@ -91,8 +93,10 @@ def _get_sessionlist_fullfnames(paradigm_ids, animal_ids, session_ids=None,
                 fullfname = os.path.join(parad_animal_subdir, session_dir, session_fname)
                 sessionlist_fullfnames.append(fullfname)
                 identifier.append((p_id, animal_id, s_id))
-                
-    L.logger.debug(f"For paradigms {paradigm_ids}, animals {animal_ids}, found\n{np.array(identifier)}")
+    
+    unique_animals = np.unique([i[1] for i in identifier])            
+    L.logger.debug(f"For paradigms {paradigm_ids}, animals {unique_animals}, "
+                   f"found {len(sessionlist_fullfnames)} sessions.")
     return sessionlist_fullfnames, identifier
 
 def _get_analytics_fname(session_dir, analysis_name):
@@ -241,7 +245,7 @@ def get_analytics(analytic, mode="set", paradigm_ids=None, animal_ids=None,
                 L.logger.info(f"Output exists, skipping.")
                 continue
             data = _compute_analytic(analytic, session_fullfname)
-            data.to_parquet(analytics_fname, index=False)
+            data.to_parquet(analytics_fname, index=False, engine='pyarrow')
         
         elif mode == "set":
             if not os.path.exists(analytics_fname):
@@ -272,10 +276,11 @@ def get_analytics(analytic, mode="set", paradigm_ids=None, animal_ids=None,
     if mode == "set":
         aggr = pd.concat(aggr)
         
-        session_ids = aggr.index.unique("session_id").tolist()
+        session_ids = aggr.index.get_level_values("session_id").tolist()
         paradigm_ids = aggr.index.unique("paradigm_id").tolist()
         animal_ids = aggr.index.unique("animal_id").tolist()
         mid_iloc = aggr.shape[0] // 2
+        L.spacer("debug")
         L.logger.info(f"Returning {analytic} for {len(session_ids)} sessions.")
         L.logger.debug(f"Paradigm_ids: {paradigm_ids}, Animal_ids: {animal_ids}"
                        f"\n{aggr}\n{aggr.iloc[mid_iloc:mid_iloc+1].T}")
@@ -284,162 +289,9 @@ def get_analytics(analytic, mode="set", paradigm_ids=None, animal_ids=None,
         return np.array(aggr)
             
             
-        
-
-        
-    
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-# def get_session_analytic(analytic, paradigm_id, animal_id, session_id, columns=None):
-#     nas_dir, _, _ = device_paths()
-#     subdir = os.path.join(nas_dir, f"RUN_rYL{animal_id:03}", f"rYL{animal_id:03}_P{paradigm_id:04d}")
-#     session_dir = [sd for sd in os.listdir(subdir) if sd.endswith("min")][session_id]
-#     full_path = os.path.join(subdir, session_dir, "session_analytics")
-#     full_fname = os.path.join(full_path, analytic+".parquet")
-#     if not os.path.exists(full_fname):
-#         raise FileNotFoundError(f"Analytics file {full_fname} not found. "
-#                                 f"Generate first with lower level pipeline")
-#     return pd.read_parquet(full_fname, columns=columns)
-    
-# def get_available_analytics(analysis_name):
-#     nas_dir, _, _ = device_paths()
-#     sessionlist_fullfnames, ids = _get_sessionlist_fullfnames(nas_dir, 
-#                                                               C.ALL_PARADIGM_IDS, 
-#                                                               C.ALL_ANIMAL_IDS)
-#     # exit()
-#     analytics_set = []
-#     for session_fullfname, s_identifier in zip(sessionlist_fullfnames, ids):
-#         print(s_identifier, session_fullfname)
-#         analytics_fname = _get_analytics_fname(os.path.dirname(session_fullfname),
-#                                                analysis_name=analysis_name)
-#         # print((s_identifier, analytics_fname), end="\n")
-#         if os.path.exists(analytics_fname):
-#             # print(s_identifier)
-#             analytics_set.append(s_identifier)
-#     return np.array(analytics_set)
-
-# def get_analytic(session_dir, analysis_name):
-#     fullfname = _get_analytics_fname(session_dir, analysis_name)
-#     if not os.path.exists(fullfname):
-#         raise FileNotFoundError(f"Analytics file {fullfname} not found. "
-#                                 f"Generate first with lower level pipeline")
-#     return pd.read_parquet(fullfname)
-    
-# def run_pipeline(which_pipeline, paradigm_ids, animal_ids, sessionlist_fullfnames, 
-#                  recompute, from_date, to_date, nas_dir, ):
-#     L = Logger()
-    
-#     # get the NAS mount point if not passed as an argument
-#     if nas_dir is None:
-#         nas_dir, _, _ = device_paths()
-#     if sessionlist_fullfnames is None:
-#         sessionlist_fullfnames, _ = _get_sessionlist_fullfnames(nas_dir, paradigm_ids, 
-#                                                                 animal_ids, from_date, 
-#                                                                 to_date)
-    
-#     for session_fullfname in sessionlist_fullfnames:
-#         analytics_fname = _get_analytics_fname(os.path.dirname(session_fullfname),
-#                                                analysis_name=which_pipeline)
-#         # print(os.path.basename(session_fullfname))
-        
-#         if os.path.exists(analytics_fname) and not recompute:
-#             print(f"Output exists, skipping.")
-#             continue
-        
-#         if which_pipeline == "metadata":
-#             data = get_complemented_session_modality(session_fullfname, "metadata", dict2pandas=True)
-        
-#         elif which_pipeline == "unity_framewise":
-#             data = get_complemented_session_modality(session_fullfname, "unity_frame",
-#                                         to_deltaT_from_session_start=True,
-#                                         position_bin_index=True, complement_data=True)
-#             data = data.reindex(columns=C.UNITY_FAMEWISE_TABLE.keys())
-#             data = data.astype(C.UNITY_FAMEWISE_TABLE)
-
-#         elif which_pipeline == "unity_trackwise":
-#             data = get_analytic(os.path.dirname(session_fullfname), "unity_framewise")
-#             data = transform_to_position_bin_index(data)
-#             data = data.reindex(columns=C.UNITY_TRACKWISE_TABLE.keys())
-#             data = data.astype(C.UNITY_TRACKWISE_TABLE)
-
-#         data.to_parquet(analytics_fname, index=False)
-        
-    
-    
-    
-# def get_session_analytic(analytic, paradigm_id, animal_id, session_id, columns=None):
-#     nas_dir, _, _ = device_paths()
-#     subdir = os.path.join(nas_dir, f"RUN_rYL{animal_id:03}", f"rYL{animal_id:03}_P{paradigm_id:04d}")
-#     session_dir = [sd for sd in os.listdir(subdir) if sd.endswith("min")][session_id]
-#     full_path = os.path.join(subdir, session_dir, "session_analytics")
-#     full_fname = os.path.join(full_path, analytic+".parquet")
-#     if not os.path.exists(full_fname):
-#         raise FileNotFoundError(f"Analytics file {full_fname} not found. "
-#                                 f"Generate first with lower level pipeline")
-#     return pd.read_parquet(full_fname, columns=columns)
-    
-    
-    
-    
-    
-    
-# def get_analytics_set(paradigm_ids, animal_ids, analysis_name, columns=None,
-#                       from_date=None, to_date=None, nas_dir=None, **kwargs):
-#     L = Logger()
-    
-#     # get the NAS mount point if not passed as an argument
-#     if nas_dir is None:
-#         nas_dir, _, _ = device_paths()
-#         sessionlist_fullfnames, ids = _get_sessionlist_fullfnames(nas_dir, paradigm_ids, 
-#                                                                   animal_ids, from_date, 
-#                                                                   to_date)
-#     # print(sessionlist_fullfnames)
-    
-#     analytics_set = []
-#     for session_fullfname, s_identifier in zip(sessionlist_fullfnames, ids):
-#         analytics_fname = _get_analytics_fname(os.path.dirname(session_fullfname),
-#                                                analysis_name=analysis_name)
-#         # print(analytics_fname)
-        
-#         if not os.path.exists(analytics_fname):
-#             # print(f"Output does not exist, skipping.")
-#             continue
-        
-#         data = pd.read_parquet(analytics_fname, columns=columns)
-#         midx = [(*s_identifier, i) for i in range(data.shape[0])]
-#         data.index = pd.MultiIndex.from_tuples(midx, names=["paradigm_id", "animal_id", "session_id", "entry_id"])
-#         analytics_set.append(data)
-#     data = pd.concat(analytics_set)
-#     # print("data.index")
-#     # print(data)
-#     return data
-    
-    
-    
-    
-    
-    
-    
-    
-if __name__ == "__main__":
-    argParser = argparse.ArgumentParser("Parse sessions from NAS and save denormalized, integrated data")
-    argParser.add_argument("--which_pipeline")
+def main():
+    argParser = argparse.ArgumentParser("Run pipeline to calculate analytics")
+    argParser.add_argument("analytic", help="which analytic to compute", type=str)
     argParser.add_argument("--paradigm_ids", nargs='+', default=None, type=int)
     argParser.add_argument("--animal_ids", nargs='+', default=None, type=int)
     argParser.add_argument("--sessionlist_fullfnames", nargs='+', default=None)
@@ -447,48 +299,19 @@ if __name__ == "__main__":
     argParser.add_argument("--from_date", default=None)
     argParser.add_argument("--to_date", default=None)
     argParser.add_argument("--logging_level", default="DEBUG")
-    argParser.add_argument("--nas_dir", default=None)
     kwargs = vars(argParser.parse_args())
     
     L = Logger()
     Logger().init_logger(None, None, kwargs.pop("logging_level"))
-    L.logger.info("Running pipeline")
-    L.logger.info(L.fmtmsg(kwargs))
+    L.logger.info(f"Running pipeline for analytic `{kwargs['analytic']}`")
+    L.logger.debug(L.fmtmsg(kwargs))
     L.spacer()
     
-    # get_analytics(**kwargs)
-    # d = get_analytics("UnityFramewise", mode="set", sessionlist_fullfnames=["/Volumes/large/BMI/VirtualReality/SpatialSequenceLearning/RUN_rYL006/rYL006_P1000/2024-11-04_16-13_rYL006_P1000_MotorLearningStop_22min/2024-11-04_16-13_rYL006_P1000_MotorLearningStop_22min.hdf5"])
-    # d.frame_pc_timestamp -= d.frame_pc_timestamp.iloc[0]
-    # d.frame_ephys_timestamp -= d.frame_ephys_timestamp.iloc[0]
-    # print(d.frame_ephys_timestamp)
-    # import matplotlib.pyplot as plt
-    # plt.plot((d.frame_pc_timestamp*1e-6) /60, (d.frame_ephys_timestamp*1e-6) /60)
-    # plt.ylabel("Ephys Time (?)")
-    # plt.xlabel("PC Time (min)")
-    # plt.show()  
-    
-    
-    # d = get_analytics("SessionMetadata", mode="recompute", animal_ids=[6], 
-    #                   paradigm_ids=[1100])
-    # d = get_analytics("FacecamPoses", mode="recompute", animal_ids=[6], 
-    #                   paradigm_ids=[1100])
-    
-    # d = get_analytics("Portenta", mode="recompute", animal_ids=[6], 
-    #                   paradigm_ids=[1100], session_ids=[20], )
-    
-    # d = get_analytics("FacecamPoses", mode="compute", animal_ids=[6], 
-    #                   paradigm_ids=[1100], session_ids=[20], )
-    d = get_analytics("FacecamPoses", mode="recompute", animal_ids=[6], 
-                      paradigm_ids=[1100], session_ids=[3], )
-    
-    print(d)
-    # d = get_analytics("UnityFramewise", mode="recompute", animal_ids=[6], 
-    #                 paradigm_ids=[1100], session_ids=None, )#from_date='2024-12-01')
-    # d = get_analytics("UnityTrackwise", mode="recompute", animal_ids=[6], 
-    #                   paradigm_ids=[1100], session_ids=None, )#from_date='2024-12-01')
-    # d = get_analytics("Spikes", mode="recompute", 
-    #                   sessionlist_fullfnames = ["/mnt/SpatialSequenceLearning/RUN_rYL006/rYL006_P1100/2024-11-21_17-22_rYL006_P1100_LinearTrackStop_25min/2024-11-21_17-22_rYL006_P1100_LinearTrackStop_25min.hdf5"])
-    # d = get_analytics("BehaviorEvents", mode="recompute", sessionlist_fullfnames=["/mnt/SpatialSequenceLearning/RUN_rYL006/rYL006_P1100/2024-11-22_16-01_rYL006_P1100_LinearTrackStop_24min/2024-11-22_16-01_rYL006_P1100_LinearTrackStop_24min.hdf5"] )#from_date='2024-12-01')
-    
-    # d = get_analytics("UnityTrialwiseMetrics", mode="recompute", animal_ids=[1], 
-    #                   paradigm_ids=[800], session_ids=None)
+    if not kwargs.pop("recompute"):
+        kwargs['mode'] = 'set'
+    else:
+        kwargs['mode'] = 'recompute'
+    get_analytics(**kwargs)
+
+if __name__ == '__main__':
+    main()

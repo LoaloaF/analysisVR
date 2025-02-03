@@ -1,9 +1,12 @@
+import os
+import sys
+sys.path.insert(1, os.path.join(sys.path[0], '..', 'ephysVR'))
+
 import dash
 import dash_bootstrap_components as dbc
 import argparse
 
 from dashsrc.components.layout import create_layout
-
 from CustomLogger import CustomLogger as Logger
 
 def main():

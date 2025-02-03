@@ -76,15 +76,15 @@ def extract_metadata(metadata, session_name):
     
     trialPackageVariables = metadata.get("trialPackageVariables")
     if trialPackageVariables is not None and trialPackageVariables.shape[0]:
-        metadata_parsed["trialPackageVariables"] = str2list(trialPackageVariables.item())
+        metadata_parsed["trialPackageVariables"] = _str2list(trialPackageVariables.item())
         
     trialPackageVariablesDefault = metadata.get("trialPackageVariablesDefault")
     if trialPackageVariablesDefault is not None and trialPackageVariablesDefault.shape[0]:
-        metadata_parsed["trialPackageVariablesDefault"] = str2list(trialPackageVariablesDefault.item())
+        metadata_parsed["trialPackageVariablesDefault"] = _str2list(trialPackageVariablesDefault.item())
         
     trialPackageVariablesFullNames = metadata.get("trialPackageVariablesFullNames")
     if trialPackageVariablesFullNames is not None and trialPackageVariablesFullNames.shape[0]:
-        metadata_parsed["trialPackageVariablesFullNames"] = str2list(trialPackageVariablesFullNames.item())
+        metadata_parsed["trialPackageVariablesFullNames"] = _str2list(trialPackageVariablesFullNames.item())
         
     # =================================
     # JSON based nested metadata fields
@@ -268,7 +268,7 @@ def _get_default_P0800_env_metadata():
         metadata = json.load(f)
     return metadata
 
-def str2list(string):
+def _str2list(string):
     """
     Convert a string representation of a list to an actual list.
 

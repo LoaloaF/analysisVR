@@ -1,29 +1,49 @@
-import json
 import os
+import cv2
 
 import h5py
 import pandas as pd
-
+import numpy as np
 from CustomLogger import CustomLogger as Logger
 
 import analytics_processing.modality_transformations as mT
 from analytics_processing import metadata_loading
-# import analytics_processing.analytics_constants as C
+import analytics_processing.analytics_constants as C
 
-def _load_cam_frames(session_file, key):
-    #TODO implement this
-    raise NotImplementedError("Loading camera frames from session data is not implemented yet")
-
+# from mea1k_modules.mea1k_raw_preproc import read_raw_data
+        
 def session_modality_from_nas(session_fullfname, key, where=None, start=None, 
                                stop=None, columns=None):
     L = Logger()
-    # session_fullfname = _make_session_filename(nas_base_dir, pardigm_subdir, session_name)
     
     # special key for camera frames    
-    if key.startswith("cam") and key.endswith("frames"):
-        session_file = load_session_hdf5(session_fullfname)
-        return _load_cam_frames(session_file, key)
+    if key.endswith("cam_frames"):
+        session_file = _load_session_hdf5(session_fullfname)
+        session_file.close()
+        return _load_cam_frames(session_file, key, columns)
     
+    # # special key for MEA1K h5 file
+    # if key == 'ephys_traces':
+    #     ephys_fullfname = session_fullfname.replace(".hdf5", "_ephys_traces.dat")
+    #     print(ephys_fullfname)
+    #     print(os.path.exists(ephys_fullfname))
+    #     print("------")
+        
+    #     if not os.path.exists(ephys_fullfname):
+    #         session_dir = os.path.dirname(session_fullfname)
+    #         ephys_fullfname = os.path.join(session_dir, "ephys_output.raw.h5")
+    #         print(ephys_fullfname)
+    #         print(os.path.exists(ephys_fullfname))
+            
+    #         if not os.path.exists(ephys_fullfname):
+    #             L.logger.error(f"MEAK1 ephys traces not found in session directory")
+    #             return pd.DataFrame([False], columns=["ephys_traces_compressed"])
+    #         else:
+    #             return pd.DataFrame([True], columns=["ephys_traces_compressed"])
+        
+    #     # o = read_raw_data(session_dir, 'ephys_output.raw.h5')
+    #     return None
+        
     # pandas based data
     try:
         with pd.HDFStore(session_fullfname, mode='r') as store:
@@ -45,15 +65,15 @@ def session_modality_from_nas(session_fullfname, key, where=None, start=None,
                 
                 data = store.select(key, start=start, stop=stop, where=where, 
                                     columns=columns)
-            # very old data (non-patched) may not be in table format, can't read with select
+            # very old data (non-patched) may not be in table format, can't read with start stop
             else:
-                L.logger.error(f"Data not in table format; deprecated format")
-                raise KeyError(f"Data not in table format")
+                # L.logger.error(f"Data not in table format; deprecated format")
+                # raise KeyError(f"Data not in table format")
                 
-                # L.logger.debug(f"Accessing {key}...")
-                # if columns is not None:
-                #     L.logger.warning(f"Data not in table format, `columns` will be ignored")
-                # data = store.select(key)
+                L.logger.debug(f"Accessing {key}...")
+                if columns is not None:
+                    L.logger.warning(f"Data not in table format, `columns` will be ignored")
+                data = store.select(key)
             L.logger.debug(f"Got data with shape ({data.shape[0]:,}, {data.shape[1]:,})")
         # data = pd.read_hdf(session_fullfname, key=key, mode='r', start=start, 
         #                    stop=stop, where=where, columns=columns)
@@ -71,15 +91,74 @@ def session_modality_from_nas(session_fullfname, key, where=None, start=None,
     if key == 'metadata':
         session_name = os.path.basename(session_fullfname).replace(".hdf5", "")
         if data is not None:
-            # metadata is the only key that will never return None
             data = metadata_loading.extract_metadata(data, session_name)
         else:
+            # metadata is the only key that will never return None
             data = metadata_loading.minimal_metad_from_session_name(session_name)
     elif key == 'paradigm_variable':
         data = mT.fix_missing_paradigm_variable_names(data)
     return data
 
-def load_session_hdf5(session_fullfname):
+def get_modality_summary(session_fullfname):
+    L = Logger()
+    aggr = []
+    for modality_key in C.MODALITY_KEYS:
+        modality_summary = {}
+        data = session_modality_from_nas(session_fullfname, modality_key)
+        L.logger.debug(f"Creating summary of {modality_key} modality...")
+                    
+        if modality_key == "metadata":
+            data = pd.Series(data).to_frame().T
+        elif data is None:
+            L.logger.warning(f"Modality {modality_key} missing.")
+            continue
+            
+        if modality_key.endswith("cam_packages"):
+            session_file = _load_session_hdf5(session_fullfname)
+            raw_images_key = modality_key.replace("_packages", "_frames")
+            all_frame_keys = list(session_file[raw_images_key].keys())
+            session_file.close()
+            all_frame_keys = np.array([int(k.replace("frame_","")) for k in all_frame_keys])
+            # assume that gaps are exactly 1 frame
+            missing_frame_keys = all_frame_keys[:-1][np.diff(all_frame_keys) != 1]+1
+            modality_summary['missing_frame_keys'] = missing_frame_keys.tolist()
+            modality_summary['no_missing_frame_keys'] = missing_frame_keys.size == 0
+        
+        elif modality_key == "ephys_traces":
+            modality_summary['compressed'] = data.iloc[0, 0]
+        
+        # get general shape of data
+        modality_summary['n_columns'] = data.shape[1]
+        modality_summary['n_rows'] = data.shape[0]
+        modality_summary['columns'] = data.columns.tolist()
+        
+        # check for missing values regarding ephys timestamps, patching
+        col_basename = modality_key
+        if modality_key == "unity_frame":
+            col_basename = "frame"
+        elif modality_key == "unity_trial":
+            col_basename = "trial_start"
+        elif modality_key.endswith("cam_packages"):
+            col_basename = modality_key.replace("_packages", "_image")
+        
+        ephys_t_col = f"{col_basename}_ephys_timestamp"
+        et_patched_col = f"{col_basename}_ephys_patched"
+        if ephys_t_col in data.columns:
+            modality_summary['n_nan_ephys_timestamp'] = data[ephys_t_col].isna().sum()
+            modality_summary['no_nan_ephys_timestamps'] = data[ephys_t_col].isna().sum() == 0
+            if et_patched_col in data.columns:
+                modality_summary['n_patched_ephys_timestamp'] = data[et_patched_col].isna().sum()
+                modality_summary['no_patched_ephys_timestamps'] = data[et_patched_col].isna().sum() == 0
+        
+        modality_summary = pd.Series(modality_summary, name=modality_key)
+        modality_summary.index = modality_key+"_"+modality_summary.index
+        L.logger.debug(f"Summary of {modality_key}:\n{modality_summary}")
+        aggr.append(modality_summary)
+    aggr = pd.concat(aggr, axis=0)
+    L.logger.debug(f"Summary of all modalities:\n{aggr}")
+    return aggr
+
+def _load_session_hdf5(session_fullfname):
     try:
         session_file = h5py.File(session_fullfname, 'r')
     except OSError:
@@ -88,101 +167,16 @@ def load_session_hdf5(session_fullfname):
         session_file = None
     return session_file
 
-# def get_complemented_session_modality(session_fullfname, modality, modality_parsing_kwargs={}, 
-#                          **session_parsing_kwargs):
-#     L = Logger()
-#     data = session_modality_from_nas(session_fullfname, modality, 
-#                                       **modality_parsing_kwargs)
-#     if data is None:
-#         Logger().logger.error(f"Failed to load {modality} data")
-#         return 
-    
-#     if modality == 'metadata':
-#         if session_parsing_kwargs.get("dict2pandas"):
-#             # drop nested json-like fields
-#             data = {k:v for k,v in data.items() 
-#                     if k not in ["env_metadata","fsm_metadata","configuration","log_file_content"]}
-#             data = pd.Series(data, name=0).to_frame().T
+def _load_cam_frames(session_file, key, columns):
+    L = Logger()
+    frames_stack = []
+    if columns is None:
+        L.logger.debug(f"Loading entire sequence of {key}...")
+        columns = list(session_file[key].keys())
         
-#         elif session_parsing_kwargs.get("dict2json"):
-#             data = json.dumps(data, indent='  ').replace("NaN", "null")
-            
-#         elif session_parsing_kwargs.get("only_get_track_details"):
-#             data = metadata_loading.env_metadata2track_details(data['env_metadata'])
-    
-#     elif modality == 'event':
-#         pass
-    
-#         if session_parsing_kwargs.get("complement_data"):
-#             lickdata = data.loc[data['event_name'] == "L"]
-#             licks = mT.event_modality_calc_timeintervals_around_lick(lickdata, C.LICK_MERGE_INTERVAL)
-            
-            
-#             #TODO process licks poerperly, make reward timeline with vacuum
-#             #TODO add pose estimation
-#             #  events = session_modality_from_nas(*session_dir_tuple, "event")
-#                 # reward, lick = sT.frame_wise_events(data, events)
-#                 # data['frame_reward'] = reward
-#                 # data['frame_lick'] = lick
-#                 # insert ball velocity
-#                 # ball_vel = session_modality_from_nas(*session_dir_tuple, "ballvelocity")
-#                 # raw_yaw_pitch = sT.frame_wise_ball_velocity(data, ball_vel)
-#                 # data = pd.concat([data, raw_yaw_pitch], axis=1)
-
-
-
-
-
-
-#     elif modality == "paradigm_variable":
-#         if session_parsing_kwargs.get("fix_missing_names"):
-#             data = mT.fix_missing_paradigm_variable_names(data)
-    
-#     elif modality == 'unity_frame' or modality == 'unity_trial':
-#         paradigm_id = get_complemented_session_modality(session_fullfname, "metadata",
-#                                            {"columns": ["paradigm_name"]})['paradigm_id']
-#         if paradigm_id in (800, 1100):
-#             track_details = get_complemented_session_modality(session_fullfname, "metadata",
-#                                                  {"columns": ["env_metadata"]},
-#                                                  only_get_track_details=True)
-#             if modality == 'unity_frame':
-#                 if session_parsing_kwargs.get("to_deltaT_from_session_start"):
-#                     data = mT.data_modality_deltaT_from_session_start(data)
-                
-#                 if session_parsing_kwargs.get("complement_data"):
-#                     # insert z position bin (1cm)
-#                     from_z_position, to_z_position = mT.unity_modality_track_spatial_bins(data)
-#                     data['from_z_position_bin'] = from_z_position
-#                     data['to_z_position_bin'] = to_z_position
-
-#                     # insert column with string which zone in at this frame                
-#                     zone = mT.unity_modality_track_zones(data, track_details)
-#                     data['zone'] = zone 
-                    
-#                     # insert cue/ trial type, outcome etc, denormalize 
-#                     trials_variable = get_complemented_session_modality(session_fullfname, 
-#                                                            "paradigm_variable",
-#                                                            fix_missing_names=True)
-#                     data = pd.merge(data, trials_variable, on='trial_id', how='left')
-                    
-#                     # insert velocity and acceleration
-#                     vel, acc = mT.unity_modality_track_kinematics(data)
-#                     data = pd.concat([data, vel, acc], axis=1)
-            
-#             elif modality == 'unity_trial':
-#                 if session_parsing_kwargs.get("to_deltaT_from_session_start"):
-#                     data = mT.data_modality_deltaT_from_session_start(data)
-                
-#                 trials_variable = get_complemented_session_modality(session_fullfname, 
-#                                                        "paradigm_variable",
-#                                                        fix_missing_names=True)
-#                 trials_variable.drop(columns=['trial_id'], inplace=True) # double
-#                 data = pd.concat([data, trials_variable], axis=1)
-                
-#                 cols = ('trial_id', "frame_z_position", 'frame_pc_timestamp')
-#                 unity_frames = get_complemented_session_modality(session_fullfname, 
-#                                                     "unity_frame", columns=cols)
-                
-#                 staytimes = mT.calc_staytimes(data, unity_frames, track_details)
-#                 data = pd.concat([data, staytimes], axis=1)
-#     return data
+    L.logger.debug(f"Loading {len(columns):,} frames...")
+    for frame_key in columns:
+        jpg_frame = np.array(session_file[key][frame_key][()])
+        frame = cv2.imdecode(np.frombuffer(jpg_frame, dtype=np.uint8), cv2.IMREAD_COLOR)
+        frames_stack.append(frame)
+    return np.stack(frames_stack)

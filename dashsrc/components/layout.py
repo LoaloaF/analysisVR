@@ -9,6 +9,7 @@ from . import data_loading_controls
 from ..plot_components.plot_wrappers import wrapper_SessionKinematics
 from ..plot_components.plot_wrappers import wrapper_AnimalKinematics
 from ..plot_components.plot_wrappers import wrapper_StayPerformance
+from ..plot_components.plot_wrappers import wrapper_SessionsOverview
 from ..plot_components.plot_wrappers import wrapper_StayRatio
 
 def create_sessionwise_vis_containers(app: Dash, global_data: dict):
@@ -38,6 +39,9 @@ def create_multisession_vis_containers(app: Dash, global_data: dict):
                                                         vis_name=vis_name)
             case "StayPerformance":
                 analysis_div = wrapper_StayPerformance.render(app, global_data, 
+                                                              vis_name=vis_name)
+            case "SessionsOverview":
+                analysis_div = wrapper_SessionsOverview.render(app, global_data, 
                                                               vis_name=vis_name)
             case _:
                 analysis_div = html.Div([html.H5(vis_name)], id=f'{vis_name}-container', 

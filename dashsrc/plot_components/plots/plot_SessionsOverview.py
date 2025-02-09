@@ -110,10 +110,7 @@ def draw_modality_heatmap(data, modalities, fig):
     # iterate over modalities
     for i, modality in enumerate(modalities):
         # get the columns that contain the modality
-        print()
-        print(modality)
         cols = [modality in col for col in data.columns]
-        print(cols)
         
         # iterate over sessions, checking their modality data
         for j in session_idx:
@@ -141,24 +138,31 @@ def draw_modality_heatmap(data, modalities, fig):
                         color = 1
                         
                 elif modality == 'ephys_traces':
-                    annot += f'Compressed: {session_modality_data[f"{key}_compressed"]}<br>'
-                    if session_modality_data[f"{key}_compressed"]:
-                        color = 1
+                    if not pd.isna((session_modality_data[f"{key}_n_columns"])):
+                        color = 2
                     else:
-                        color = -.25
-                        
-                    print("INNN")
-                
-                # get shape of the modality h5 file    
+                        if not session_modality_data[f"{key}_recorded"]:
+                            annot += f'Compressed: False<br>'
+                            color = -.25 # white
+                        else:
+                            annot += f'Compressed: True<br>'
+                            color = 1
+                    
+                # get shape of the modality h5 file
                 annot += f'Columns: {session_modality_data[f"{key}_n_columns"]}<br>'
                 annot += f'Rows: {session_modality_data[f"{key}_n_rows"]:,}<br>'
                 
                 # column names of the modality h5 file
-                cols_string = session_modality_data[f"{key}_columns"]
-                gaps = [i for i,s in enumerate(cols_string) if s==" "][2::3]
-                for g in gaps:
-                    cols_string = cols_string[:g] + "<br>   " + cols_string[g:]
-                annot += f'Columns: {cols_string}<br>'
+                # cols_string = 
+                # print(f"{key}_columns")
+                # print(cols_string)
+                # print(type(cols_string))
+                if f"{key}_columns" in session_modality_data and not pd.isna(session_modality_data[f"{key}_columns"]):
+                    cols_string = session_modality_data[f"{key}_columns"]
+                    gaps = [i for i,s in enumerate(cols_string) if s==" "][2::3]
+                    for g in gaps:
+                        cols_string = cols_string[:g] + "<br>   " + cols_string[g:]
+                    annot += f'Columns: {cols_string}<br>'
                 
                 if modality not in ('metadata', 'paradigm_variable', 'ephys_traces'):
                     # check for NaN ephys timestamps

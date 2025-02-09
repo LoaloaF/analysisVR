@@ -214,11 +214,25 @@ def unity_modality_track_kinematics(frames):
 
 def fix_missing_paradigm_variable_names(data):
     renamer = {
-        "LR": "lick_triggered_reward",
+        # P800
+        "LR": "lick_triggers_reward",
+        
+        # P1100
+        "ST_2": "velocity_threshold_at_R2",
+        "SR": 'multi_reward_requires_stop',
+        "DR": 'both_R1_R2_rewarded',
+        "RF": 'flip_Cue1R1_Cue2R2',
+        "NP": 'prob_cue1_trial',
+        "GF": 'movement_gain_scaler',
     }
-    return data.rename(columns=renamer)
+    if all([True if c in data.columns else False for c in ["ST_2","SR","DR","RF","NP","GF"]]):
+        # paradigm P1100 hacky fix to correct an old label from P0800...
+        renamer['stay_time'] = 'velocity_threshold_at_R1'
+        renamer['stop_threshold'] = 'velocity_threshold_at_R1'
     
-
+    data = data.rename(columns=renamer)
+    return data
+    
 
 
 

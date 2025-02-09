@@ -8,7 +8,7 @@ from collections import OrderedDict
 
 # when executed as a process add parent project dir to path
 sys.path.insert(1, os.path.join(sys.path[0], '..'))
-# sys.path.insert(1, os.path.join(sys.path[0], '..', '..', 'ephysVR'))
+sys.path.insert(1, os.path.join(sys.path[0], '..', '..', 'ephysVR'))
 
 import pandas as pd
 import numpy as np
@@ -151,6 +151,10 @@ def _compute_analytic(analytic, session_fullfname):
         data = m2a.get_Portenta(session_fullfname)
         data_table = C.BEHAVIOR_EVENT_TABLE
     
+    elif analytic == "Unity":
+        data = m2a.get_Unity(session_fullfname)
+        data_table = C.UNITY_TABLE
+    
     elif analytic == "BehaviorEvents":
         data = m2a.get_BehaviorEvents(session_fullfname)
         data_table = C.BEHAVIOR_EVENT_TABLE
@@ -200,9 +204,13 @@ def _compute_analytic(analytic, session_fullfname):
         # data = integr_analytics.get_UnityTrialwiseMetrics(unity_framewise)
         # data_table = C.UNITY_TRIALWISE_METRICS_TABLE
     
-    elif analytic == "Spikes":
-        data = m2a.get_Spikes(session_fullfname)
-        data_table = C.SPIKE_TABLE
+    elif analytic == "MultiUnits":
+        data = m2a.get_MultiUnits(session_fullfname)
+        data_table = C.MULTI_UNITS_TABLE
+        
+    # elif analytic == "Spikes":
+    #     data = m2a.get_Spikes(session_fullfname)
+    #     data_table = C.SPIKE_TABLE
 
     #TODO fix later
     if analytic != "UnityTrialwiseMetrics":
@@ -246,6 +254,8 @@ def get_analytics(analytic, mode="set", paradigm_ids=None, animal_ids=None,
                 continue
             data = _compute_analytic(analytic, session_fullfname)
             data.to_parquet(analytics_fname, index=False, engine='pyarrow')
+            L.spacer("debug")
+            
         
         elif mode == "set":
             if not os.path.exists(analytics_fname):

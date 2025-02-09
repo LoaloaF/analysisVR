@@ -6,7 +6,7 @@ from CustomLogger import CustomLogger as Logger
 
 from analysis_utils import device_paths
 
-def extract_metadata(metadata, session_name):
+def extract_metadata(metadata, session_name, session_fullfname):
     L = Logger()
     metadata_parsed = {"trial_id": 1, "session_name": session_name}
     
@@ -154,9 +154,16 @@ def extract_metadata(metadata, session_name):
             "log_file_content": nested_metadata.get("log_files"),
         }})
     
+    # ===============================================================
+    # complementation of metadata
+    # ===============================================================
+    
     if metadata_parsed['paradigm_id'] in (800, 1100): 
-        track_details = env_metadata2track_details(metadata_parsed['env_metadata'])
+        track_details = _env_metadata2track_details(metadata_parsed['env_metadata'])
         metadata_parsed['track_details'] = json.dumps(track_details, indent='  ')
+        
+    ephys_fullfname = os.path.join(os.path.dirname(session_fullfname), 'ephys_output.raw.h5')
+    metadata_parsed['ephys_traces_recorded'] = os.path.exists(ephys_fullfname)
         
     # add keys that are still in metadata but not in metadata_parsed, to see if something interesting is missing
     metadata_parsed['GAP'] = None
@@ -180,7 +187,7 @@ def minimal_metad_from_session_name(session_name):
     }
     return data
 
-def env_metadata2track_details(env_metadata):
+def _env_metadata2track_details(env_metadata):
     pillar_ids = list(set([val["id"] for val in env_metadata["pillars"].values()]))
     n_pillar_types = len(pillar_ids)
     pillars_posY = {}
@@ -280,10 +287,18 @@ def _str2list(string):
     """
     try:
         # Use ast.literal_eval to safely evaluate the string
+        if string == 'none' or string == 'placeholder':
+            return []
+
         result = ast.literal_eval(string)
         if isinstance(result, list):
             return result
         else:
-            raise ValueError("The provided string does not represent a list.")
+            try:
+                float(string)
+                return [string]
+            except ValueError as e:
+                print(e)
+            # raise ValueError("The provided string does not represent a list.")
     except (ValueError, SyntaxError) as e:
         raise ValueError(f"Invalid string representation of a list: {string}") from e

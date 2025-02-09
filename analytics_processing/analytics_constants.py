@@ -43,10 +43,11 @@ SESSION_METADATA_TABLE = OrderedDict([
     # ("maxiumTrialLength", pd.Int32Dtype()),
     # ("sessionFREEVAR2", pd.Int32Dtype()),
     # ("sessionDescription", pd.Float32Dtype()),  # NaN is stored as float
-    ("ephys_traces_compressed", pd.BooleanDtype()),
+    ("ephys_traces_recorded", pd.BooleanDtype()),
     ("ephys_traces_n_columns", pd.Int32Dtype()),
     ("ephys_traces_n_rows", pd.Int32Dtype()),
-    ("ephys_traces_columns", pd.StringDtype()),  # Lists are stored as strings
+    # ("ephys_traces_columns", pd.StringDtype()),  # Lists are stored as strings
+    
     ("event_n_columns", pd.Int32Dtype()),
     ("event_n_rows", pd.Int32Dtype()),
     ("event_columns", pd.StringDtype()),  # Lists are stored as strings
@@ -157,6 +158,53 @@ BEHAVIOR_EVENT_TABLE = OrderedDict([
     ("event_ephys_patched", pd.Int8Dtype()),
 ])
 
+UNITY_TABLE = OrderedDict([
+    # compeletly conastant across all paradigms, usful in 2D
+    ("frame_x_position", pd.Float32Dtype()),
+    ("frame_angle", pd.Float32Dtype()),
+    
+    # 00% of session constant thoughout session, except cue
+    ("lick_triggers_reward", pd.BooleanDtype()),
+    ("maximum_reward_number", pd.Int32Dtype()),
+    ("stay_time", pd.Float32Dtype()),
+    ("multi_reward_requires_stop", pd.BooleanDtype()),
+    ("both_R1_R2_rewarded", pd.BooleanDtype()),
+    ("flip_Cue1R1_Cue2R2", pd.BooleanDtype()),
+    ("prob_cue1_trial", pd.Float32Dtype()),
+    ("movement_gain_scaler", pd.Float32Dtype()),
+    
+    ("cue", pd.Int16Dtype()),
+    
+    # constant for each frame of a trial
+    ("trial_id", pd.Int16Dtype()),
+    ("trial_start_frame", pd.Int32Dtype()),
+    ("trial_start_pc_timestamp", pd.Int64Dtype()),
+    ("trial_end_frame", pd.Int32Dtype()),
+    ("trial_end_pc_timestamp", pd.Int64Dtype()),
+    ("trial_pc_duration", pd.Int32Dtype()),
+    ("trial_outcome", pd.Int32Dtype()),
+    ("trial_start_ephys_timestamp", pd.Int64Dtype()),
+    ("trial_end_ephys_timestamp", pd.Int64Dtype()),
+    
+    # slowly chanfing as animals runs through the zones    
+    ("zone", pd.StringDtype()),
+    ("frame_state", pd.Int16Dtype()),
+
+    # chaning every 1cm
+    ("from_z_position_bin", pd.Int16Dtype()),  # Nullable integer
+    ("to_z_position_bin", pd.Int16Dtype()),    # Nullable integer
+    
+    # changing every frame if animal not 100% still
+    ("frame_z_position", pd.Float32Dtype()),
+    # changing every frame
+    ("frame_id", pd.Int64Dtype()),
+    ("frame_pc_timestamp", pd.Int64Dtype()),
+    ("frame_ephys_timestamp", pd.Int64Dtype()), # Nullable integer
+    ("ballvelocity_first_package", pd.Int64Dtype()),
+    ("ballvelocity_last_package", pd.Int64Dtype()),
+    ("frame_blinker", pd.BooleanDtype()),      # Nullable boolean
+
+])
 
 # Define the schema with pandas dtypes
 UNITY_FAMEWISE_TABLE = OrderedDict([

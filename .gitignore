@@ -9,3 +9,5 @@ __pycache__/
 *.log
 
 outputs/
+mua_detection.py
+events.csv

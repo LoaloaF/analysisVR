@@ -32,9 +32,9 @@ def render(app: Dash, global_data: dict) -> html.Div:
             return {"marginTop": 15, "backgroundColor": "green"}, *([True]*n_plots)
         return {"marginTop": 15, "backgroundColor": "blue"}, *([False]*n_plots)
     
-    default_animals = [1]
-    default_paradigms = None
-    default_analytics = ['SessionMetadata']
+    default_animals = [6]
+    default_paradigms = [1100]
+    default_analytics = ['SessionMetadata', 'UnityTrialwiseMetrics']
     
     return dbc.Row([
                 dbc.Col([
@@ -80,8 +80,8 @@ def _load_all_data(selected_analytics, global_data, selected_paradigms, selected
     L = Logger()
     
     for analytic in selected_analytics:
-        # if len(selected_paradigms) == 0:
-        #     selected_paradigms = None
+        if len(selected_paradigms) == 0:
+            selected_paradigms = None
         if len(selected_animals) == 0:
             selected_animals = None
         dat = analytics.get_analytics(analytic, mode='set', session_ids=None,

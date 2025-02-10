@@ -39,7 +39,7 @@ def render(app: Dash, global_data: dict, vis_name: str) -> html.Div:
     animal_dropd, ANIMAL_DROPD_ID = animal_dropdown_component(*comp_args)
     # these don't need data to be initialized    
     session_slider, SESSION_SLIDER_ID = session_range_slider_component(vis_name)
-    maxmetric_inp, MAXMETRIC_INP_ID = max_metric_input_component(vis_name, initial_value=80)
+    maxmetric_inp, MAXMETRIC_INP_ID = max_metric_input_component(vis_name, initial_value=8)
 
     outcome_filter, OUTCOME_FILTER_ID = outcome_group_filter_component(vis_name)
     cue_filter, CUE_FILTER_ID = cue_group_filter_component(vis_name)
@@ -71,7 +71,7 @@ def render(app: Dash, global_data: dict, vis_name: str) -> html.Div:
         paradigm_slice = slice(selected_paradigm, selected_paradigm)
         animal_slice = slice(selected_animal, selected_animal)
         session_slice = [sid for sid in np.arange(session_range[0], session_range[1] + 1)
-                         if sid in global_data['UnityTrackwise'].index.unique('session_id')]
+                         if sid in global_data[analytic].index.unique('session_id')]
         
         # paradigm, animal and session filtering
         data = global_data[analytic].loc[pd.IndexSlice[paradigm_slice, animal_slice, 

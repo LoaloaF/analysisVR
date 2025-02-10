@@ -81,7 +81,7 @@ def render(app: Dash, global_data: dict, vis_name: str) -> html.Div:
         paradigm_slice = slice(selected_paradigm, selected_paradigm)
         animal_slice = slice(selected_animal, selected_animal)
         session_slice = [sid for sid in np.arange(session_range[0], session_range[1] + 1)
-                         if sid in global_data['UnityTrackwise'].index.unique('session_id')]
+                         if sid in global_data[analytic].index.unique('session_id')]
         
         # paradigm, animal and session filtering
         data = global_data[analytic].loc[pd.IndexSlice[paradigm_slice, animal_slice, 

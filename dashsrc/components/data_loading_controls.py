@@ -80,9 +80,9 @@ def _load_all_data(selected_analytics, global_data, selected_paradigms, selected
     L = Logger()
     
     for analytic in selected_analytics:
-        if len(selected_paradigms) == 0:
+        if selected_paradigms is None or len(selected_paradigms) == 0:
             selected_paradigms = None
-        if len(selected_animals) == 0:
+        if selected_animals is None or len(selected_animals) == 0:
             selected_animals = None
         dat = analytics.get_analytics(analytic, mode='set', session_ids=None,
                                       paradigm_ids=selected_paradigms,

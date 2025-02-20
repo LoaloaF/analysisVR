@@ -327,7 +327,7 @@ UNITY_TRACKWISE_TABLE = OrderedDict([
     ("posbin_to_ephys_timestamp", pd.Int64Dtype()), # Nullable integer
 ])
 
-SPIKE_TABLE = OrderedDict([
+MULTI_UNITS_TABLE = OrderedDict([
     ("spike_time", pd.Int64Dtype()),
     ("cluster_id", pd.Int32Dtype()),
     ("site_id", pd.Int32Dtype())

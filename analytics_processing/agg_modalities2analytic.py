@@ -230,7 +230,7 @@ def get_Spikes(session_fullfname):
 
 def get_MultiUnits(session_fullfname):
     data = session_modality_from_nas(session_fullfname, "ephys_traces",
-                                     columns=[None], start=400, stop=500)
+                                     )
     print(data)
     
-    exit()
+    # exit()

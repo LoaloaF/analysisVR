@@ -9,9 +9,6 @@ from CustomLogger import CustomLogger as Logger
 import analytics_processing.modality_transformations as mT
 from analytics_processing import metadata_loading
 import analytics_processing.analytics_constants as C
-
-from mea1k_modules.mea1k_raw_preproc import mea1k_raw2decompressed_dat_file
-from mea1k_modules.mea1k_raw_preproc import complement_raw_traces_dat_file
         
 def session_modality_from_nas(session_fullfname, key, where=None, start=None, 
                                stop=None, columns=None):
@@ -57,28 +54,11 @@ def _handle_ephys_from_nas(session_fullfname, start, stop, columns):
         data = data[slice(start, stop)]
         if columns is not None:
             # load to memory if columns are specified (timeslice)
-            data = np.array(data.iloc[:, slice(*columns)])
+            data = np.array(data[:, slice(*columns)])
         return data, mapping.iloc[slice(start, stop), :]
-        
-    else:
-        return None, None
-        
-        L.logger.info(f"No de-compressed ephys traces found")
-        # session_dir = os.path.dirname(session_fullfname)
-        if os.path.exists(os.path.join(session_dir, "ephys_output.raw.h5")):
-            # decompress the raw output of mea1k and convert to uV int16 .dat file
-            mea1k_raw2decompressed_dat_file(session_dir, 'ephys_output.raw.h5', 
-                                            session_name=session_name,
-                                            convert2uV_int16=True,
-                                            subtract_dc_offset=True)
-            # save additional files for (mapping csv for identifying rows in dat file, 
-            # .mat probe file for spikesoring, and .xml file for neuroscope viwing)
-            complement_raw_traces_dat_file(session_dir, 'ephys_output.raw.h5', 
-                                            session_name=session_name)
-        else:
-            L.logger.warning("No ephys recordings found.")
-        return None, None
-    
+    L.logger.info(f"No de-compressed ephys traces found")
+    return None, None
+            
 def _pandas_based_from_nas(session_fullfname, key, where=None, start=None,
                             stop=None, columns=None):
     L = Logger()

@@ -5,6 +5,7 @@ sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 # from dashsrc.plot_components import staytimes_plot_sessions as staytimes_plot_sessions
 from dashsrc.plot_components.plots import plot_AnimalKinematics
 from dashsrc.plot_components.plots import plot_StayRatioOverTime
+from dashsrc.plot_components.plots import plot_2DStaytimes
 from analytics_processing import analytics
 from CustomLogger import CustomLogger as Logger
 
@@ -29,7 +30,7 @@ data['SessionMetadata'] = analytics.get_analytics('SessionMetadata', mode='set',
                                                   paradigm_ids=paradigm_ids, 
                                                   animal_ids=animal_ids, 
                                                   session_ids=session_ids)
-fig = plot_StayRatioOverTime.render_plot(data[analytic], data['SessionMetadata'], 
+fig = plot_2DStaytimes.render_plot(data[analytic], data['SessionMetadata'], 
                                          width, height)
 fullfname = f'{output_dir}/rYL001_first3Sess_kinemetics_heatmap.svg'
 fig.write_image(fullfname, width=width, height=height, scale=1)

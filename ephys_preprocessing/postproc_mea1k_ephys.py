@@ -24,7 +24,7 @@ import analytics_processing.sessions_from_nas_parsing as sp
 
 from mea1k_modules.mea1k_raw_preproc import mea1k_raw2decompressed_dat_file
 
-def _handle_raw_mea1k_ephys(session_fullfname, recompute=False, exclude_shanks=[]):
+def _handle_raw_mea1k_ephys(session_fullfname, recompute=False, exclude_shanks=None):
     L = Logger()
     session_name = os.path.basename(session_fullfname).replace(".hdf5", "")
     session_dir = os.path.dirname(session_fullfname)
@@ -55,7 +55,7 @@ def _handle_raw_mea1k_ephys(session_fullfname, recompute=False, exclude_shanks=[
 
 def postprocess(paradigm_ids=None, animal_ids=None, recompute=False,
                 session_ids=None, sessionlist_fullfnames=None, 
-                from_date=None, to_date=None, columns=None,exclude_shanks=[]):
+                from_date=None, to_date=None, columns=None,exclude_shanks=None):
     L = Logger()
     
     if sessionlist_fullfnames is None:
@@ -65,14 +65,14 @@ def postprocess(paradigm_ids=None, animal_ids=None, recompute=False,
     else:
         ids = [sp.extract_id_from_sessionname(os.path.basename(s))
                for s in sessionlist_fullfnames]
-    L.logger.debug(f"Paradigm_ids: {paradigm_ids}, animal_ids: {animal_ids}, "
+    L.logger.info(f"Paradigm_ids: {paradigm_ids}, animal_ids: {animal_ids}, "
                    f"session_ids: {session_ids}, from_date: {from_date}, "
                    f"to_date: {to_date}\n\t"
                    f"Processing {len(sessionlist_fullfnames)} sessions\n")
 
     aggr = []
     for session_fullfname, identif in zip(sessionlist_fullfnames, ids):
-        L.logger.debug(f"Processing {identif} {os.path.basename(session_fullfname)}"
+        L.logger.info(f"Processing {identif} {os.path.basename(session_fullfname)}"
                        f"\n{os.path.dirname(session_fullfname)}")
         
         # create the dat file 

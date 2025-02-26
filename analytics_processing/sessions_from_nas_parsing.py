@@ -30,7 +30,7 @@ def parse_paradigm_animals_from_nas(paradigm_id, nas_dir):
 def get_sessionlist_fullfnames(paradigm_ids, animal_ids, session_ids=None,
                                 from_date=None, to_date=None):
     L = Logger()
-    L.logger.debug("Searching NAS for applicable sesseions...")
+    L.logger.debug("Searching NAS for applicable sessions...")
     
     nas_dir, _, _ = device_paths()
     sessionlist_fullfnames = []
@@ -85,3 +85,14 @@ def extract_id_from_sessionname(session_name):
     session_name_split = session_name.split("_")
     anim_name, parad_name = session_name_split[2], session_name_split[3]
     return int(anim_name[-3:]), int(parad_name[1:]), 0
+
+def sessionnames2fullfnames(session_names):
+    Logger().logger.debug(f"Inferring NAS paths for list of session names...")
+    sessionlist_fullfnames, s_ids = [], []
+    for session_name in session_names:
+        animal_id, paradigm_id, s_id = extract_id_from_sessionname(session_name)
+        session_dir = f"RUN_rYL{animal_id:03}", f"rYL{animal_id:03}_P{paradigm_id:04d}"
+        fullfname = os.path.join(device_paths()[0], *session_dir, session_name, f"{session_name}.hdf5")
+        sessionlist_fullfnames.append(fullfname)
+        s_ids.append((s_id))
+    return sessionlist_fullfnames, s_ids

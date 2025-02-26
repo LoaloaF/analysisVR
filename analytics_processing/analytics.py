@@ -1,139 +1,16 @@
-from datetime import datetime
-import json
-from time import sleep
-import sys
 import os
-import argparse
+from time import sleep
 from collections import OrderedDict
-
-# when executed as a process add parent project dir to path
-sys.path.insert(1, os.path.join(sys.path[0], '..'))
-sys.path.insert(1, os.path.join(sys.path[0], '..', '..', 'ephysVR'))
 
 import pandas as pd
 import numpy as np
 
-import analytics_processing.analytics_constants as C
-
 from CustomLogger import CustomLogger as Logger
-# from analytics_processing.modality_loading import get_complemented_session_modality
-from analysis_utils import device_paths
-# from analytics_processing.agg_modalities2analytic import transform_to_position_bin_index
 
+import analytics_processing.analytics_constants as C
 import analytics_processing.agg_modalities2analytic as m2a
 import analytics_processing.integr_analytics as integr_analytics
-
-import sessions_from_nas_parsing as sp
-
-# def _parse_paradigms_from_nas(nas_dir):
-#     # get list of something like "RUN_rYL001", in nas bas dir
-#     run_animal_names = [f for f in os.listdir(nas_dir) 
-#                         if f.startswith("RUN_") and str.isdigit(f[-3:])]
-#     paradigms = []
-#     for r_animal_name in run_animal_names:
-#         # extract the P part from something like "rYL001_P0100"
-#         paradigms.extend([int(f[-4:]) for f in os.listdir(os.path.join(nas_dir, r_animal_name)) 
-#                           if str.isdigit(f[-4:])])
-#     return sorted(list(set(paradigms)))
-    
-# def _parse_paradigm_animals_from_nas(paradigm_id, nas_dir):
-#     # get list of something like "RUN_rYL001", in nas bas dir
-#     run_animal_names = [f for f in os.listdir(nas_dir) 
-#                         if f.startswith("RUN_") and str.isdigit(f[-3:])]
-#     run_animal_names.sort()
-#     # filter out animals that did not do the passed paradigm
-#     filtered_animals = [r_animal_name for r_animal_name in run_animal_names if 
-#                         f"{r_animal_name[4:]}_P{paradigm_id:04}" # eg rYL001_P0100
-#                         in os.listdir(os.path.join(nas_dir, r_animal_name))]
-#     return sorted([int(f[-3:]) for f in filtered_animals])
-
-# def _get_sessionlist_fullfnames(paradigm_ids, animal_ids, session_ids=None,
-#                                 from_date=None, to_date=None):
-#     L = Logger()
-#     L.logger.debug("Searching NAS for applicable sesseions...")
-    
-#     nas_dir, _, _ = device_paths()
-#     sessionlist_fullfnames = []
-#     from_date = datetime.strptime(from_date, "%Y-%m-%d") if from_date is not None else None
-#     to_date = datetime.strptime(to_date, "%Y-%m-%d") if to_date is not None else None
-
-#     identifier = []
-#     # get all paradigms if not specified
-#     paradigm_ids = paradigm_ids if paradigm_ids is not None else _parse_paradigms_from_nas(nas_dir)
-#     for p_id in paradigm_ids:
-#         # get all animals if not specified
-#         animal_ids_ = animal_ids if animal_ids is not None else _parse_paradigm_animals_from_nas(p_id, nas_dir)
-#         for animal_id in animal_ids_:
-#             # get all sessions for the paradigm+animal combo
-#             parad_animal_subdir = os.path.join(nas_dir, f"RUN_rYL{animal_id:03}", 
-#                                                f"rYL{animal_id:03}_P{p_id:04d}")
-#             if not os.path.exists(parad_animal_subdir):
-#                 continue # not every combination exists
-            
-#             # get all the session dirs in the animal+paradigm subdir, should end with min
-#             parad_animal_session_dirs = [sd for sd in os.listdir(parad_animal_subdir) 
-#                                          if sd.endswith("min")]
-#             for s_id, session_dir in enumerate(sorted(parad_animal_session_dirs)):
-#                 date = datetime.strptime(session_dir[:10], "%Y-%m-%d")
-#                 if from_date is not None and date < from_date:
-#                     continue
-#                 if to_date is not None and date > to_date:
-#                     continue
-#                 if session_ids is not None and s_id not in session_ids:
-#                     continue
-                
-#                 # get the session behavior data h5 file
-#                 session_fname = [fname for fname in os.listdir(os.path.join(parad_animal_subdir, session_dir))
-#                                  if fname.endswith("min.hdf5")]
-#                 if len(session_fname) != 1:
-#                     L.logger.warning(f"Expected 1 session file for {session_dir}, found "
-#                           f"{len(session_fname)}, {session_fname} in "
-#                           f"{os.path.join(parad_animal_subdir, session_dir)}")
-#                     continue
-#                 session_fname = session_fname[0]
-                
-#                 fullfname = os.path.join(parad_animal_subdir, session_dir, session_fname)
-#                 sessionlist_fullfnames.append(fullfname)
-#                 identifier.append((p_id, animal_id, s_id))
-    
-#     unique_animals = np.unique([i[1] for i in identifier])            
-#     L.logger.debug(f"For paradigms {paradigm_ids}, animals {unique_animals}, "
-#                    f"found {len(sessionlist_fullfnames)} sessions.")
-#     return sessionlist_fullfnames, identifier
-
-# def _compute_analytic(analytic, session_fullfname):
-#     if analytic == "metadata":
-#         data = get_complemented_session_modality(session_fullfname, "metadata", dict2pandas=True)
-        
-#     if analytic == "behavior_event":
-#         data = get_complemented_session_modality(session_fullfname, "event",
-#                                                  complement_data=True)
-#         print(data)
-#         exit()
-#         data = data.reindex(columns=C.BEHAVIOR_EVENT_TABLE.keys())
-#         data = data.astype(C.BEHAVIOR_EVENT_TABLE)
-    
-#     elif analytic == "unity_framewise":
-#         data = get_complemented_session_modality(session_fullfname, "unity_frame",
-#                                     position_bin_index=True, complement_data=True)
-#         data = data.reindex(columns=C.UNITY_FAMEWISE_TABLE.keys())
-#         data = data.astype(C.UNITY_FAMEWISE_TABLE)
-    
-#     elif analytic == "unity_trialwise":
-#         data = get_complemented_session_modality(session_fullfname, "unity_trial",
-#                                     position_bin_index=True, complement_data=True)
-#         # TODO doesn't convert poroperly NaN
-#         # data = data.reindex(columns=C.UNITY_TRIALWISE_TABLE.keys())
-#         # data = data.astype(C.UNITY_TRIALWISE_TABLE)
-
-#     elif analytic == "unity_trackwise":
-#         # data = get_analytic(os.path.dirname(session_fullfname), "unity_framewise")
-#         data = get_analytics(analytic="unity_framewise", sessionlist_fullfnames=[session_fullfname])
-#         data.reset_index(inplace=True, drop=True)
-#         data = transform_to_position_bin_index(data)
-#         data = data.reindex(columns=C.UNITY_TRACKWISE_TABLE.keys())
-#         data = data.astype(C.UNITY_TRACKWISE_TABLE)
-#     return data
+import analytics_processing.sessions_from_nas_parsing as sp
 
 def _get_analytics_fname(session_dir, analysis_name):
     full_path = os.path.join(session_dir, "session_analytics")
@@ -226,17 +103,17 @@ def _compute_analytic(analytic, session_fullfname):
 #     return int(anim_name[-3:]), int(parad_name[1:]), 0
 
 def get_analytics(analytic, mode="set", paradigm_ids=None, animal_ids=None, 
-                  session_ids=None, sessionlist_fullfnames=None, 
+                  session_ids=None, session_names=None, 
                   from_date=None, to_date=None, columns=None,):
     L = Logger()
     
-    if sessionlist_fullfnames is None:
+    if session_names is None:
         sessionlist_fullfnames, ids = sp.get_sessionlist_fullfnames(paradigm_ids, 
                                                                 animal_ids, session_ids,
                                                                 from_date, to_date)
     else:
-        ids = [sp.extract_id_from_sessionname(os.path.basename(s))
-               for s in sessionlist_fullfnames]
+        sessionlist_fullfnames, ids = sp.sessionnames2fullfnames(session_names)
+        
     L.logger.debug(f"Requested analytics: {analytic}, mode: {mode}, "
                    f"Paradigm_ids: {paradigm_ids}, animal_ids: {animal_ids}, "
                    f"session_ids: {session_ids}, from_date: {from_date}, "
@@ -301,32 +178,6 @@ def get_analytics(analytic, mode="set", paradigm_ids=None, animal_ids=None,
                        f"\n{aggr}\n{aggr.iloc[mid_iloc:mid_iloc+1].T}")
         return aggr
     elif mode == "available":
-        return np.array(aggr)
-            
-            
-def main():
-    argParser = argparse.ArgumentParser("Run pipeline to calculate analytics")
-    argParser.add_argument("analytic", help="which analytic to compute", type=str)
-    argParser.add_argument("--paradigm_ids", nargs='+', default=None, type=int)
-    argParser.add_argument("--animal_ids", nargs='+', default=None, type=int)
-    argParser.add_argument("--sessionlist_fullfnames", nargs='+', default=None)
-    argParser.add_argument("--recompute", action="store_true", default=False)
-    argParser.add_argument("--from_date", default=None)
-    argParser.add_argument("--to_date", default=None)
-    argParser.add_argument("--logging_level", default="DEBUG")
-    kwargs = vars(argParser.parse_args())
-    
-    L = Logger()
-    Logger().init_logger(None, None, kwargs.pop("logging_level"))
-    L.logger.info(f"Running pipeline for analytic `{kwargs['analytic']}`")
-    L.logger.debug(L.fmtmsg(kwargs))
-    L.spacer()
-    
-    if not kwargs.pop("recompute"):
-        kwargs['mode'] = 'set'
-    else:
-        kwargs['mode'] = 'recompute'
-    get_analytics(**kwargs)
-
-if __name__ == '__main__':
-    main()
+        aggr = np.array(aggr)
+        L.logger.debug(f"Returning {analytic}:\n{aggr}")
+        return aggr

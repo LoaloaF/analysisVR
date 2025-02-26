@@ -6,8 +6,11 @@ sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 from dashsrc.plot_components.plots import plot_AnimalKinematics
 from dashsrc.plot_components.plots import plot_StayRatioOverTime
 from dashsrc.plot_components.plots import plot_2DStaytimes
+from dashsrc.plot_components.plots import plot_LickTrack
 from analytics_processing import analytics
 from CustomLogger import CustomLogger as Logger
+
+from dashsrc.plot_components.plot_wrappers.data_selection import group_filter_data
 
 output_dir = "./outputs/experimental/"
 data = {}
@@ -16,12 +19,13 @@ Logger().init_logger(None, None, logging_level="DEBUG")
 
 
 # PANEL 1
-paradigm_ids = [1100]
-animal_ids = [6]
+paradigm_ids = [800]
+animal_ids = [5]
 session_ids = None
-width = 315
-height = 170
-analytic = "UnityTrialwiseMetrics"
+width = 715
+height = 1070
+analytic = "UnityTrackwise"
+group_by = None
 data[analytic] = analytics.get_analytics(analytic, mode='set',
                                          paradigm_ids=paradigm_ids,
                                          animal_ids=animal_ids,
@@ -30,11 +34,12 @@ data['SessionMetadata'] = analytics.get_analytics('SessionMetadata', mode='set',
                                                   paradigm_ids=paradigm_ids, 
                                                   animal_ids=animal_ids, 
                                                   session_ids=session_ids)
-fig = plot_2DStaytimes.render_plot(data[analytic], data['SessionMetadata'], 
-                                         width, height)
-fullfname = f'{output_dir}/rYL001_first3Sess_kinemetics_heatmap.svg'
-fig.write_image(fullfname, width=width, height=height, scale=1)
-print(f"inkscape {fullfname}")
+data[analytic], group_by_values = group_filter_data(data[analytic], cue_filter=["Late R"])
+fig = plot_LickTrack.render_plot(data[analytic], data['SessionMetadata'], 
+                                 width, height)
+# fullfname = f'{output_dir}/rYL001_first3Sess_kinemetics_heatmap.svg'
+# fig.write_image(fullfname, width=width, height=height, scale=1)
+# print(f"inkscape {fullfname}")
 fig.show()
 
 

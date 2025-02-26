@@ -23,6 +23,7 @@ from .data_selection_components import (
 )
 from .data_selection import group_filter_data
 from ..plots import plot_AnimalKinematics
+from ..plots import plot_LickTrack
 
 import dashsrc.components.dashvis_constants as C
 
@@ -94,9 +95,9 @@ def render(app: Dash, global_data: dict, vis_name: str) -> html.Div:
         if len(smooth_data) == 1:
             smooth_data = True
             
-        fig = plot_AnimalKinematics.render_plot(data, global_data['SessionMetadata'], 
-                                                metric, metric_max, 
-                                                smooth_data, width, height)
+        fig = plot_LickTrack.render_plot(data, global_data['SessionMetadata'], 
+                                                # metric, metric_max, smooth_data, 
+                                                width, height)
         return fig
     
     return html.Div([

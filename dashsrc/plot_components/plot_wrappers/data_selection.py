@@ -1,7 +1,9 @@
 import numpy as np
 
     
-def group_filter_data(data, outcome_filter, cue_filter, trial_filter, group_by="None"):
+def group_filter_data(data, outcome_filter=['1 R', '1+ R', 'no R'], 
+                      cue_filter=['Early R', 'Late R'], 
+                      trial_filter=['1/3', '2/3', '3/3'], group_by="None"):
     group_by_values = None
     def group_filter_session(sess_d, outcome_filter, cue_filter, 
                              trial_filter, group_by="None"):

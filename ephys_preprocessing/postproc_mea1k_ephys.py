@@ -10,6 +10,7 @@ def _handle_raw_mea1k_ephys(session_fullfname, mode=False, exclude_shanks=None):
     L = Logger()
     session_name = os.path.basename(session_fullfname).replace(".hdf5", "")
     session_dir = os.path.dirname(session_fullfname)
+    animal_name = session_name.split("_")[2]
     
     # check if a dat file already exists
     dat_fnames = [f for f in os.listdir(session_dir) if f.endswith(".dat")]
@@ -30,6 +31,7 @@ def _handle_raw_mea1k_ephys(session_fullfname, mode=False, exclude_shanks=None):
     # also, save a mapping csv file for identifying the rows in the dat file
     mea1k_raw2decompressed_dat_file(session_dir, 'ephys_output.raw.h5', 
                                     session_name=session_name,
+                                    animal_name=animal_name,
                                     convert2uV_int16=True,
                                     subtract_dc_offset=True,
                                     exclude_shanks=exclude_shanks)

@@ -4,7 +4,7 @@ from CustomLogger import CustomLogger as Logger
 import analytics_processing.sessions_from_nas_parsing as sp
 
 # from ../../ephysVR.git
-from mea1k_modules.mea1k_raw_preproc import mea1k_raw2decompressed_dat_file
+from mea1k_modules.mea1k_raw_preproc import mea1k_raw2decompressed_dat_file, write_neuroscope_xml
 
 def _handle_raw_mea1k_ephys(session_fullfname, mode=False, exclude_shanks=None):
     L = Logger()
@@ -29,12 +29,18 @@ def _handle_raw_mea1k_ephys(session_fullfname, mode=False, exclude_shanks=None):
 
     # decompress the raw output of mea1k and convert to uV int16 .dat file
     # also, save a mapping csv file for identifying the rows in the dat file
-    mea1k_raw2decompressed_dat_file(session_dir, 'ephys_output.raw.h5', 
-                                    session_name=session_name,
-                                    animal_name=animal_name,
-                                    convert2uV_int16=True,
-                                    subtract_dc_offset=True,
-                                    exclude_shanks=exclude_shanks)
+    # mea1k_raw2decompressed_dat_file(session_dir, 'ephys_output.raw.h5', 
+    #                                 session_name=session_name,
+    #                                 animal_name=animal_name,
+    #                                 convert2uV=True,
+    #                                 subtract_dc_offset=True,
+    #                                 exclude_shanks=exclude_shanks)
+    
+    write_neuroscope_xml(session_dir, "ephys_output.raw.h5",
+                        animal_name=animal_name,
+                         exclude_shanks=exclude_shanks)
+    
+    
 
 
 def postprocess(paradigm_ids=None, animal_ids=None, mode=False,

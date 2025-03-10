@@ -59,6 +59,11 @@ def device_paths():
         local_data_dir = "/home/vrmaster/local_data/"
         project_dir = "/home/vrmaster/Projects/VirtualReality/"
     
+    elif which_os == 'Linux' and user == 'loaloa':
+        nas_dir = "/mnt/NTnas/BMI/VirtualReality/SpatialSequenceLearning/"
+        local_data_dir = "/home/vrmaster/local_data/"
+        project_dir = "/home/loaloa/homedataXPS/projects/ratvr/VirtualReality/"
+    
     elif which_os == "Darwin" and user == "root":
         nas_dir = "/Volumes/large/BMI/VirtualReality/SpatialSequenceLearning/"
         folders = [f for f in os.listdir("/Users") if os.path.isdir(os.path.join("/Users", f))]
@@ -74,7 +79,7 @@ def device_paths():
     
     else:
         nas_dir, local_data_dir, project_dir = None, None, None
-        raise ValueError("Unknown OS or user")
+        raise ValueError("Unknown OS or user: ", which_os, user)
     
     if not os.path.exists(nas_dir):
         msg = f"NAS directory not found: {nas_dir} - VPN connected?"

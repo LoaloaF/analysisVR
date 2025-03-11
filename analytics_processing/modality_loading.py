@@ -50,7 +50,7 @@ def _handle_ephys_from_nas(session_fullfname, start, stop, columns):
         ephys_map_fname = ephys_fname[0].replace(".dat", "_mapping.csv")
         mapping = pd.read_csv(os.path.join(session_dir,ephys_map_fname), index_col=0)
         data = np.memmap(os.path.join(session_dir,ephys_fname[0]), dtype=np.int16, 
-                         mode='r').reshape(len(mapping), -1)
+                         mode='r').reshape(len(mapping), -1, order='F')
         data = data[slice(start, stop)]
         if columns is not None:
             # load to memory if columns are specified (timeslice)

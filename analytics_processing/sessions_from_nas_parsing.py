@@ -52,7 +52,7 @@ def get_sessionlist_fullfnames(paradigm_ids, animal_ids, session_ids=None,
             
             # get all the session dirs in the animal+paradigm subdir, should end with min
             parad_animal_session_dirs = [sd for sd in os.listdir(parad_animal_subdir) 
-                                         if sd.endswith("min")]
+                                         if sd.endswith("min") and not sd.startswith('._')]
             for s_id, session_dir in enumerate(sorted(parad_animal_session_dirs)):
                 date = datetime.strptime(session_dir[:10], "%Y-%m-%d")
                 if from_date is not None and date < from_date:
@@ -96,3 +96,17 @@ def sessionnames2fullfnames(session_names):
         sessionlist_fullfnames.append(fullfname)
         s_ids.append((s_id))
     return sessionlist_fullfnames, s_ids
+
+def sessionlist_fullfnames_from_args(paradigm_ids=None, animal_ids=None, session_ids=None, 
+                                     session_names=None, from_date=None, to_date=None, ):
+    if session_names is None:
+        sessionlist_fullfnames, ids = get_sessionlist_fullfnames(paradigm_ids, 
+                                                                animal_ids, session_ids,
+                                                                from_date, to_date)
+    else:
+        sessionlist_fullfnames, ids = sessionnames2fullfnames(session_names)
+    Logger().logger.info(f"Paradigm_ids: {paradigm_ids}, animal_ids: {animal_ids}, "
+                         f"session_ids: {session_ids}, from_date: {from_date}, "
+                         f"to_date: {to_date}\n\t"
+                         f"Merging {len(sessionlist_fullfnames)} sessions\n")
+    return sessionlist_fullfnames, ids

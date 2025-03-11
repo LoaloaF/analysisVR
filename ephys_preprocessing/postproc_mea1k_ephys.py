@@ -4,7 +4,7 @@ from CustomLogger import CustomLogger as Logger
 import analytics_processing.sessions_from_nas_parsing as sp
 
 # from ../../ephysVR.git
-from mea1k_modules.mea1k_raw_preproc import mea1k_raw2decompressed_dat_file, write_neuroscope_xml
+from mea1k_modules.mea1k_raw_preproc import mea1k_raw2decompressed_dat_file, replace_neuroscope_xml
 
 def _handle_raw_mea1k_ephys(session_fullfname, mode=False, exclude_shanks=None):
     L = Logger()
@@ -29,23 +29,20 @@ def _handle_raw_mea1k_ephys(session_fullfname, mode=False, exclude_shanks=None):
 
     # decompress the raw output of mea1k and convert to uV int16 .dat file
     # also, save a mapping csv file for identifying the rows in the dat file
-    # mea1k_raw2decompressed_dat_file(session_dir, 'ephys_output.raw.h5', 
-    #                                 session_name=session_name,
-    #                                 animal_name=animal_name,
-    #                                 convert2uV=True,
-    #                                 subtract_dc_offset=True,
-    #                                 exclude_shanks=exclude_shanks)
+    mea1k_raw2decompressed_dat_file(session_dir, 'ephys_output.raw.h5', 
+                                    session_name=session_name,
+                                    animal_name=animal_name,
+                                    convert2uV=True,
+                                    subtract_dc_offset=True,
+                                    write_neuroscope_xml=True,
+                                    exclude_shanks=exclude_shanks)
     
-    write_neuroscope_xml(session_dir, "ephys_output.raw.h5",
-                        animal_name=animal_name,
-                         exclude_shanks=exclude_shanks)
+    # copy the manually edited xml file to the session directory
+    replace_neuroscope_xml(session_dir, animal_name=animal_name)
     
-    
-
-
-def postprocess(paradigm_ids=None, animal_ids=None, mode=False,
-                session_ids=None, session_names=None, 
-                from_date=None, to_date=None, columns=None,exclude_shanks=None):
+def postprocess_ephys(paradigm_ids=None, animal_ids=None, mode=False,
+                      session_ids=None, session_names=None, 
+                      from_date=None, to_date=None, columns=None,exclude_shanks=None):
     L = Logger()
     
     if session_names is None:
@@ -60,8 +57,9 @@ def postprocess(paradigm_ids=None, animal_ids=None, mode=False,
                    f"Processing {len(sessionlist_fullfnames)} sessions\n")
 
     aggr = []
-    for session_fullfname, identif in zip(sessionlist_fullfnames, ids):
-        L.logger.info(f"Processing {identif} {os.path.basename(session_fullfname)}"
+    for i, (session_fullfname, identif) in enumerate(zip(sessionlist_fullfnames, ids)):
+        L.logger.info(f"Processing {identif} ({i+1}/{len(ids)}) "
+                      f"{os.path.basename(session_fullfname)}"
                        f"\n{os.path.dirname(session_fullfname)}")
         
         # create the dat file 

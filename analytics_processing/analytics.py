@@ -114,7 +114,7 @@ def get_analytics(analytic, mode="set", paradigm_ids=None, animal_ids=None,
     else:
         sessionlist_fullfnames, ids = sp.sessionnames2fullfnames(session_names)
         
-    L.logger.debug(f"Requested analytics: {analytic}, mode: {mode}, "
+    L.logger.info(f"Requested analytics: {analytic}, mode: {mode}, "
                    f"Paradigm_ids: {paradigm_ids}, animal_ids: {animal_ids}, "
                    f"session_ids: {session_ids}, from_date: {from_date}, "
                    f"to_date: {to_date}\n\t"

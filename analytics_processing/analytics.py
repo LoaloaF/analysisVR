@@ -107,19 +107,10 @@ def get_analytics(analytic, mode="set", paradigm_ids=None, animal_ids=None,
                   from_date=None, to_date=None, columns=None,):
     L = Logger()
     
-    if session_names is None:
-        sessionlist_fullfnames, ids = sp.get_sessionlist_fullfnames(paradigm_ids, 
-                                                                animal_ids, session_ids,
-                                                                from_date, to_date)
-    else:
-        sessionlist_fullfnames, ids = sp.sessionnames2fullfnames(session_names)
-        
-    L.logger.info(f"Requested analytics: {analytic}, mode: {mode}, "
-                   f"Paradigm_ids: {paradigm_ids}, animal_ids: {animal_ids}, "
-                   f"session_ids: {session_ids}, from_date: {from_date}, "
-                   f"to_date: {to_date}\n\t"
-                   f"Processing {len(sessionlist_fullfnames)} sessions\n")
-
+    sessionlist_fullfnames, ids = sp.sessionlist_fullfnames_from_args(paradigm_ids, animal_ids, 
+                                                                      session_ids, session_names, 
+                                                                      from_date, to_date)
+    
     aggr = []
     for session_fullfname, identif in zip(sessionlist_fullfnames, ids):
         L.logger.debug(f"Processing {identif} {os.path.basename(session_fullfname)}"

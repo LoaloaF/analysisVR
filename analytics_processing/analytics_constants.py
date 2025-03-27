@@ -1,5 +1,50 @@
+import os
 from collections import OrderedDict
 import pandas as pd
+import platform 
+
+def device_paths():
+    which_os = platform.system()
+    user = os.getlogin()
+    # print(f"OS: {which_os}, User: {user}")
+    
+    if which_os == 'Linux' and user == 'houmanjava':
+        nas_dir = "/mnt/SpatialSequenceLearning/"
+        local_data_dir = "/home/houmanjava/local_data/"
+        project_dir = "/home/houmanjava/meatesting/"
+    
+    elif which_os == 'Linux' and user == 'vrmaster':
+        nas_dir = "/mnt/SpatialSequenceLearning/"
+        local_data_dir = "/home/vrmaster/local_data/"
+        project_dir = "/home/vrmaster/Projects/VirtualReality/"
+    
+    elif which_os == 'Linux' and user == 'loaloa':
+        nas_dir = "/mnt/NTnas/BMI/VirtualReality/SpatialSequenceLearning/"
+        local_data_dir = "/home/vrmaster/local_data/"
+        project_dir = "/home/loaloa/homedataXPS/projects/ratvr/VirtualReality/"
+    
+    elif which_os == "Darwin" and user == "root":
+        nas_dir = "/Volumes/large/BMI/VirtualReality/SpatialSequenceLearning/"
+        # nas_dir = "/Users/loaloa/local_data/nas_imitation"
+        folders = [f for f in os.listdir("/Users") if os.path.isdir(os.path.join("/Users", f))]
+
+        if "loaloa" in folders:
+            local_data_dir = "/Users/loaloa/local_data/analysisVR_cache"
+            project_dir = "/Users/loaloa/homedataAir/phd/ratvr/VirtualReality/"
+        elif "yaohaotian" in folders:
+            local_data_dir = "/Users/yaohaotian/Downloads/Study/BME/Research/MasterThesis/code/data/analysisVR_cache"
+            project_dir = "/Users/yaohaotian/Downloads/Study/BME/Research/MasterThesis/code/"
+        else:
+            raise ValueError("Unknown MacOS user")
+    
+    else:
+        nas_dir, local_data_dir, project_dir = None, None, None
+        raise ValueError("Unknown OS or user: ", which_os, user)
+    
+    if not os.path.exists(nas_dir):
+        msg = f"NAS directory not found: {nas_dir} - VPN connected?"
+        raise FileNotFoundError(msg)
+    return nas_dir, local_data_dir, project_dir
 
 # ALL_PARADIGM_IDS = [200, 800, 1100]
 # ALL_ANIMAL_IDS = [1,2,3,4,5,6,7,8,9]

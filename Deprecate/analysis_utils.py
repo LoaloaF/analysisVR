@@ -66,6 +66,7 @@ def device_paths():
     
     elif which_os == "Darwin" and user == "root":
         nas_dir = "/Volumes/large/BMI/VirtualReality/SpatialSequenceLearning/"
+        # nas_dir = "/Users/loaloa/local_data/nas_imitation"
         folders = [f for f in os.listdir("/Users") if os.path.isdir(os.path.join("/Users", f))]
 
         if "loaloa" in folders:

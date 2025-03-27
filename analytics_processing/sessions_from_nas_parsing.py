@@ -3,7 +3,7 @@ from datetime import datetime
 import numpy as np
 
 from CustomLogger import CustomLogger as Logger
-from analysis_utils import device_paths
+from analytics_processing.analytics_constants import device_paths
 
 def parse_paradigms_from_nas(nas_dir):
     # get list of something like "RUN_rYL001", in nas bas dir

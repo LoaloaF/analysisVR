@@ -9,7 +9,7 @@ import analytics_processing.analytics_constants as C
 
 import analytics_processing.modality_transformations as mT
 import analytics_processing.analytics_utils as aU
-from analysis_utils import device_paths
+from analytics_processing.analytics_constants import device_paths
 import mat73
 
 from analytics_processing.modality_loading import session_modality_from_nas

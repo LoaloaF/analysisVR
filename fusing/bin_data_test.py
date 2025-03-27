@@ -4,7 +4,7 @@ sys.path.insert(1, os.path.join(sys.path[0], '..'))
 import matplotlib.pyplot as plt
 import numpy as np
 
-from analysis_utils import device_paths
+from analytics_processing.analytics_constants import device_paths
 from analytics_processing.modality_loading import session_modality_from_nas
 
 

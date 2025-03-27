@@ -6,7 +6,7 @@ import analytics_processing.sessions_from_nas_parsing as sp
 # from ../../ephysVR.git
 from mea1k_modules.mea1k_raw_preproc import mea1k_raw2decompressed_dat_file, replace_neuroscope_xml
 
-def _handle_raw_mea1k_ephys(session_fullfname, mode=False, exclude_shanks=None):
+def _handle_session_ephys(session_fullfname, mode=False, exclude_shanks=None):
     L = Logger()
     session_name = os.path.basename(session_fullfname).replace(".hdf5", "")
     session_dir = os.path.dirname(session_fullfname)
@@ -40,21 +40,12 @@ def _handle_raw_mea1k_ephys(session_fullfname, mode=False, exclude_shanks=None):
     # copy the manually edited xml file to the session directory
     replace_neuroscope_xml(session_dir, animal_name=animal_name)
     
-def postprocess_ephys(paradigm_ids=None, animal_ids=None, mode=False,
-                      session_ids=None, session_names=None, 
-                      from_date=None, to_date=None, columns=None,exclude_shanks=None):
+def postprocess_ephys(kwargs):
     L = Logger()
+    exclude_shanks = kwargs.pop("exclude_shanks")
+    mode = kwargs.pop("mode")
     
-    if session_names is None:
-        sessionlist_fullfnames, ids = sp.get_sessionlist_fullfnames(paradigm_ids, 
-                                                                    animal_ids, session_ids,
-                                                                    from_date, to_date)
-    else:
-        sessionlist_fullfnames, ids = sp.sessionnames2fullfnames(session_names)
-    L.logger.info(f"Paradigm_ids: {paradigm_ids}, animal_ids: {animal_ids}, "
-                   f"session_ids: {session_ids}, from_date: {from_date}, "
-                   f"to_date: {to_date}\n\t"
-                   f"Processing {len(sessionlist_fullfnames)} sessions\n")
+    sessionlist_fullfnames, ids = sp.sessionlist_fullfnames_from_args(**kwargs)
 
     aggr = []
     for i, (session_fullfname, identif) in enumerate(zip(sessionlist_fullfnames, ids)):
@@ -63,4 +54,4 @@ def postprocess_ephys(paradigm_ids=None, animal_ids=None, mode=False,
                        f"\n{os.path.dirname(session_fullfname)}")
         
         # create the dat file 
-        _handle_raw_mea1k_ephys(session_fullfname, mode, exclude_shanks)
+        _handle_session_ephys(session_fullfname, mode, exclude_shanks)

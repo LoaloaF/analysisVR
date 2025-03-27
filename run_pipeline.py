@@ -8,7 +8,6 @@ import argparse
 from CustomLogger import CustomLogger as Logger
 
 from ephys_preprocessing.postproc_mea1k_ephys import postprocess_ephys
-from ephys_preprocessing.postproc_mea1k_ephys import prepare_concatenated_ss
 from analytics_processing.analytics import get_analytics
 
 def main():
@@ -35,9 +34,6 @@ def main():
     pipeline = kwargs.pop("pipeline")
     if pipeline == "decompress_ephys":
         postprocess_ephys(**kwargs)
-    elif pipeline == "prep_concat_ss":
-        kwargs.pop("exclude_shanks")
-        prepare_concatenated_ss(**kwargs)
     else:
         kwargs.pop("exclude_shanks")
         kwargs['analytic'] = pipeline

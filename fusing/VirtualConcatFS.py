@@ -8,11 +8,11 @@ import time
 import stat
 
 class VirtualConcatFS(LoggingMixIn, Operations):
-    def __init__(self, root, concat_fullfname='/rYL006_concat_ss/concat.dat', 
+    def __init__(self, root, concat_mount_fullfname='/rYL006_concat_ss/concat.dat', 
                  singlefiles_fullfnames=[]):
         self.root = realpath(root)
         self.rwlock = Lock()
-        self.concat_fullfname = concat_fullfname
+        self.concat_mount_fullfname = concat_mount_fullfname
         self._singlefiles_fullfnames = singlefiles_fullfnames
 
     def _full_path(self, partial):
@@ -44,7 +44,7 @@ class VirtualConcatFS(LoggingMixIn, Operations):
 
     def getattr(self, path, fh=None):
         full_path = self._full_path(path)
-        if full_path.endswith(self.concat_fullfname):
+        if full_path.endswith(self.concat_mount_fullfname):
             total_size = self.get_concatfile_size()
             logging.info(f"\nRequested fstat for concat.dat - size set to: {total_size:,}")
             return {
@@ -81,7 +81,7 @@ class VirtualConcatFS(LoggingMixIn, Operations):
     def read(self, path, size, offset, fh):
         logging.info("\n\n----Requested:-----", )
         logging.info(f"{path=}, {size=:,}, {offset=:,}, {fh=}", )
-        if path == self.concat_fullfname:
+        if path == self.concat_mount_fullfname:
             return self.virtual_concat_read(size, offset, fh)
         
         with self.rwlock:

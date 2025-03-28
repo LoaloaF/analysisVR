@@ -1,10 +1,11 @@
 import os
+import numpy as np
 
 from CustomLogger import CustomLogger as Logger
 import analytics_processing.sessions_from_nas_parsing as sp
 
 # from ../../ephysVR.git
-from mea1k_modules.mea1k_raw_preproc import mea1k_raw2decompressed_dat_file, replace_neuroscope_xml
+from mea1k_modules.mea1k_raw_preproc import mea1k_raw2decompressed_dat_file
 
 def _handle_session_ephys(session_fullfname, mode=False, exclude_shanks=None):
     L = Logger()
@@ -14,7 +15,9 @@ def _handle_session_ephys(session_fullfname, mode=False, exclude_shanks=None):
     
     # check if a dat file already exists
     dat_fnames = [f for f in os.listdir(session_dir) if f.endswith(".dat")]
-    if any(dat_fnames):
+    dat_sizes = np.array([os.path.getsize(os.path.join(session_dir, f)) for f in dat_fnames])
+
+    if any(dat_sizes>0):
         L.logger.debug(f"De-compressed ephys files found: {dat_fnames}")
         if mode != "recompute":
             L.logger.debug(f"Skipping...")
@@ -35,12 +38,11 @@ def _handle_session_ephys(session_fullfname, mode=False, exclude_shanks=None):
                                     convert2uV=True,
                                     subtract_dc_offset=True,
                                     write_neuroscope_xml=True,
+                                    write_probe_file=True,
+                                    replace_with_curated_xml=True,
                                     exclude_shanks=exclude_shanks)
     
-    # copy the manually edited xml file to the session directory
-    replace_neuroscope_xml(session_dir, animal_name=animal_name)
-    
-def postprocess_ephys(kwargs):
+def postprocess_ephys(**kwargs):
     L = Logger()
     exclude_shanks = kwargs.pop("exclude_shanks")
     mode = kwargs.pop("mode")

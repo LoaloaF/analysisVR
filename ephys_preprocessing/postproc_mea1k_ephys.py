@@ -39,7 +39,7 @@ def _handle_session_ephys(session_fullfname, mode=False, exclude_shanks=None):
                                     subtract_dc_offset=True,
                                     write_neuroscope_xml=True,
                                     write_probe_file=True,
-                                    replace_with_curated_xml=True,
+                                    replace_with_curated_xml=False,
                                     exclude_shanks=exclude_shanks)
     
 def postprocess_ephys(**kwargs):

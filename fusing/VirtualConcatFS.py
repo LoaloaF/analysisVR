@@ -8,8 +8,7 @@ import time
 import stat
 
 class VirtualConcatFS(LoggingMixIn, Operations):
-    def __init__(self, root, concat_mount_fullfname='/rYL006_concat_ss/concat.dat', 
-                 singlefiles_fullfnames=[]):
+    def __init__(self, root, concat_mount_fullfname, singlefiles_fullfnames=[]):
         self.root = realpath(root)
         self.rwlock = Lock()
         self.concat_mount_fullfname = concat_mount_fullfname

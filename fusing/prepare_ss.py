@@ -2,6 +2,7 @@ import os
 import sys
 sys.path.insert(1, os.path.join(sys.path[0], '..'))
 
+import shutil
 from fuse import FUSE
 import logging
 import argparse
@@ -18,6 +19,23 @@ from VirtualConcatFS import VirtualConcatFS
 
 
 def create_virtual_concat(kwargs):
+    def handle_first_session():
+        traces_order = mapping['pad_id'].values
+        L.logger.debug(f"Using mapping:\n{mapping}")
+        # copy in the prope file for JRC from this first session
+        probe_fullfname = [fn for fn in os.listdir(session_dir)
+                            if fn.endswith(".prb") and not fn.startswith("._")]
+        print()
+        print(probe_fullfname)
+        print()
+        if len(probe_fullfname) != 1:
+            L.logger.error(f"Expected 1 probe file for {session_dir}, found "
+                                f"{len(probe_fullfname)}, {probe_fullfname}")
+            exit(1)
+        shutil.copyfile(os.path.join(session_dir, probe_fullfname[0]),
+                        os.path.join(device_paths()[0], concat_rel_path, 'concat.prb'))
+        return traces_order
+
     L = Logger()
     mount = kwargs.pop('mount')
     root = kwargs.pop('root')
@@ -35,13 +53,9 @@ def create_virtual_concat(kwargs):
         
         # valid session, rm curated traces clause later, just not processed
         if mapping is not None and mapping.columns[-1] == 'curated_trace':
-            # first valid session, parse order that is expected of all sessions
+            # first valid session, parse el order that is expected of all sessions
             if traces_order is None:
-                traces_order = mapping['pad_id'].values
-                L.logger.debug(f"Using mapping:\n{mapping}")
-                # write the prope file for JRC
-                probe_fullfname = os.path.join(device_paths()[0], concat_rel_path, 'ephys.prb')
-                _write_probe_file(mapping, probe_fullfname)
+                traces_order = handle_first_session()
             
             # all follwing sessions
             else:
@@ -80,46 +94,13 @@ def create_virtual_concat(kwargs):
          nothreads=True, 
          foreground=True)
 
-def _write_probe_file(implant_mapping, output_fullfname, pad_size=11):
-    channels = np.arange(1, implant_mapping.shape[0]+1)
-    shanks = implant_mapping.shank_id
-    
-    # Use `x` and `depth` to populate geometry based on actual positions
-    geometry = np.zeros((implant_mapping.shape[0], 2))
-    geometry[:, 0] = shanks*1000  # x coo constant for each shank
-    geometry[:, 1] = implant_mapping.depth # y coo
-    
-    # print(geometry)
-    # exit()
-
-    # Write to MATLAB-readable probe file format
-    # fullfname = os.path.join(subdir, f"ephys_{data.shape[0]}_ss.prb")
-    # print(fullfname)
-    
-    with open(output_fullfname, "w") as f:
-        f.write("% Order of the probe sites in the recording file\n")
-        f.write(f"channels = {list(channels)};\n\n")
-        
-        f.write("% Site location in micrometers (x and y)\n")
-        f.write("geometry = [\n")
-        for row in geometry:
-            f.write(f"    {row[0]}, {row[1]};\n")
-        f.write("];\n\n")
-        
-        f.write("% Shank information\n")
-        f.write(f"shank = {list(shanks)};\n\n")
-        
-        f.write("% Reference sites to exclude\n")
-        f.write(f"ref_sites = {channels[~implant_mapping.curated_trace]};\n\n")
-        
-        f.write("% Recording contact pad size (height x width in micrometers)\n")
-        f.write(f"pad = [{pad_size} {pad_size}];\n\n")
 
 def main():
+    nas_dir = device_paths()[0]
     
     argParser = argparse.ArgumentParser("Mount a virtual file system to read concatenated ephys traces")
-    argParser.add_argument('--mount')
-    argParser.add_argument('--root')
+    argParser.add_argument('--mount', default=f"{nas_dir}/fuse_root1")
+    argParser.add_argument('--root', default=f"{nas_dir}/RUN_rYL006")
     argParser.add_argument('--concat_rel_path', default="RUN_rYL006/rYL006_concat_ss")
     argParser.add_argument('--concat_mount_fullfname', default="/rYL006_concat_ss/concat.dat")
     argParser.add_argument("--paradigm_ids", nargs='+', default=None, type=int)

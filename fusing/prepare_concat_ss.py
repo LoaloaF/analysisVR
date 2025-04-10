@@ -65,14 +65,14 @@ def create_virtual_concat(kwargs):
     session_fullfnames, _ = sp.sessionlist_fullfnames_from_args(**kwargs)
     
     singlefiles_fullfnames = []
-    # singlefiles_lengths = {}
+    singlefiles_lengths = []
     traces_order, prb_ffname = None, None # set at first session
     for session_ffname in session_fullfnames:
         session_dir = os.path.dirname(session_ffname)
         d, mapping = session_modality_from_nas(session_ffname, key='ephys_traces')
         
-        # valid session, rm curated traces clause later, just not processed
-        if mapping is not None and mapping.columns[-1] == 'curated_trace':
+        # valid session
+        if mapping is not None:
             # first valid session, parse el order that is expected of all sessions
             if traces_order is None:
                 traces_order, prb_ffname = handle_first_session()
@@ -88,8 +88,8 @@ def create_virtual_concat(kwargs):
             ephys_fname = [fn for fn in os.listdir(session_dir) 
                            if fn.startswith('20') and fn.endswith("ephys_traces.dat")][0]
             singlefiles_fullfnames.append(os.path.join(session_dir, ephys_fname))
-            # singlefiles_lengths[ephys_fname] = d.shape[1]
-    
+            singlefiles_lengths.append((ephys_fname, d.shape[1]))
+
     if len(singlefiles_fullfnames) == 0:
         L.logger.error(f"No valid sessions found. Not mounting FUSE filesystem.")
         return
@@ -97,7 +97,16 @@ def create_virtual_concat(kwargs):
     L.logger.debug(L.fmtmsg(["Files:", *singlefiles_fullfnames]))
     L.spacer("debug")
     
+    # overview of the session boundaries
+    singlefiles_lengths = pd.DataFrame(singlefiles_lengths, columns=['name','nsamples'])
+    singlefiles_lengths['length_sec'] = singlefiles_lengths['nsamples'] // 20000
+    singlefiles_lengths['length_sec_cum'] = singlefiles_lengths['length_sec'].cumsum()
+    singlefiles_lengths['nsamples_cum'] = singlefiles_lengths['nsamples'].cumsum()
+    
+    # setup the paths, create base dir etc
     this_ss_dirname, root = handle_path_setup(kwargs, traces_order, prb_ffname, name)
+    singlefiles_lengths.to_csv(os.path.join(root, 'concatenated_ss', this_ss_dirname,
+                                            'concat_session_lengths.csv'), index=False)
 
     L.logger.info(f"Mounting virtual filesystem for concatenated read of "
                   f"{len(singlefiles_fullfnames)} ephys traces from "

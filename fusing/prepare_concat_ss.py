@@ -40,7 +40,7 @@ def create_virtual_concat(kwargs):
         L.logger.info(f"Created directory for concatenated ss: {this_ss_fullpath}")
         
         # the JRC parameter file
-        updated_prms = {'qqFactor': 5.9}
+        updated_prms = {'qqFactor': '5.9;'}
         write_prm_file(mapping, os.path.join(device_paths()[2], 'ephysVR/assets/concat_template.prm'),
                        out_fullfname=os.path.join(this_ss_fullpath, 'concat.prm'), 
                        shank_subset=shank_subset, updated_prms=updated_prms)

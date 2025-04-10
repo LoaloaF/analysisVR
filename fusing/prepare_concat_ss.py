@@ -18,14 +18,19 @@ from analytics_processing.analytics_constants import device_paths
 from VirtualConcatFS import VirtualConcatFS
 
 from mea1k_modules.mea1k_raw_preproc import _write_prb_file
+from mea1k_modules.mea1k_raw_preproc import write_prm_file
 
 def create_virtual_concat(kwargs):
     def handle_path_setup(animal_id, traces_order, name):
         nas_dir = device_paths()[0]
         # everything in root will appear in the mount
-        concat_ss_base_dir = os.path.join(nas_dir, f"RUN_rYL{animal_id:03}", 'concatenated_ss')
+        root = os.path.join(nas_dir, f"RUN_rYL{animal_id:03}", )
+        concat_ss_base_dir = os.path.join(root, 'concatenated_ss')
         if not os.path.exists(concat_ss_base_dir):
             os.makedirs(concat_ss_base_dir) # created once per animal
+        
+        if not os.path.exists(os.path.join(concat_ss_base_dir, 'fused_concat_dat')):
+            os.makedirs(os.path.join(concat_ss_base_dir, 'fused_concat_dat')) # created once per animal
 
         # define the dir name of this concatenated ss preparation, R/W in this dir
         datet = pd.to_datetime('now').strftime("%Y-%m-%d_%H-%M")
@@ -35,14 +40,15 @@ def create_virtual_concat(kwargs):
         L.logger.info(f"Created directory for concatenated ss: {this_ss_fullpath}")
         
         # the JRC parameter file
-        shutil.copy(os.path.join(device_paths()[2], 'analysisVR/assets/concat_template.prm'), 
-                    os.path.join(this_ss_fullpath, 'concat.prm'))
+        write_prm_file(mapping, os.path.join(device_paths()[2], 'ephysVR/assets/concat_template.prm'),
+                       out_fullfname=os.path.join(this_ss_fullpath, 'concat.prm'), 
+                       shank_subset=shank_subset)
         # the probe file
         _write_prb_file(mapping, os.path.join(this_ss_fullpath, 'concat.prb'),
                         shank_subset=shank_subset)
         # create the concat files that will be read by the FUSE
-        open(os.path.join(this_ss_fullpath, 'concat.dat'), 'w').close()
-        return this_ss_dirname, this_ss_fullpath
+        open(os.path.join(concat_ss_base_dir, 'fused_concat_dat', 'concat.dat'), 'w').close()
+        return this_ss_dirname, this_ss_fullpath, root
 
     L = Logger()
     # extract the arguments for paths for later
@@ -69,8 +75,8 @@ def create_virtual_concat(kwargs):
                 L.logger.debug(f"Using mapping:\n{mapping}")
                 traces_order = mapping['pad_id'].values
                 # setup the paths, create base dir etc
-                this_ss_dirname, this_ss_fullpath = handle_path_setup(kwargs['animal_ids'][0], 
-                                                                      traces_order, name)
+                this_ss_dirname, this_ss_fullpath, root = handle_path_setup(kwargs['animal_ids'][0], 
+                                                                            traces_order, name)
                 
             # all follwing sessions
             else:
@@ -105,8 +111,8 @@ def create_virtual_concat(kwargs):
                   f"Spike sorting dir: {this_ss_fullpath}")
     L.spacer("info")
     logging.basicConfig(level=logging.INFO, )
-    fuse_concat_fullfname = os.path.join('/', 'concatenated_ss', this_ss_dirname, 'concat.dat')
-    FUSE(VirtualConcatFS(this_ss_fullpath, singlefiles_fullfnames=singlefiles_fullfnames,
+    fuse_concat_fullfname = os.path.join('/', 'concatenated_ss', 'fused_concat_dat', 'concat.dat')
+    FUSE(VirtualConcatFS(root, singlefiles_fullfnames=singlefiles_fullfnames,
                          concat_mount_fullfname=fuse_concat_fullfname,), 
          mount, 
          nothreads=True, 

@@ -375,5 +375,6 @@ UNITY_TRACKWISE_TABLE = OrderedDict([
 MULTI_UNITS_TABLE = OrderedDict([
     ("spike_time", pd.Int64Dtype()),
     ("cluster_id", pd.Int32Dtype()),
-    ("site_id", pd.Int32Dtype())
+    ("spike_site", pd.Int32Dtype()),
+    ("spike_color", pd.StringDtype()),
 ])

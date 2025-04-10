@@ -19,7 +19,8 @@ def main():
     Logger().init_logger(None, None, loglevel)
 
     global_data = {"UnityTrackwise": None, "UnityFramewise": None, 'UnityTrialwiseMetrics': None,
-                   "SessionMetadata": None, "Portenta":None}
+                   "SessionMetadata": None, "Portenta":None, "ephys_traces": None,
+                   "spikes": None, "implant_mapping": None,}
     
     # Initialize app
     app = dash.Dash(__name__, external_stylesheets=[dbc.themes.BOOTSTRAP])

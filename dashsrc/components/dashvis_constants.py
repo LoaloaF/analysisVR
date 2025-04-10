@@ -5,16 +5,21 @@ from plotly.colors import convert_colors_to_same_type
 
 # html ids used across the app
 
-ANIMALS = 1,2,3, 5,7, 8, 6,9
+# ANIMALS = 1,2,3, 5,7, 8, 6,9, 10,11,12,13,14,15
+ANIMALS = 6,9, 10,11,12,13,15
 PARADIGMS = 800, 1100, 500
 
-SESSION_WISE_VISS = ('SessionKinematics', )
-ANIMAL_WISE_VISS = ('Kinematics', 'StayPerformance', 'StayRatio', 'SessionsOverview')
+SESSION_WISE_VISS = ('SessionKinematics', "RawSpikes")
+ANIMAL_WISE_VISS = ('Kinematics', 'StayPerformance', 'StayRatio', 'SessionsOverview', 
+                    'EvolvingStayTime', 'EvolvingStayDecision')
 DATA_LOADED_SessionKinematics_ID = 'SessionKinematics-data-loaded'
 DATA_LOADED_Kinematics_ID = 'Kinematics-data-loaded'
 DATA_LOADED_StayRatio_ID = 'Staytimes-data-loaded'
 DATA_LOADED_StayPerformance_ID = 'Staytimes-Performance-data-loaded'
 DATA_LOADED_SessionsOverview_ID = 'SessionsOverview-data-loaded'
+DATA_LOADED_EvolvingStayTime_ID = 'EvolvingStayTime-data-loaded'
+DATA_LOADED_EvolvingStayDecision_ID = 'EvolvingStayDecision-data-loaded'
+DATA_LOADED_RawSpikes_ID = 'RawSpikes-data-loaded'
 
 def get_vis_name_data_loaded_id(vis_name):
     match vis_name:
@@ -28,6 +33,12 @@ def get_vis_name_data_loaded_id(vis_name):
             data_loaded_id = DATA_LOADED_StayRatio_ID
         case 'SessionsOverview':
             data_loaded_id = DATA_LOADED_SessionsOverview_ID
+        case 'EvolvingStayTime':
+            data_loaded_id = DATA_LOADED_EvolvingStayTime_ID
+        case 'EvolvingStayDecision':
+            data_loaded_id = DATA_LOADED_EvolvingStayDecision_ID
+        case 'RawSpikes':
+            data_loaded_id = DATA_LOADED_RawSpikes_ID
         case _:
             raise ValueError(f"Unknown vis_name: {vis_name} for matching "
                             "with its data_loaded_id")

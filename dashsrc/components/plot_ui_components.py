@@ -256,18 +256,19 @@ def register_paradigm_dropdown_callback(app, global_data, analytic, vis_name):
     
     
     
-def get_vis_name_data_loaded_id(vis_name):
-    match vis_name:
-        case 'Kinematics':
-            data_loaded_id = C.DATA_LOADED_Kinematics_ID
-        case 'StayPerformance':
-            print("in")
-            data_loaded_id = C.DATA_LOADED_StayPerformance_ID
-        case 'SessionKinematics':
-            data_loaded_id = C.DATA_LOADED_SessionKinematics_ID
-        case 'StayRatio':
-            data_loaded_id = C.DATA_LOADED_StayRatio_ID
-        case _:
-            raise ValueError(f"Unknown vis_name: {vis_name} for matching "
-                            "with its data_loaded_id")
-    return data_loaded_id
+# def get_vis_name_data_loaded_id(vis_name):
+#     match vis_name:
+#         case 'Kinematics':
+#             data_loaded_id = C.DATA_LOADED_Kinematics_ID
+#         case 'StayPerformance':
+#             data_loaded_id = C.DATA_LOADED_StayPerformance_ID
+#         case 'SessionKinematics':
+#             data_loaded_id = C.DATA_LOADED_SessionKinematics_ID
+#         case 'StayRatio':
+#             data_loaded_id = C.DATA_LOADED_StayRatio_ID
+#         case 'EvolvingStayTime':
+#             data_loaded_id = C.DATA_LOADED_EvolvingStayTime_ID
+#         case _:
+#             raise ValueError(f"Unknown vis_name: {vis_name} for matching "
+#                             "with its data_loaded_id")
+#     return data_loaded_id

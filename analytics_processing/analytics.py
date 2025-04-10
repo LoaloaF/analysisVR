@@ -87,9 +87,9 @@ def _compute_analytic(analytic, session_fullfname):
         data = m2a.get_MultiUnits(session_fullfname)
         data_table = C.MULTI_UNITS_TABLE
         
-    # elif analytic == "Spikes":
-    #     data = m2a.get_Spikes(session_fullfname)
-    #     data_table = C.SPIKE_TABLE
+    elif analytic == "Spikes":
+        data = m2a.get_Spikes(session_fullfname)
+        data_table = C.MULTI_UNITS_TABLE
 
     #TODO fix later
     if analytic != "UnityTrialwiseMetrics" and data is not None:

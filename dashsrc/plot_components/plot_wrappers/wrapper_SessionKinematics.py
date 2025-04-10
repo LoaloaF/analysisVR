@@ -108,7 +108,7 @@ def render(app: Dash, global_data: dict, vis_name: str) -> html.Div:
         return fig
     
     return html.Div([
-        dcc.Store(id=C.DATA_LOADED_SessionKinematics_ID, data=False),  # Store to track data loading state
+        dcc.Store(id=C.get_vis_name_data_loaded_id(vis_name), data=False),  # Store to track data loading state
         dbc.Row([
             # Left side for plots
             dbc.Col([

@@ -11,6 +11,9 @@ from ..plot_components.plot_wrappers import wrapper_AnimalKinematics
 from ..plot_components.plot_wrappers import wrapper_StayPerformance
 from ..plot_components.plot_wrappers import wrapper_SessionsOverview
 from ..plot_components.plot_wrappers import wrapper_StayRatio
+from ..plot_components.plot_wrappers import wrapper_EvolvingStayTime
+from ..plot_components.plot_wrappers import wrapper_EvolvingStayDecision
+from ..plot_components.plot_wrappers import wrapper_RawSpikes
 
 def create_sessionwise_vis_containers(app: Dash, global_data: dict):
     viss_row_container = []
@@ -19,6 +22,9 @@ def create_sessionwise_vis_containers(app: Dash, global_data: dict):
             case 'SessionKinematics':
                 analysis_div = wrapper_SessionKinematics.render(app, global_data, 
                                                                 vis_name=vis_name)
+            case "RawSpikes":
+                analysis_div = wrapper_RawSpikes.render(app, global_data, 
+                                                              vis_name=vis_name)
             case _:
                 analysis_div = html.Div([html.H5(vis_name)], id=f'{vis_name}-container', 
                                         style={'display': 'none', 
@@ -42,6 +48,12 @@ def create_multisession_vis_containers(app: Dash, global_data: dict):
                                                               vis_name=vis_name)
             case "SessionsOverview":
                 analysis_div = wrapper_SessionsOverview.render(app, global_data, 
+                                                              vis_name=vis_name)
+            case "EvolvingStayTime":
+                analysis_div = wrapper_EvolvingStayTime.render(app, global_data, 
+                                                              vis_name=vis_name)
+            case "EvolvingStayDecision":
+                analysis_div = wrapper_EvolvingStayDecision.render(app, global_data, 
                                                               vis_name=vis_name)
             case _:
                 analysis_div = html.Div([html.H5(vis_name)], id=f'{vis_name}-container', 

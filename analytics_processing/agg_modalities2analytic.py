@@ -15,6 +15,8 @@ import mat73
 from analytics_processing.modality_loading import session_modality_from_nas
 from analytics_processing.modality_loading import get_modality_summary
 
+from dashsrc.plot_components.plot_utils import make_discr_cluster_id_cmap
+
 def get_Portenta(session_fullfname):
     # event data
     cols = ("event_pc_timestamp","event_value","event_name",
@@ -211,20 +213,33 @@ def get_Spikes(session_fullfname):
     ephys_res = os.path.join(analytics_dir, ephys_res[0])
     ephys_res_mat = mat73.loadmat(ephys_res)
 
+    # alternatively, if you want to use h5py
+    # import h5py
+    # # Open the .mat file
+    # with h5py.File(ephys_res, 'r') as f:
+    #     # List all keys in the file
+    #     print(list(f.keys()))
+    #     # Access specific datasets
+    #     spikeClusters = f['spikeClusters'][:]
+
     # TODO: include more fields to this parquet
     clusters = ephys_res_mat["spikeClusters"] 
-    spikeTimes = ephys_res_mat["spikeTimes"] * 50 # TODO: check if this is correct to multiply 50
-    cluster_sites = ephys_res_mat["clusterSites"]
+    spikeTimes = ephys_res_mat["spikeTimes"] * 50 # convert to ms
+    spike_sites = ephys_res_mat["spikeSites"] -1 # matlab is 1-indexed
+
+    # set cluster colors
+    cluster_ids = np.unique(clusters)
+    cmap = make_discr_cluster_id_cmap(cluster_ids)
+    map_colors = np.vectorize(cmap.get)
+    spike_colors = map_colors(clusters)
 
     spikes = pd.DataFrame({
     "cluster_id": clusters,
-    "spike_time": spikeTimes
+    "spike_time": spikeTimes,
+    "spike_site": spike_sites, 
+    "spike_color": spike_colors,
     })
     
-    # Create a mapping from cluster to site
-    cluster_to_site = {cluster_id: site_id for cluster_id, site_id in enumerate(cluster_sites)}
-    spikes['site_id'] = spikes['cluster_id'].map(cluster_to_site)
-
     return spikes
 
 

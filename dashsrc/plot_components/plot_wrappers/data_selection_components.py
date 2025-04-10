@@ -137,7 +137,35 @@ def smooth_checklist_component(vis_name):
             id=component_id
         )
     ], component_id
+    
+def digit_input_component(vis_name, label='Input', initial_value=0, width=.5, 
+                          step=1, debounce=True):
+    component_id = f'{label}-{vis_name}'
+    return [
+        html.Label(label, style={"marginTop": 10,}),
+        dcc.Input(
+            id=component_id,
+            type='number',
+            step=step,
+            value=initial_value,
+            debounce=debounce,
+            style={"width": f"{width*100}%", "marginLeft": "5px", 'marginRight': "5px"},
+        )
+    ], component_id
 
+def shank_input_component(vis_name, initial_value=[1,2]):
+    component_id = f'shanks-{vis_name}'
+    return [
+        html.Label("Shanks", style={"marginTop": 10}),
+        dcc.Dropdown(
+            id=component_id,
+            options=[1,2,3,4],
+            placeholder="Select shanks",
+            multi=True,
+            value=initial_value,
+        )
+    ], component_id
+        
 def max_metric_input_component(vis_name, initial_value):
     component_id = f'max-metric-value-{vis_name}'
     return [
@@ -160,6 +188,20 @@ def trial_range_slider_component(vis_name):
             step=1,
             value=[0, 100],
             id=component_id
+        )
+    ], component_id
+    
+def session_time_slider_component(vis_name):
+    component_id = f'session-time-slider-{vis_name}'
+    return [
+        html.Label("Select a session timestamp", style={"marginTop": 15}),
+        dcc.Slider(
+            0, 5*60,
+            step=1,
+            value=3*60,
+            marks={t: f'{t//60}min' for t in range(0, 60*5, 60)},
+            id=component_id,
+            included=False
         )
     ], component_id
 
@@ -282,8 +324,33 @@ def plot_type_selecter_component(vis_name):
         )
     ], component_id
         
+def time_step_button_component(vis_name, direction='forward', disabled=False):
+    component_id = f'time-step-button-{direction}-{vis_name}'
+    return [
+        dbc.Button(
+            ">>" if direction == 'forward' else "<<",
+            id=component_id,
+            n_clicks=0,
+            style={"marginTop": 6, "marginLeft": 5, "width": "40px"},
+            color="secondary",
+            size="sm",
+            disabled=disabled,
+        )
+    ], component_id
 
-
+def trace_group_selecter_component(vis_name):
+    component_id = f'plot-type-{vis_name}'
+    return [
+        html.Label("Draw traces", style={"marginTop": 15}),
+        dcc.Checklist(
+            ["non_curated", "curated", "spike_traces"],
+            id=component_id,
+            inputStyle={"margin-right": "3px", "margin-left": "3px"},
+            style={"marginLeft": 10},
+            value=['spike_traces'],
+            inline=True,
+        )
+    ], component_id
 
 
 
@@ -345,7 +412,8 @@ def register_session_dropdown_callback(app, vis_name, global_data, analytic):
         session_ids = [{'label': f'Session {i}', 'value': i} for i in sessions]
         return session_ids
 
-def register_session_slider_callback(app, vis_name, global_data, analytic):
+def register_session_slider_callback(app, vis_name, global_data, analytic, 
+                                     override_default_last_session=None):
     # html not used, just ensure that callcack is linked to correct component
     _, session_slider_comp_id = session_range_slider_component(vis_name)
     _, animal_dropd_comp_id = animal_dropdown_component(vis_name, global_data, analytic)
@@ -358,10 +426,62 @@ def register_session_slider_callback(app, vis_name, global_data, analytic):
     def update_session_slider(selected_animal):
         data = global_data[analytic]
         if selected_animal is None or data is None:
-            return 0, 10, (0,10)
+            return 0, 10, (0,10), 
         
         last_session_id = data.index.unique("session_id").max()
-        return 0, last_session_id, (0, last_session_id)
+        if override_default_last_session is not None:
+            last_value = override_default_last_session
+        else:
+            last_value = last_session_id
+        return 0, last_session_id, (0, last_value)
+
+def register_session_time_slider_callback(app, vis_name, global_data, analytic):
+    # html not used, just ensure that callcack is linked to correct component
+    _, session_time_slider_comp_id = session_time_slider_component(vis_name)
+    _, animal_dropd_comp_id = animal_dropdown_component(vis_name, global_data, analytic)
+    _, session_dropd_comp_id = session_dropdown_component(vis_name, global_data, analytic)
+    
+    @app.callback(
+        Output(session_time_slider_comp_id, 'min'),
+        Output(session_time_slider_comp_id, 'max'),
+        Output(session_time_slider_comp_id, 'value'),
+        Output(session_time_slider_comp_id, 'marks'),
+        Input(animal_dropd_comp_id, 'value'),
+        Input(session_dropd_comp_id, 'value')
+    )
+    def update_session_time_slider(selected_animal, selected_session):
+        data = global_data[analytic]
+        if selected_animal is None or selected_session is None or data is None:
+            return 0, 5*60, 3*60, {t: f'{t//60}min' for t in range(0, 60*5, 60)},
+        
+        max_time_sec = global_data[analytic][selected_session].shape[1] *50 /1_000_000
+        # marks at 1 min, 10, 20, 30, 40, 50
+        marks = {t: f'{t//60}min' for t in range(60, int(max_time_sec) + 1, 60*10)}
+        return 0, max_time_sec, 0, marks
+
+def register_session_time_step_callback(app, vis_name, direction='forward'):
+    # html not used, just ensure that callcack is linked to correct component
+    _, session_time_step_comp_id = time_step_button_component(vis_name, direction)
+    _, session_time_slider_component_id = session_time_slider_component(vis_name)
+    _, int_input_component_id = digit_input_component(vis_name, "Interval [ms]")
+
+    @app.callback(
+    Output(session_time_slider_component_id, 'value', allow_duplicate=True),  # Allow duplicate output
+    Input(session_time_slider_component_id, 'value'),
+    Input(session_time_step_comp_id, 'n_clicks'),
+    Input(int_input_component_id, 'value'),
+    prevent_initial_call=True  # Prevent the callback from firing on app load
+    )   
+    def update_session_time_step(current_selected_time, n_clicks, interval):
+        print(f"{current_selected_time=}, {n_clicks=}, {interval=}, {direction=}")
+        if n_clicks == 0:
+            return current_selected_time
+        else:
+            new_time = current_selected_time*1_000 + interval if direction == 'forward' else -interval*2
+            new_time = max(0, new_time)
+            
+            print(f"{new_time=}")
+            return new_time/1_000 
 
 def register_trial_slider_callback(app, vis_name, global_data, analytic):
     # html not used, just ensure that callcack is linked to correct component

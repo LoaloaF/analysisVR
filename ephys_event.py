@@ -191,18 +191,76 @@ def extract_ephys(cluster_file):
     cluster_mat = mat73.loadmat(cluster_file)
     clusters = cluster_mat["spikesByCluster"] # This is only the index for spikeTimes (spikeTimes(spikebyCluster{1,2 3 4....number of neurons}(:,:))) =this gives you the actual spike times
     spikeTimes= cluster_mat["spikeTimes"]
+    print(len(spikeTimes))
 
     cluster_spikeTimes = []
     for each_cluster in clusters:
         cluster_spikeTimes.append(spikeTimes[each_cluster[0].astype(int)])
-
     print("Cluster size:", len(cluster_spikeTimes))
+
+    
+    # alternative     
+    clusters = cluster_mat["spikeClusters"] 
+    spikeTimes = cluster_mat["spikeTimes"] * 50 # TODO: check if this is correct to multiply 50
+    cluster_sites = cluster_mat["clusterSites"]
+
+    spikes = pd.DataFrame({
+    "cluster_id": clusters,
+    "spike_time": spikeTimes
+    })
+    
+    print("Unique cluster IDs in spikes:", spikes['cluster_id'].unique())
+    print("Number of cluster sites:", len(cluster_sites))
+    print(f"Ckluster sites cluster_sites {cluster_sites}")
+    # exit()
+    
+    # Create a mapping from cluster_id to site_id using the actual cluster_id values
+    cluster_to_site = {cluster_id: site_id for cluster_id, site_id in zip(clusters, cluster_sites)}
+
+    # Map the site_id values to the spikes DataFrame
+    spikes['site_id'] = spikes['cluster_id'].map(cluster_to_site)
+
+    
+    print(spikes)
+    print(spikes['site_id'].isna().sum())
     
     return cluster_spikeTimes
 
 
+def get_Spikes(session_fullfname):
+    session_dir = os.path.dirname(session_fullfname)
+    analytics_dir = os.path.join(session_dir, "session_analytics")
+    
+    ephys_res = [file for file in os.listdir(analytics_dir) if "ephys" in file and file.endswith("_res.mat")]
+    
+    if not ephys_res:
+        # Logger().logger.warning(f"No ephys file found in {analytics_dir}")
+        return None
+    
+    ephys_res = os.path.join(analytics_dir, ephys_res[0])
+    ephys_res_mat = mat73.loadmat(ephys_res)
+
+    # TODO: include more fields to this parquet
+    clusters = ephys_res_mat["spikeClusters"] 
+    spikeTimes = ephys_res_mat["spikeTimes"] * 50 # TODO: check if this is correct to multiply 50
+    cluster_sites = ephys_res_mat["clusterSites"]
+
+    spikes = pd.DataFrame({
+    "cluster_id": clusters,
+    "spike_time": spikeTimes
+    })
+    
+    # Create a mapping from cluster to site
+    cluster_to_site = {cluster_id: site_id for cluster_id, site_id in enumerate(cluster_sites)}
+    spikes['site_id'] = spikes['cluster_id'].map(cluster_to_site)
+
+    return spikes
+
+
+
 # nas_dir = "/mnt/SpatialSequenceLearning/"
 nas_dir = "/mnt/SpatialSequenceLearning"
+nas_dir = "/Volumes/large/BMI/VirtualReality/SpatialSequenceLearning/"
 session_dir = "RUN_rYL006/rYL006_P1100/2024-11-21_17-22_rYL006_P1100_LinearTrackStop_25min"
 
 event_file = os.path.join(nas_dir, session_dir, "session_analytics/BehaviorEvents.parquet")
@@ -216,7 +274,12 @@ unity_data["frame_ephys_timestamp"] = unity_data["frame_ephys_timestamp"] / 1e6
 
 
 cluster_spikeTimes = extract_ephys(cluster_file)
-
+exit()
+print(cluster_spikeTimes)
+print(len(cluster_spikeTimes))
+[print(len(cluster)) for cluster in cluster_spikeTimes]
+raster = plot_event_ephys("R", behavior_event, cluster_spikeTimes, time_window=2)
+exit()
 
 # # lick_raster = plot_event_ephys("L", behavior_event, clusters, time_window=0.5)
 # sound_raster = plot_event_ephys("S", behavior_event, cluster_spikeTimes, time_window=2)
@@ -226,3 +289,5 @@ cluster_spikeTimes = extract_ephys(cluster_file)
 # vacuum_raster = plot_event_ephys("V", behavior_event, cluster_spikeTimes, time_window=0.5)
 
 unity_raster = plot_unity_ephys(unity_data, cluster_spikeTimes, 5)
+
+

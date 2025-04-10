@@ -48,7 +48,7 @@ def _handle_ephys_from_nas(session_fullfname, start, stop, columns):
                         if f.startswith(session_name) and f.endswith("ephys_traces.dat")]
     if len(ephys_fname) == 1:
         ephys_map_fname = ephys_fname[0].replace(".dat", "_mapping.csv")
-        mapping = pd.read_csv(os.path.join(session_dir,ephys_map_fname), index_col=0)
+        mapping = pd.read_csv(os.path.join(session_dir,ephys_map_fname), )#index_col=0) amplifier id will be a column, not the index
         data = np.memmap(os.path.join(session_dir,ephys_fname[0]), dtype=np.int16, 
                          mode='r').reshape(len(mapping), -1, order='F')
         data = data[slice(start, stop)]

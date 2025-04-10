@@ -1,3 +1,4 @@
+import os
 from dash import html, dcc, Input, Output, State, Dash
 import dash_bootstrap_components as dbc
 
@@ -5,6 +6,10 @@ from CustomLogger import CustomLogger as Logger
 
 import dashsrc.components.dashvis_constants as C
 from analytics_processing import analytics
+
+from analytics_processing.sessions_from_nas_parsing import sessionlist_fullfnames_from_args
+from analytics_processing.modality_loading import session_modality_from_nas
+
 
 def render(app: Dash, global_data: dict) -> html.Div:
     # component specific html ids
@@ -34,7 +39,8 @@ def render(app: Dash, global_data: dict) -> html.Div:
     
     default_animals = [6]
     default_paradigms = [1100]
-    default_analytics = ['SessionMetadata', 'UnityTrialwiseMetrics']
+    # default_analytics = ['SessionMetadata', 'UnityTrialwiseMetrics']
+    default_analytics = ['spikes', 'ephys_traces']
     
     return dbc.Row([
                 dbc.Col([
@@ -79,17 +85,31 @@ def render(app: Dash, global_data: dict) -> html.Div:
 def _load_all_data(selected_analytics, global_data, selected_paradigms, selected_animals):
     L = Logger()
     
+    log_msg = ''
     for analytic in selected_analytics:
         if selected_paradigms is None or len(selected_paradigms) == 0:
             selected_paradigms = None
         if selected_animals is None or len(selected_animals) == 0:
             selected_animals = None
-        dat = analytics.get_analytics(analytic, mode='set', session_ids=None,
-                                      paradigm_ids=selected_paradigms,
-                                      animal_ids=selected_animals)
-        global_data[analytic] = dat
-        log_msg = {analytic: "Not loaded" if global_data[analytic] is None 
-                   else f"Loaded ({global_data[analytic].shape})" 
-                   for analytic in global_data.keys()}
-        L.logger.debug(L.fmtmsg(log_msg))
-    L.logger.info(L.fmtmsg(log_msg))
+        
+        # not an analytic...
+        if analytic == 'ephys_traces':
+            raw_data_mmaps, mappings = [], []
+            for session_ffname in sessionlist_fullfnames_from_args(paradigm_ids=selected_paradigms, 
+                                                                      animal_ids=selected_animals)[0]:
+                raw_data_mmap, mapping = session_modality_from_nas(session_ffname, 'ephys_traces')
+                raw_data_mmaps.append(raw_data_mmap)
+                mappings.append(mapping)
+            global_data['ephys_traces'] = raw_data_mmaps
+            global_data['implant_mapping'] = mappings
+        
+        else:
+            dat = analytics.get_analytics(analytic, mode='set', session_ids=None,
+                                        paradigm_ids=selected_paradigms,
+                                        animal_ids=selected_animals)
+            global_data[analytic] = dat
+            # log_msg = {analytic: "Not loaded" if global_data[analytic] is None 
+            #         else f"Loaded ({global_data[analytic].shape})" 
+            #         for analytic in global_data.keys()}
+            # L.logger.debug(L.fmtmsg(log_msg))
+        L.logger.info(L.fmtmsg(log_msg))

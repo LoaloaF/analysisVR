@@ -213,6 +213,8 @@ def unity_modality_track_kinematics(frames):
 
 
 def fix_missing_paradigm_variable_names(data):
+    if data is None:
+        return None
     renamer = {
         # P800
         "LR": "lick_triggers_reward",

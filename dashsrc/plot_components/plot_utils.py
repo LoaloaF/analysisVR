@@ -2,6 +2,8 @@ import plotly.express as px
 import plotly.colors as pc
 import numpy as np
 
+import plotly.colors as pc
+
 def make_discr_trial_cmap(n_trials, px_seq_cmap):
     discrete_colors = pc.sample_colorscale(px_seq_cmap, samplepoints=n_trials+1)
     return dict(zip(range(n_trials+1),discrete_colors))
@@ -21,3 +23,8 @@ def make_discr_trial_cmap(n_trials, px_seq_cmap):
     #         colorscale[trial_i] = col
     # print(colorscale)
     # return colorscale
+    
+def make_discr_cluster_id_cmap(cluster_ids):
+    color_scale = pc.qualitative.Dark24  # You can also use D3, Set1, etc.
+    colors = [color_scale[i % len(color_scale)] for i in cluster_ids]
+    return {cl_id: colors[i] for i, cl_id in enumerate(cluster_ids)}

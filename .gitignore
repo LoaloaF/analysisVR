@@ -11,3 +11,5 @@ __pycache__/
 outputs/
 mua_detection.py
 events.csv
+psytrack
+.DS_Store

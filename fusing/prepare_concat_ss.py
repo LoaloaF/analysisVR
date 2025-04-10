@@ -1,6 +1,7 @@
 import os
 import sys
 sys.path.insert(1, os.path.join(sys.path[0], '..'))
+sys.path.insert(1, os.path.join(sys.path[0], '..', '..', 'ephysVR'))
 
 import shutil
 from fuse import FUSE
@@ -16,27 +17,13 @@ from analytics_processing.analytics_constants import device_paths
 
 from VirtualConcatFS import VirtualConcatFS
 
-def create_virtual_concat(kwargs):
-    def handle_first_session():
-        traces_order = mapping['pad_id'].values
-        L.logger.debug(f"Using mapping:\n{mapping}")
-        # copy in the prope file for JRC from this first session
-        probe_fullfname = [fn for fn in os.listdir(session_dir)
-                            if fn.endswith(".prb") and not fn.startswith('._')]
-        if len(probe_fullfname) != 1:
-            L.logger.error(f"Expected 1 probe file for {session_dir}, found "
-                                f"{len(probe_fullfname)}, {probe_fullfname}")
-            exit(1)
-        # shutil.copyfile(os.path.join(session_dir, probe_fullfname[0]),
-        #                 os.path.join(device_paths()[0], concat_rel_path, 'concat.prb'))
-        return traces_order, os.path.join(session_dir, probe_fullfname[0])
+from mea1k_modules.mea1k_raw_preproc import _write_prb_file
 
-    def handle_path_setup(kwargs, traces_order, prb_ffname, name):
+def create_virtual_concat(kwargs):
+    def handle_path_setup(animal_id, traces_order, name):
         nas_dir = device_paths()[0]
-        animal_id = kwargs['animal_ids'][0]
         # everything in root will appear in the mount
-        root = os.path.join(nas_dir, f"RUN_rYL{animal_id:03}")
-        concat_ss_base_dir = os.path.join(root, 'concatenated_ss')
+        concat_ss_base_dir = os.path.join(nas_dir, f"RUN_rYL{animal_id:03}", 'concatenated_ss')
         if not os.path.exists(concat_ss_base_dir):
             os.makedirs(concat_ss_base_dir) # created once per animal
 
@@ -46,19 +33,23 @@ def create_virtual_concat(kwargs):
         this_ss_fullpath = os.path.join(concat_ss_base_dir, this_ss_dirname)
         os.makedirs(this_ss_fullpath, exist_ok=True)
         L.logger.info(f"Created directory for concatenated ss: {this_ss_fullpath}")
-
+        
+        # the JRC parameter file
+        shutil.copy(os.path.join(device_paths()[2], 'analysisVR/assets/concat_template.prm'), 
+                    os.path.join(this_ss_fullpath, 'concat.prm'))
+        # the probe file
+        _write_prb_file(mapping, os.path.join(this_ss_fullpath, 'concat.prb'),
+                        shank_subset=shank_subset)
         # create the concat files that will be read by the FUSE
         open(os.path.join(this_ss_fullpath, 'concat.dat'), 'w').close()
-        shutil.copyfile(prb_ffname, os.path.join(this_ss_fullpath, 'concat.prb'))
-        shutil.copyfile(prb_ffname.replace(".prb", ".xml"), 
-                        os.path.join(this_ss_fullpath, 'concat.xml'))
-        return this_ss_dirname, root
+        return this_ss_dirname, this_ss_fullpath
 
     L = Logger()
     # extract the arguments for paths for later
     nas_dir = device_paths()[0]
     mount = os.path.join(nas_dir, kwargs.pop('mount'))
     name = kwargs.pop('name')
+    shank_subset = kwargs.pop('shank_subset', None)
     assert len(kwargs['animal_ids']) == 1, "Traces from only one animal can be concatenated"
     
     # get the matching sessions
@@ -66,7 +57,7 @@ def create_virtual_concat(kwargs):
     
     singlefiles_fullfnames = []
     singlefiles_lengths = []
-    traces_order, prb_ffname = None, None # set at first session
+    traces_order = None # set at first session
     for session_ffname in session_fullfnames:
         session_dir = os.path.dirname(session_ffname)
         d, mapping = session_modality_from_nas(session_ffname, key='ephys_traces')
@@ -75,8 +66,12 @@ def create_virtual_concat(kwargs):
         if mapping is not None:
             # first valid session, parse el order that is expected of all sessions
             if traces_order is None:
-                traces_order, prb_ffname = handle_first_session()
-            
+                L.logger.debug(f"Using mapping:\n{mapping}")
+                traces_order = mapping['pad_id'].values
+                # setup the paths, create base dir etc
+                this_ss_dirname, this_ss_fullpath = handle_path_setup(kwargs['animal_ids'][0], 
+                                                                      traces_order, name)
+                
             # all follwing sessions
             else:
                 # traces must exactly match the first session
@@ -103,18 +98,15 @@ def create_virtual_concat(kwargs):
     singlefiles_lengths['length_sec_cum'] = singlefiles_lengths['length_sec'].cumsum()
     singlefiles_lengths['nsamples_cum'] = singlefiles_lengths['nsamples'].cumsum()
     
-    # setup the paths, create base dir etc
-    this_ss_dirname, root = handle_path_setup(kwargs, traces_order, prb_ffname, name)
-    singlefiles_lengths.to_csv(os.path.join(root, 'concatenated_ss', this_ss_dirname,
-                                            'concat_session_lengths.csv'), index=False)
+    singlefiles_lengths.to_csv(os.path.join(this_ss_fullpath, 'concat_session_lengths.csv'), index=False)
 
     L.logger.info(f"Mounting virtual filesystem for concatenated read of "
-                  f"{len(singlefiles_fullfnames)} ephys traces from "
-                  f"{os.path.join(mount, 'concatenated_ss', this_ss_dirname,)}")
+                  f"{len(singlefiles_fullfnames)} ephys traces at {mount}\n"
+                  f"Spike sorting dir: {this_ss_fullpath}")
     L.spacer("info")
     logging.basicConfig(level=logging.INFO, )
     fuse_concat_fullfname = os.path.join('/', 'concatenated_ss', this_ss_dirname, 'concat.dat')
-    FUSE(VirtualConcatFS(root, singlefiles_fullfnames=singlefiles_fullfnames,
+    FUSE(VirtualConcatFS(this_ss_fullpath, singlefiles_fullfnames=singlefiles_fullfnames,
                          concat_mount_fullfname=fuse_concat_fullfname,), 
          mount, 
          nothreads=True, 
@@ -128,6 +120,7 @@ def main():
     argParser.add_argument("--from_date", default=None)
     argParser.add_argument("--to_date", default=None)
     argParser.add_argument("--logging_level", default="DEBUG")
+    argParser.add_argument("--shank_subset", default=None, type=int, nargs='+')
     argParser.add_argument('--name', default="")
     argParser.add_argument('--mount', default="fuse_root")
 

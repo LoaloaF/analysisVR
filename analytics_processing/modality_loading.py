@@ -56,7 +56,7 @@ def _handle_ephys_from_nas(session_fullfname, start, stop, columns):
             # load to memory if columns are specified (timeslice)
             data = np.array(data[:, slice(*columns)])
         return data, mapping.iloc[slice(start, stop), :]
-    L.logger.info(f"No de-compressed ephys traces found for {session_name}")
+    L.logger.info(f"No de-compressed ephys traces found")
     return None, None
             
 def _pandas_based_from_nas(session_fullfname, key, where=None, start=None,

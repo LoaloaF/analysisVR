@@ -8,7 +8,7 @@ exportResults = 1; % Export results (res) as a struct to the base workspace if t
 verbose = 1; % (formerly fVerbose) Be chatty when processing
 
 % EXECUTION PARAMETERS
-gpuLoadFactor = 5; % GPU memory usage factor (Use 1/gpuLoadFactor amount of GPU memory)
+gpuLoadFactor = 1.3; % GPU memory usage factor (Use 1/gpuLoadFactor amount of GPU memory)
 maxBytesLoad = []; % (formerly MAX_BYTES_LOAD) Maximum number of bytes to load into memory
 maxSecLoad = []; % (formerly MAX_LOAD_SEC) Maximum sample duration (in s) to load into memory (Overrides maxBytesLoad if nonempty)
 nThreadsGPU = 128; % (formerly nThreads) Number of GPU threads to use for clustering
@@ -28,7 +28,7 @@ bitScaling = 6.3; % (formerly uV_per_bit) ADC bit scaling factor (Conversion fac
 dataType = 'int16'; % (formerly vcDataType) Format of raw recordings
 headerOffset = 0; % (formerly header_offset) Recording file header offset (in bytes)
 nChans = 431; % Number of channels stored in recording file (Distinct from the number of AP sites)
-rawRecordings = {'concat.dat'}; % Path or paths to raw recordings to sort
+rawRecordings = {'./../../../fuse_root/concat.dat'}; % Path or paths to raw recordings to sort
 recordingFormat = 'SpikeGLX'; % Format of raw recording
 sampleRate = 20000; % (formerly sRateHz) Sampling rate (in Hz) of raw recording
 tallSkinny = 1; % (formerly fTranspose_bin) Recording will be interpreted as nChannels x nSamples if true
@@ -59,7 +59,7 @@ nSiteDir = 10.5; % (formerly maxSite) Number of neighboring sites to group in ei
 nSitesExcl = 0; % (formerly nSites_ref) Number of sites to exclude from the spike waveform group for feature extraction
 qqFactor = 5.5; % Spike detection threshold factor (Thr = qqFactor*med(abs(x-med(x)))/0.6745)
 refracInt = 0.25; % (formerly spkRefrac_ms) Spike refractory period (in ms)
-detectBipolar = 1; % (formerly fDetectBipolar) Detect positive as well as negative peaks
+detectBipolar = 0; % (formerly fDetectBipolar) Detect positive as well as negative peaks
 evtManualThresh = []; % (formerly spkThresh_uV) Manually-set spike detection threshold (in μV)
 evtWindowRaw = [-0.5, 1.5]; % (formerly spkLim_raw_ms) Time range (in ms) of raw spike waveforms, centered at the peak
 groupShank = 0; % (formerly fGroup_shank) Group all sites on the same shank if true
@@ -79,11 +79,11 @@ nPeaksFeatures = 2; % (formerly nFet_use) Number of potential peaks to use when 
 % CLUSTERING PARAMETERS
 autoMergeBy = 'pearson'; % (formerly autoMergeCriterion) Metric to use for automerging clusters based on average waveform
 distCut = 2; % (formerly dc_percent) Percentile of pairwise distances between spikes on a site to use as a cutoff distance
-evtMergeRad = 35; % (formerly maxDist_site_merge_um) Maximum distance (in μm) to consider for merging spike waveforms
+evtMergeRad = 70; % (formerly maxDist_site_merge_um) Maximum distance (in μm) to consider for merging spike waveforms
 log10DeltaCut = 0.6; % (formerly delta1_cut) Log10 of delta cutoff (Spikes with delta values below this cutoff will not be considered as cluster centers)
 log10RhoCut = -2.5; % (formerly rho_cut) Log10 of rho cutoff (Spikes with rho values below this cutoff will not be considered as cluster centers)
-maxUnitSim = 0.98; % (formerly maxWavCor) Threshold for merging two units having similar spike waveforms (Units with a similiarity score above this value will be merged)
-minClusterSize = 30; % (formerly min_count) Minimum number of spikes per cluster (Automatically set to the maximum of this value and twice the number of features)
+maxUnitSim = 0.90; % (formerly maxWavCor) Threshold for merging two units having similar spike waveforms (Units with a similiarity score above this value will be merged)
+minClusterSize = 300; % (formerly min_count) Minimum number of spikes per cluster (Automatically set to the maximum of this value and twice the number of features)
 nClusterIntervals = 4; % (formerly nTime_clu) Number of intervals to divide the recording into around a spike (When clustering, take the 1/nClusterIntervals fraction of all spikes around a spiking event to compute distance)
 RDDetrendMode = 'global'; % (formerly vcDetrend_postclu) Detrending mode to apply to rho-delta values in order to determine cluster centers
 driftMerge = 1; % (formerly fDrift_merge) Compute multiple waveforms at three drift locations based on the spike position if true
@@ -92,7 +92,7 @@ maxClustersSite = 20; % (formerly maxCluPerSite) Maximum number of cluster cente
 meanInterpFactor = 1; % (formerly nInterp_merge) Interpolation factor for mean unit waveforms (Set to 1 to disable)
 minSitesWeightFeatures = 5; % (formerly min_sites_mask) Minimum number of sites to have if using weightFeatures (Ignored if weightFeatures is false)
 nPassesMerge = 10; % (formerly nRepeat_merge) Number of times to repeat automatic waveform-based merging
-outlierThresh = 7.5; % (formerly thresh_mad_clu) Threshold (in MADs) to remove outlier spikes for each cluster
+outlierThresh = 5.5; % (formerly thresh_mad_clu) Threshold (in MADs) to remove outlier spikes for each cluster
 useGlobalDistCut = 0; % (formerly fDc_global) Use a global distance cutoff for all sites if true
 weightFeatures = 0; % (formerly fSpatialMask_clu) Weight display features by distance from site if true
 

@@ -94,7 +94,7 @@ def sessionnames2fullfnames(session_names):
         session_dir = f"RUN_rYL{animal_id:03}", f"rYL{animal_id:03}_P{paradigm_id:04d}"
         fullfname = os.path.join(device_paths()[0], *session_dir, session_name, f"{session_name}.hdf5")
         sessionlist_fullfnames.append(fullfname)
-        s_ids.append((s_id))
+        s_ids.append((animal_id, paradigm_id, s_id))
     return sessionlist_fullfnames, s_ids
 
 def sessionlist_fullfnames_from_args(paradigm_ids=None, animal_ids=None, session_ids=None, 
@@ -109,4 +109,4 @@ def sessionlist_fullfnames_from_args(paradigm_ids=None, animal_ids=None, session
                          f"session_ids: {session_ids}, from_date: {from_date}, "
                          f"to_date: {to_date}\n\t"
                          f"Merging {len(sessionlist_fullfnames)} sessions\n")
-    return sessionlist_fullfnames, ids
+    return sessionlist_fullfnames, ids  

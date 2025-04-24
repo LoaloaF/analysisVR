@@ -18,13 +18,15 @@ def main():
     
     Logger().init_logger(None, None, loglevel)
 
-    global_data = {"UnityTrackwise": None, "UnityFramewise": None, 'UnityTrialwiseMetrics': None,
-                   "SessionMetadata": None, "Portenta":None, "ephys_traces": None,
-                   "spikes": None, "implant_mapping": None,}
+    loaded_analytics = {"UnityTrackwise": None, "UnityFramewise": None, 
+                        'UnityTrialwiseMetrics': None, "SessionMetadata": None, 
+                        "Portenta":None,"Spikes": None, }
+    loaded_raw_traces = {}
+    
     
     # Initialize app
     app = dash.Dash(__name__, external_stylesheets=[dbc.themes.BOOTSTRAP])
-    app.layout = create_layout(app, global_data)
+    app.layout = create_layout(app, loaded_analytics, loaded_raw_traces)
     app.run_server(host="0.0.0.0", port=8050, debug=True)
 
 if __name__ == '__main__':

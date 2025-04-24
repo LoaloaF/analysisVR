@@ -44,6 +44,35 @@ def get_vis_name_data_loaded_id(vis_name):
                             "with its data_loaded_id")
     return data_loaded_id
 
+def get_all_data_loaded_ids():
+    return [get_vis_name_data_loaded_id(vis_name) for vis_name in [*SESSION_WISE_VISS, *ANIMAL_WISE_VISS]]
+
+def get_vis_name_req_data(vis_name):
+    match vis_name:
+        case 'SessionKinematics':
+            req_data = 'UnityTrackwise', 'SessionMetadata'
+        case 'Kinematics':
+            req_data = 'UnityTrialwiseMetrics', 'SessionMetadata'
+        case 'StayPerformance':
+            req_data = 'UnityTrialwiseMetrics', 'SessionMetadata'
+        case 'StayRatio':
+            req_data = 'UnityTrialwiseMetrics', 'SessionMetadata'
+        case 'SessionsOverview':
+            req_data = 'SessionMetadata',
+        case 'EvolvingStayTime':
+            req_data = 'UnityTrialwiseMetrics',
+        case 'EvolvingStayDecision':
+            req_data = 'UnityTrialwiseMetrics',
+        case 'RawSpikes':
+            req_data = 'Spikes', 'raw_traces'
+        case _:
+            raise ValueError(f"Unknown vis_name: {vis_name} for matching "
+                            "with its data_loaded_id")
+    return req_data
+
+def get_all_viss_req_data():
+    return [get_vis_name_req_data(vis_name) for vis_name in [*SESSION_WISE_VISS, *ANIMAL_WISE_VISS]]
+
 OUTCOME_COL_MAP = {
     0: convert_colors_to_same_type("#CD1414")[0][0],
     1: convert_colors_to_same_type("#40CA72")[0][0],

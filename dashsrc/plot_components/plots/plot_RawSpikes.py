@@ -12,12 +12,13 @@ def render_plot(ephys_traces, implant_mapping, spikes, from_smpl=0, to_smpl=10_0
                 trace_groups=("non_curated", "curated", "spike_traces")):
     print(spikes)
     print(implant_mapping)
+    print(ephys_traces.shape)
+    print(ephys_traces[:1000, :1000])
     print("================")
     
     # from_smpl, to_smpl = (0, 10_000)
     if spikes is not None:
-        spikes.loc[:, 'spike_time'] /= 50 # time to sample index
-        spikes = spikes[(spikes['spike_time'] >= from_smpl) & (spikes['spike_time'] <= to_smpl)]
+        spikes = spikes[(spikes['sample_id'] >= from_smpl) & (spikes['sample_id'] <= to_smpl)]
     
     implant_mapping = implant_mapping[implant_mapping['shank_id'].isin(shanks)]
     
@@ -164,13 +165,13 @@ def _draw_traces(fig, ephys_traces, implant_mapping, um_per_uV, shanks, from_smp
             
             elif trace_group == "curated":
                 if spikes is not None:
-                    spike_trace_mask = implant_mapping.index.isin(spikes.spike_site)
+                    spike_trace_mask = implant_mapping.index.isin(spikes.channel)
                 else:
                     spike_trace_mask = pd.Series(False, index=implant_mapping.index)
                 mask = mask & implant_mapping['curated_trace'] & ~spike_trace_mask
             
             elif trace_group == "spike_traces" and spikes is not None:
-                spike_trace_mask = implant_mapping.index.isin(spikes.spike_site)
+                spike_trace_mask = implant_mapping.index.isin(spikes.channel)
                 mask = mask & spike_trace_mask
             
             if not mask.any():
@@ -183,6 +184,8 @@ def _draw_traces(fig, ephys_traces, implant_mapping, um_per_uV, shanks, from_smp
             
             # load shank traces to memory
             shank_traces_y = ephys_traces[ilocs, from_smpl:to_smpl].astype(np.float64)
+            print(shank_traces_y)
+            print(shank_traces_y.shape  )
             # rescale uV to um / pixels
             shank_traces_y *= -1 /um_per_uV
             # add el depth offset
@@ -305,13 +308,13 @@ def _draw_scale_indicator(fig, row, um_per_uV, to_smpl, origin=None,
 def _draw_spikes_on_traces(fig, spikes, shank_mapping, shank_traces_y, from_smpl, 
                            legendgroup, row):
     count = 0
-    for _, spike_info in spikes[spikes.spike_site.isin(shank_mapping.index)].iterrows():
+    for _, spike_info in spikes[spikes.channel.isin(shank_mapping.index)].iterrows():
         # Convert from the general iloc to the shank_wise iloc
-        iloc = np.where(shank_mapping.index == spike_info.spike_site)[0][0]
-        # wf_sample_idx = np.arange(spike_info.spike_time - 10, spike_info.spike_time + 10)
+        iloc = np.where(shank_mapping.index == spike_info.channel)[0][0]
+        # wf_sample_idx = np.arange(spike_info.sample_id - 10, spike_info.sample_id + 10)
         # offset the timeslice according to the interval we look at
-        wf_sample_idx = np.arange(spike_info.spike_time - 10 - from_smpl, 
-                                  spike_info.spike_time + 10 - from_smpl,)
+        wf_sample_idx = np.arange(spike_info.sample_id - 10 - from_smpl, 
+                                  spike_info.sample_id + 10 - from_smpl,)
         # the _10 for the spike waveform can be larger than the raw trace arr
         wf_sample_idx = wf_sample_idx[wf_sample_idx <= shank_traces_y.shape[1]-1]
         raw_trace = shank_traces_y[iloc, wf_sample_idx]
@@ -323,7 +326,8 @@ def _draw_spikes_on_traces(fig, spikes, shank_mapping, shank_traces_y, from_smpl
                 y=raw_trace,
                 mode='lines',
                 opacity=0.5,
-                line=dict(color=spike_info.spike_color, width=4),
+                # line=dict(color=spike_info.spike_color, width=4),
+                line=dict(color=spike_info.cluster_color, width=4),
                 showlegend=False,
                 hoverinfo='text',
                 hovertext=f"Cluster{spike_info.cluster_id:03d}",

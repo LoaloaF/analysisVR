@@ -435,9 +435,10 @@ def register_session_slider_callback(app, vis_name, global_data, analytic,
             last_value = last_session_id
         return 0, last_session_id, (0, last_value)
 
-def register_session_time_slider_callback(app, vis_name, global_data, analytic):
+def register_session_time_slider_callback(app, vis_name, global_data, analytic, loaded_raw_traces):
     # html not used, just ensure that callcack is linked to correct component
     _, session_time_slider_comp_id = session_time_slider_component(vis_name)
+    _, paradigm_dropd_comp_id = paradigm_dropdown_component(vis_name, global_data, analytic)
     _, animal_dropd_comp_id = animal_dropdown_component(vis_name, global_data, analytic)
     _, session_dropd_comp_id = session_dropdown_component(vis_name, global_data, analytic)
     
@@ -446,15 +447,19 @@ def register_session_time_slider_callback(app, vis_name, global_data, analytic):
         Output(session_time_slider_comp_id, 'max'),
         Output(session_time_slider_comp_id, 'value'),
         Output(session_time_slider_comp_id, 'marks'),
+        Input(paradigm_dropd_comp_id, 'value'),
         Input(animal_dropd_comp_id, 'value'),
         Input(session_dropd_comp_id, 'value')
     )
-    def update_session_time_slider(selected_animal, selected_session):
-        data = global_data[analytic]
-        if selected_animal is None or selected_session is None or data is None:
+    def update_session_time_slider(selected_paradigm, selected_animal, selected_session):
+        # data = global_data['ephys_traces']
+        if not all((selected_paradigm, selected_animal, (selected_session is not None),
+                   len(loaded_raw_traces.keys()))):
             return 0, 5*60, 3*60, {t: f'{t//60}min' for t in range(0, 60*5, 60)},
         
-        max_time_sec = global_data[analytic][selected_session].shape[1] *50 /1_000_000
+        traces, _ = loaded_raw_traces[str((selected_paradigm, selected_animal, selected_session))]
+        max_time_sec = traces.shape[1] *50 /1_000_000
+        
         # marks at 1 min, 10, 20, 30, 40, 50
         marks = {t: f'{t//60}min' for t in range(60, int(max_time_sec) + 1, 60*10)}
         return 0, max_time_sec, 0, marks
@@ -473,14 +478,11 @@ def register_session_time_step_callback(app, vis_name, direction='forward'):
     prevent_initial_call=True  # Prevent the callback from firing on app load
     )   
     def update_session_time_step(current_selected_time, n_clicks, interval):
-        print(f"{current_selected_time=}, {n_clicks=}, {interval=}, {direction=}")
         if n_clicks == 0:
             return current_selected_time
         else:
             new_time = current_selected_time*1_000 + interval if direction == 'forward' else -interval*2
             new_time = max(0, new_time)
-            
-            print(f"{new_time=}")
             return new_time/1_000 
 
 def register_trial_slider_callback(app, vis_name, global_data, analytic):

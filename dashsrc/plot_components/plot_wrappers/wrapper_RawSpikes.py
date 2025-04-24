@@ -32,8 +32,8 @@ from analytics_processing.modality_loading import session_modality_from_nas
 from analytics_processing.sessions_from_nas_parsing import sessionlist_fullfnames_from_args
 
 
-def render(app: Dash, global_data: dict, vis_name: str) -> html.Div:
-    analytic = 'SessionMetadata'
+def render(app: Dash, global_data: dict, loaded_raw_traces: dict, vis_name: str) -> html.Div:
+    analytic = 'Spikes'
     # components with data depedency need these arguments
     comp_args = vis_name, global_data, analytic
     
@@ -43,7 +43,7 @@ def render(app: Dash, global_data: dict, vis_name: str) -> html.Div:
     register_session_dropdown_callback(app, *comp_args)
     
     # timestamp related callbacks
-    register_session_time_slider_callback(app, vis_name, global_data, 'ephys_traces')
+    register_session_time_slider_callback(app, vis_name, global_data, 'Spikes', loaded_raw_traces)
     register_session_time_step_callback(app, vis_name, direction='forward')
     # register_session_time_step_callback(app, vis_name, direction='backward')
     
@@ -93,11 +93,11 @@ def render(app: Dash, global_data: dict, vis_name: str) -> html.Div:
         session_slice = slice(selected_session, selected_session)
         
         # paradigm, animal and session filtering
-        spikes = global_data['spikes'].loc[pd.IndexSlice[paradigm_slice, animal_slice, 
+        Spikes = global_data['Spikes'].loc[pd.IndexSlice[paradigm_slice, animal_slice, 
                                                          session_slice, :]]
         
         # print(selected_session)
-        [print(i, type(global_data['ephys_traces'][i])) for i in range(len(global_data['ephys_traces']))]
+        # [print(i, type(global_data['ephys_traces'][i])) for i in range(len(global_data['ephys_traces']))]
         # print(global_data['ephys_traces'][selected_session])
         # print(global_data['implant_mapping'][selected_session])
         
@@ -108,10 +108,12 @@ def render(app: Dash, global_data: dict, vis_name: str) -> html.Div:
         to_smpl = from_smpl + interval * 1_000 /50  # to us, then sample ID
         # print(f"from smpl: {from_smpl}, to smpl: {to_smpl}")
         # print(f"um_per_px: {um_per_px}, uV_per_um: {uV_per_um}")
+        
+        traces, mapping = loaded_raw_traces[str((selected_paradigm, selected_animal, selected_session))]
                 
-        fig = plot_RawSpikes.render_plot(ephys_traces=global_data['ephys_traces'][selected_session],
-                                        implant_mapping=global_data['implant_mapping'][selected_session],
-                                        spikes=spikes,
+        fig = plot_RawSpikes.render_plot(ephys_traces=traces,
+                                        implant_mapping=mapping,
+                                        spikes=Spikes,
                                         from_smpl=int(from_smpl),
                                         to_smpl=int(to_smpl),
                                         shanks=shanks,

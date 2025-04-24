@@ -1,6 +1,8 @@
 import os
-from dash import html, dcc, Input, Output, State, Dash
+from dash import html, dcc, Input, Output, State, Dash, no_update
 import dash_bootstrap_components as dbc
+
+import numpy as np
 
 from CustomLogger import CustomLogger as Logger
 
@@ -11,105 +13,126 @@ from analytics_processing.sessions_from_nas_parsing import sessionlist_fullfname
 from analytics_processing.modality_loading import session_modality_from_nas
 
 
-def render(app: Dash, global_data: dict) -> html.Div:
+def render(app: Dash, loaded_analytics: dict, loaded_raw_traces: dict) -> html.Div:
+    L = Logger()
     # component specific html ids
     D2M_ANIMALS_DROPDOWN_ID = 'd2m-animals-dropdown'
     D2M_PARADIGMS_DROPDOWN_ID = 'd2m-paradigm-dropdown'
     D2M_ANALYTICS_DROPDOWN_ID = 'd2m-analytics-dropdown'
     D2M_LOAD_DATA_BUTTON_ID = 'd2m-load-data-button'
+    LOADING_OUTPUT_ID = 'loading-output'
 
-    # outputs specifc for plot wise data selection
-    data_loaded_plot_outputs = [Output(C.get_vis_name_data_loaded_id(vis_name), 'data') 
-                                for vis_name in [*C.SESSION_WISE_VISS, *C.ANIMAL_WISE_VISS]]
-    n_plots = len(data_loaded_plot_outputs)
+    # outputs specific for plot-wise data selection
 
     @app.callback(
         Output(D2M_LOAD_DATA_BUTTON_ID, 'style'),
-        *data_loaded_plot_outputs,
+        Output(LOADING_OUTPUT_ID, 'children'),
+        *[Output(data_loaded_id, 'data') for data_loaded_id in C.get_all_data_loaded_ids()],
         Input(D2M_LOAD_DATA_BUTTON_ID, 'n_clicks'),
         State(D2M_ANALYTICS_DROPDOWN_ID, 'value'),
         State(D2M_PARADIGMS_DROPDOWN_ID, 'value'),
         State(D2M_ANIMALS_DROPDOWN_ID, 'value'),
     )
     def load_data(n_clicks, selected_analytics, selected_paradigms, selected_animals):
+        n_plots = len(C.SESSION_WISE_VISS) + len(C.ANIMAL_WISE_VISS)
         if n_clicks and selected_analytics:
-            _load_all_data(selected_analytics, global_data, selected_paradigms, selected_animals)
-            return {"marginTop": 15, "backgroundColor": "green"}, *([True]*n_plots)
-        return {"marginTop": 15, "backgroundColor": "blue"}, *([False]*n_plots)
-    
+            # Show loading message
+            loading_message = "Loading data, please wait..."
+            
+            _load_all_data(selected_analytics, loaded_analytics, loaded_raw_traces, 
+                           selected_paradigms, selected_animals)
+            
+            data_exists = [np.all(np.isin(req_d, selected_analytics)).item()
+                           for req_d in C.get_all_viss_req_data()]
+            L.logger.debug(L.fmtmsg((dict(zip(C.get_all_data_loaded_ids(), data_exists)))))
+                
+            return {"marginTop": 15, "backgroundColor": "green"}, "", *data_exists
+        return {"marginTop": 15, "backgroundColor": "blue"}, no_update, *([False] * n_plots)
+
     default_animals = [6]
     default_paradigms = [1100]
-    # default_analytics = ['SessionMetadata', 'UnityTrialwiseMetrics']
-    default_analytics = ['spikes', 'ephys_traces']
-    
-    return dbc.Row([
-                dbc.Col([
-                    dcc.Dropdown(
-                        id=D2M_ANALYTICS_DROPDOWN_ID,
-                        options= list(global_data.keys()),
-                        multi=True,
-                        value=default_analytics,
-                        placeholder="Select one or more analytics",
-                        style={"marginTop": 15}
-                    ),
-                ], width=4),
+    default_analytics = ['Spikes', 'raw_traces']
 
-                dbc.Col([
-                    dcc.Dropdown(
-                        id=D2M_PARADIGMS_DROPDOWN_ID,
-                        options=C.PARADIGMS,
-                        multi=True,
-                        value=default_paradigms,
-                        placeholder="Select paradigms",
-                        style={"marginTop": 15}
-                    ),
-                ], width=3),
-       
-                dbc.Col([
-                    dcc.Dropdown(
-                        id=D2M_ANIMALS_DROPDOWN_ID,
-                        options=C.ANIMALS,
-                        multi=True,
-                        value=default_animals,
-                        placeholder="Select animals",
-                        style={"marginTop": 15}
-                    ),
-                ], width=3),
-                
-                dbc.Col([
-                    dbc.Button("Load Data", id=D2M_LOAD_DATA_BUTTON_ID, color="primary", 
-                            style={"marginTop": 15}),
-                ], width=2, )  # Light red background for debugging
-        ])
+    return dbc.Row([
+        dbc.Col([
+            dcc.Dropdown(
+                id=D2M_ANALYTICS_DROPDOWN_ID,
+                options=[*loaded_analytics.keys(), 'raw_traces'],
+                multi=True,
+                value=default_analytics,
+                placeholder="Select one or more analytics",
+                style={"marginTop": 15}
+            ),
+        ], width=4),
+
+        dbc.Col([
+            dcc.Dropdown(
+                id=D2M_PARADIGMS_DROPDOWN_ID,
+                options=C.PARADIGMS,
+                multi=True,
+                value=default_paradigms,
+                placeholder="Select paradigms",
+                style={"marginTop": 15}
+            ),
+        ], width=3),
+
+        dbc.Col([
+            dcc.Dropdown(
+                id=D2M_ANIMALS_DROPDOWN_ID,
+                options=C.ANIMALS,
+                multi=True,
+                value=default_animals,
+                placeholder="Select animals",
+                style={"marginTop": 15}
+            ),
+        ], width=2),
+
+        dbc.Col([
+                dbc.Button("Load Data", id=D2M_LOAD_DATA_BUTTON_ID, color="primary", 
+                        style={"marginTop": 15}),
+        ], width=2),
+        
+        dbc.Col([
+            dcc.Loading(
+                id="loading-spinner",
+                type="circle",
+                children=[
+                    html.Div(id=LOADING_OUTPUT_ID, style={"marginTop": 35})
+                ])
+        ], width=1),
+    ])
     
-def _load_all_data(selected_analytics, global_data, selected_paradigms, selected_animals):
+def _load_all_data(selected_analytics, loaded_analytics, loaded_raw_traces, selected_paradigms, selected_animals):
     L = Logger()
     
-    log_msg = ''
-    for analytic in selected_analytics:
-        if selected_paradigms is None or len(selected_paradigms) == 0:
+    selected_analytics_filt = [a for a in selected_analytics if a != 'raw_traces']
+    for analytic in selected_analytics_filt:
+        if len(selected_paradigms) == 0:
             selected_paradigms = None
-        if selected_animals is None or len(selected_animals) == 0:
+        if len(selected_animals) == 0:
             selected_animals = None
         
-        # not an analytic...
-        if analytic == 'ephys_traces':
-            raw_data_mmaps, mappings = [], []
-            for session_ffname in sessionlist_fullfnames_from_args(paradigm_ids=selected_paradigms, 
-                                                                      animal_ids=selected_animals)[0]:
-                raw_data_mmap, mapping = session_modality_from_nas(session_ffname, 'ephys_traces')
-                raw_data_mmaps.append(raw_data_mmap)
-                mappings.append(mapping)
-            global_data['ephys_traces'] = raw_data_mmaps
-            global_data['implant_mapping'] = mappings
+        dat = analytics.get_analytics(analytic, mode='set', session_ids=None,
+                                      paradigm_ids=selected_paradigms,
+                                      animal_ids=selected_animals)
+        loaded_analytics[analytic] = dat
         
-        else:
-            dat = analytics.get_analytics(analytic, mode='set', session_ids=None,
-                                        paradigm_ids=selected_paradigms,
-                                        animal_ids=selected_animals)
-            global_data[analytic] = dat
-            # log_msg = {analytic: "Not loaded" if global_data[analytic] is None 
-            #         else f"Loaded ({global_data[analytic].shape})" 
-            #         for analytic in global_data.keys()}
-            # L.logger.debug(L.fmtmsg(log_msg))
-        L.logger.info(L.fmtmsg(log_msg))
+        # check if also raw_traces was in the passed selected_analytics list
+        if len(selected_analytics) != len(selected_analytics_filt):
+            session_ffnames, identifs = sessionlist_fullfnames_from_args(paradigm_ids=selected_paradigms, 
+                                                                         animal_ids=selected_animals)
+            for session_ffname, identf in zip(session_ffnames, identifs):
+                raw_data_mmap, mapping = session_modality_from_nas(session_ffname, 'ephys_traces')
+                loaded_raw_traces[str(identf)] = (raw_data_mmap, mapping)
+                
+    # raw traces
+    log_msg = {identif: "Not loaded" if loaded_raw_traces[identif][0] is None 
+               else str(loaded_raw_traces[identif][0].shape)
+               for identif in loaded_raw_traces.keys()}
+    L.logger.debug(L.fmtmsg(log_msg))
+    L.logger.info("All data loaded.")
+    # analytics
+    log_msg = {analytic: "Not loaded" if loaded_analytics[analytic] is None 
+               else f"Loaded ({loaded_analytics[analytic].shape})" 
+               for analytic in loaded_analytics.keys()}
+    L.logger.debug(L.fmtmsg(log_msg))

@@ -12,6 +12,8 @@ import analytics_processing.agg_modalities2analytic as m2a
 import analytics_processing.integr_analytics as integr_analytics
 import analytics_processing.sessions_from_nas_parsing as sp
 
+import ephys_preprocessing.postproc_mea1k_ephys as ephys
+
 def _get_analytics_fname(session_dir, analysis_name):
     full_path = os.path.join(session_dir, "session_analytics")
     if not os.path.exists(full_path):
@@ -88,8 +90,8 @@ def _compute_analytic(analytic, session_fullfname):
         data_table = C.MULTI_UNITS_TABLE
         
     elif analytic == "Spikes":
-        data = m2a.get_Spikes(session_fullfname)
-        data_table = C.MULTI_UNITS_TABLE
+        data = ephys.get_Spikes(session_fullfname)
+        data_table = C.SPIKES_TABLE
 
     #TODO fix later
     if analytic != "UnityTrialwiseMetrics" and data is not None:
@@ -159,7 +161,8 @@ def get_analytics(analytic, mode="set", paradigm_ids=None, animal_ids=None,
     if mode == "set":
         aggr = pd.concat(aggr)
         
-        session_ids = aggr.index.get_level_values("session_id").tolist()
+        # session_ids = aggr.index.get_level_values("session_id").tolist()
+        session_ids = aggr.index.unique("session_id").tolist()
         paradigm_ids = aggr.index.unique("paradigm_id").tolist()
         animal_ids = aggr.index.unique("animal_id").tolist()
         mid_iloc = aggr.shape[0] // 2

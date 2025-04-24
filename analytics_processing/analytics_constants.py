@@ -372,9 +372,25 @@ UNITY_TRACKWISE_TABLE = OrderedDict([
     ("posbin_to_ephys_timestamp", pd.Int64Dtype()), # Nullable integer
 ])
 
-MULTI_UNITS_TABLE = OrderedDict([
-    ("spike_time", pd.Int64Dtype()),
-    ("cluster_id", pd.Int32Dtype()),
-    ("spike_site", pd.Int32Dtype()),
-    ("spike_color", pd.StringDtype()),
+# MULTI_UNITS_TABLE = OrderedDict([
+#     ("spike_time", pd.Int64Dtype()),
+#     ("cluster_id", pd.Int32Dtype()),
+#     ("spike_site", pd.Int32Dtype()),
+#     ("spike_color", pd.StringDtype()),
+# ])
+
+SPIKES_TABLE = OrderedDict([
+    ("sample_id", pd.UInt32Dtype()),          
+    ("ephys_timestamp", pd.UInt64Dtype()),   
+    ("amplitude_uV", pd.Int16Dtype()),      
+    ("channel", pd.UInt16Dtype()),
+    ("shank", pd.UInt8Dtype()),
+    ("waveform", pd.StringDtype()),         # object (list of integers stored as strings)
+    ("cluster_id", pd.Int16Dtype()),        # max 32767 
+    ("cluster_color", pd.StringDtype()),
+    ("shank_name", pd.StringDtype()),
+    ("depth", pd.UInt16Dtype()),
+    ("fiber_id", pd.UInt16Dtype()),
+    ("pad_id", pd.UInt16Dtype()),
+    ("mea1k_el", pd.UInt16Dtype())
 ])

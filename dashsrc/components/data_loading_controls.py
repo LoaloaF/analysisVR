@@ -51,7 +51,7 @@ def render(app: Dash, loaded_analytics: dict, loaded_raw_traces: dict) -> html.D
 
     default_animals = [6]
     default_paradigms = [1100]
-    default_analytics = ['Spikes', 'raw_traces']
+    default_analytics = ['SessionMetadata', 'UnityTrackwise']
 
     return dbc.Row([
         dbc.Col([

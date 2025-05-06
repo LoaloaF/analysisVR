@@ -52,7 +52,7 @@ def get_vis_name_req_data(vis_name):
         case 'SessionKinematics':
             req_data = 'UnityTrackwise', 'SessionMetadata'
         case 'Kinematics':
-            req_data = 'UnityTrialwiseMetrics', 'SessionMetadata'
+            req_data = 'UnityTrackwise', 'SessionMetadata'
         case 'StayPerformance':
             req_data = 'UnityTrialwiseMetrics', 'SessionMetadata'
         case 'StayRatio':

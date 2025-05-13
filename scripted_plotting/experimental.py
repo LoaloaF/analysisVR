@@ -1,6 +1,8 @@
 import os
+import pickle
 import sys
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
+sys.path.insert(1, os.path.join(sys.path[0], '..', '..', 'ephysVR'))
 
 # from dashsrc.plot_components import staytimes_plot_sessions as staytimes_plot_sessions
 # from dashsrc.plot_components.plots import plot_AnimalKinematics
@@ -8,6 +10,8 @@ sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 # from dashsrc.plot_components.plots import plot_2DStaytimes
 # from dashsrc.plot_components.plots import plot_LickTrack
 from dashsrc.plot_components.plots import plot_RawSpikes
+from dashsrc.plot_components.plots import plot_rawEvents
+from dashsrc.plot_components.plots import plot_fr
 from analytics_processing import analytics
 import analytics_processing.analytics_constants as C
 from CustomLogger import CustomLogger as Logger
@@ -20,7 +24,7 @@ from analytics_processing.sessions_from_nas_parsing import sessionlist_fullfname
 output_dir = "./outputs/experimental/"
 data = {}
 nas_dir = C.device_paths()[0]
-Logger().init_logger(None, None, logging_level="DEBUG")
+Logger().init_logger(None, None, logging_level="INFO")
 
 
 
@@ -98,24 +102,24 @@ Logger().init_logger(None, None, logging_level="DEBUG")
 # fig.show()
 
 
-# ephys
-paradigm_ids = [1100]
-animal_ids = [6]
-session_ids = [4]
-width = 715
-height = 1070
-group_by = None
-data["Spikes"] = analytics.get_analytics('spikes', mode='set',
-                                         paradigm_ids=paradigm_ids,
-                                         animal_ids=animal_ids,
-                                         session_ids=session_ids)
+# # ephys
+# paradigm_ids = [1100]
+# animal_ids = [6]
+# session_ids = [4]
+# width = 715
+# height = 1070
+# group_by = None
+# data["Spikes"] = analytics.get_analytics('spikes', mode='set',
+#                                          paradigm_ids=paradigm_ids,
+#                                          animal_ids=animal_ids,
+#                                          session_ids=session_ids)
 
-session_dir = sessionlist_fullfnames_from_args(paradigm_ids, animal_ids, session_ids)[0][0]
-raw_data_mmap, mapping = session_modality_from_nas(session_dir, 'ephys_traces')
-data['ephys_traces'] = raw_data_mmap
-data['implant_mapping'] = mapping
-fig = plot_RawSpikes.render_plot(data['ephys_traces'], data['implant_mapping'], data['Spikes'])
-fig.show()
+# session_dir = sessionlist_fullfnames_from_args(paradigm_ids, animal_ids, session_ids)[0][0]
+# raw_data_mmap, mapping = session_modality_from_nas(session_dir, 'ephys_traces')
+# data['ephys_traces'] = raw_data_mmap
+# data['implant_mapping'] = mapping
+# fig = plot_RawSpikes.render_plot(data['ephys_traces'], data['implant_mapping'], data['Spikes'])
+# fig.show()
 
 
 
@@ -196,3 +200,87 @@ fig.show()
 # # do a event plot of the spikes with matplotlib
 
 # # plt.eventplot
+
+
+
+# # ephys
+# paradigm_ids = [1100]
+# animal_ids = [6]
+# session_ids = [1]
+# width = 715
+# height = 1070
+# group_by = None
+# data["Spikes"] = analytics.get_analytics('Spikes', mode='set',
+#                                          paradigm_ids=paradigm_ids,
+#                                          animal_ids=animal_ids,
+#                                          session_ids=session_ids)
+
+
+# # session_dir = sessionlist_fullfnames_from_args(paradigm_ids, animal_ids, session_ids)[0][0]
+# # raw_data_mmap, mapping = session_modality_from_nas(session_dir, 'ephys_traces')
+# # data['ephys_traces'] = raw_data_mmap
+# # data['implant_mapping'] = mapping
+# fig = plot_rawEvents.render_plot(data['Spikes'], data['BehaviorEvents'])
+# fig.show()
+
+
+# ephys
+paradigm_ids = [1100]
+animal_ids = [6]
+width = 715
+height = 1070
+# session_ids = [2]
+
+for s_id in range(0,33):
+    session_ids = [s_id]
+
+    # data["BehaviorEvents"] = analytics.get_analytics('BehaviorEvents', mode='set',
+    #                                         paradigm_ids=paradigm_ids,
+    #                                         animal_ids=animal_ids,
+    #                                         session_ids=session_ids)
+    data["FiringRateTrackbinsZ"] = analytics.get_analytics('FiringRateTrackbinsZ', mode='set',
+                                            paradigm_ids=paradigm_ids,
+                                            animal_ids=animal_ids,
+                                            session_ids=session_ids)
+    if data["FiringRateTrackbinsZ"] is None:
+        print(f"FiringRateTrackbinsZ not found for session {session_ids[0]}")
+        continue
+    # data["Spikes"] = analytics.get_analytics('Spikes', mode='set',
+    #                                         paradigm_ids=paradigm_ids,
+    #                                         animal_ids=animal_ids,
+    #                                         session_ids=session_ids)
+    data["UnityTrackwise"] = analytics.get_analytics('UnityTrackwise', mode='set',
+                                            paradigm_ids=paradigm_ids,
+                                            animal_ids=animal_ids,
+                                            session_ids=session_ids)
+    # print()
+    # # save as python pickle object locally
+    # with open('data.pkl', 'wb') as f:
+    #     pickle.dump(data, f)
+        
+    # # load it
+    # with open('data.pkl', 'rb') as f:
+    #     data = pickle.load(f) 
+
+    # fr_hz = get_FiringRate200msHz(data['Spikes'])
+    # # print(fr_hz)
+    # fr_Z = get_FiringRate200msZ(fr_hz)
+    # # print(fr_Z)
+
+    # data['FiringRate200msHz'] = fr_hz
+    # data['FiringRate200msZ'] = fr_Z
+    # print(data['FiringRate200msZ'])
+
+        
+    # fig = plot_rawEvents.render_plot(data['Spikes'], data['BehaviorEvents'])
+        
+    fig = plot_fr.render_plot(data['FiringRateTrackbinsZ'], data['UnityTrackwise'], 
+                              s_id=session_ids[0],)
+    fig.show()
+    # exit()
+    # except Exception as e:
+    #     print(f"Error in session {session_ids[0]}: {e}")
+    #     continue
+
+
+

@@ -43,7 +43,7 @@ def device_paths():
     
     if not os.path.exists(nas_dir):
         msg = f"NAS directory not found: {nas_dir} - VPN connected?"
-        raise FileNotFoundError(msg)
+        # raise FileNotFoundError(msg)
     return nas_dir, local_data_dir, project_dir
 
 # ALL_PARADIGM_IDS = [200, 800, 1100]
@@ -380,17 +380,53 @@ UNITY_TRACKWISE_TABLE = OrderedDict([
 # ])
 
 SPIKES_TABLE = OrderedDict([
+    ("cluster_id", pd.Int16Dtype()),        # max 32767 
     ("sample_id", pd.UInt32Dtype()),          
     ("ephys_timestamp", pd.UInt64Dtype()),   
+    ("waveform", pd.StringDtype()),         # object (list of integers stored as strings)
+    ('ss_batch_id', pd.UInt16Dtype()),
+    ("cluster_color", pd.StringDtype()),
     ("amplitude_uV", pd.Int16Dtype()),      
     ("channel", pd.UInt16Dtype()),
     ("shank", pd.UInt8Dtype()),
-    ("waveform", pd.StringDtype()),         # object (list of integers stored as strings)
-    ("cluster_id", pd.Int16Dtype()),        # max 32767 
-    ("cluster_color", pd.StringDtype()),
-    ("shank_name", pd.StringDtype()),
     ("depth", pd.UInt16Dtype()),
-    ("fiber_id", pd.UInt16Dtype()),
-    ("pad_id", pd.UInt16Dtype()),
-    ("mea1k_el", pd.UInt16Dtype())
 ])
+
+SPIKES_CLUSTER_METADATA_TABLE = OrderedDict([
+    ("cluster_id_ssbatch", pd.Int16Dtype()),        # max 32767 
+    ('cluster_id', pd.UInt16Dtype()),
+    ('cluster_channel', pd.UInt16Dtype()),
+    ('cluster_type', pd.StringDtype()),
+    ('unit_count', pd.UInt64Dtype()),
+    ('unit_snr', pd.Float32Dtype()),
+    ('unit_Vpp', pd.Float32Dtype()),
+    ('unit_isi_ratio', pd.Float32Dtype()),
+    ('unit_iso_dist', pd.Float32Dtype()),
+    ('unit_L_ratio', pd.Float32Dtype()),
+    ('amplifier_id', pd.UInt16Dtype()),
+    ('mea1k_el', pd.UInt16Dtype()),
+    ('pad_id', pd.UInt16Dtype()),
+    ('fiber_id', pd.UInt16Dtype()),
+    ('metal', pd.UInt16Dtype()),
+    ('shank_name', pd.StringDtype()),
+    ('mea1k_connectivity', pd.Float32Dtype()),
+    ('connectivity_order', pd.UInt16Dtype()),
+    ('ss_batch_name', pd.StringDtype()),
+    ('ss_batch_id', pd.UInt16Dtype()),
+    ('shank_side', pd.StringDtype()),
+    ('curated_trace', pd.BooleanDtype()),
+    ('depth', pd.UInt16Dtype()),
+    ('shank_id', pd.UInt16Dtype()),
+    ('session_nsamples', pd.UInt64Dtype()),
+    ('cluster_color', pd.StringDtype()),
+])
+
+FIRING_RATE_40MS_HZ_ONE_DTYPE = pd.Int16Dtype() # variable length, all columns are int16
+FIRING_RATE_40MS_Z_ONE_DTYPE = pd.Float32Dtype() # variable length, all columns are float32
+FIRING_RATE_TRACKBINS_Z_ONE_DTYPE = pd.Float32Dtype() # variable length, all columns are float32
+# SPIKES_CLUSTER_METADATA_ARGS - {
+#     'order_cluster_by': 'rastermap',
+#     'rastermap_locality': .6,
+#     'rastermap_n_PCs': 32,
+#     'rastermap_time_lag_window': 20,
+# }

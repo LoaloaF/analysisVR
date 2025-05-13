@@ -23,7 +23,8 @@ def _get_analytics_fname(session_dir, analysis_name):
     return fullfname
 
 def _compute_analytic(analytic, session_fullfname):
-    print(f"Computing {analytic} for {os.path.basename(session_fullfname)}")
+    session_name = os.path.basename(session_fullfname)[:-5]
+    print(f"Computing {analytic} for {session_name}")
     if analytic == "SessionMetadata":
         data = m2a.get_SesssionMetadata(session_fullfname)
         data_table = C.SESSION_METADATA_TABLE
@@ -48,12 +49,12 @@ def _compute_analytic(analytic, session_fullfname):
 
     elif analytic == "UnityFramewise":
         data = m2a.get_UnityFramewise(session_fullfname)
-        behavior_event_data = m2a.get_BehaviorEvents(session_fullfname)
-        pose_data = m2a.get_FacecamPoses(session_fullfname)
-
+        portenta_data = m2a.get_Portenta(session_fullfname)
+        # pose_data = m2a.get_FacecamPoses(session_fullfname)
+        
         # integrate the behavior events and facecam poses
-        data = integr_analytics.merge_behavior_events_with_frames(data, behavior_event_data)
-        data = integr_analytics.merge_facecam_poses_with_frames(data, pose_data)
+        data = integr_analytics.merge_behavior_events_with_frames(data, portenta_data)
+        # data = integr_analytics.merge_facecam_poses_with_frames(data, pose_data)
 
         data_table = C.UNITY_FAMEWISE_TABLE
         # update the data_table with the facecam pose columns
@@ -62,8 +63,9 @@ def _compute_analytic(analytic, session_fullfname):
                 data_table[col] = pd.Float32Dtype()
 
     elif analytic == "UnityTrackwise":
-        unity_framewise = get_analytics(analytic="UnityFramewise", 
-                                        sessionlist_fullfnames=[session_fullfname])
+        unity_framewise = get_analytics(analytic="UnityFramewise",
+                                        session_names=[session_name])
+ 
         data = integr_analytics.get_UnityTrackwise(unity_framewise)
         
         data_table = C.UNITY_TRACKWISE_TABLE
@@ -89,9 +91,53 @@ def _compute_analytic(analytic, session_fullfname):
         data = m2a.get_MultiUnits(session_fullfname)
         data_table = C.MULTI_UNITS_TABLE
         
+    elif analytic == "SpikeClusterMetadata":
+        data = ephys.get_SpikeClusterMetadata(session_fullfname)
+        data_table = C.SPIKES_CLUSTER_METADATA_TABLE
+    
     elif analytic == "Spikes":
-        data = ephys.get_Spikes(session_fullfname)
+        sp_clust_metadata = get_analytics('SpikeClusterMetadata',
+                                          session_names=[session_name],
+                                          columns=['cluster_id_ssbatch', 'cluster_id', 
+                                                   'cluster_color', 'cluster_type',
+                                                   'unit_count', 'ss_batch_id']
+                                          )
+        if sp_clust_metadata is None:
+            return None
+        data = ephys.get_Spikes(session_fullfname, sp_clust_metadata)
         data_table = C.SPIKES_TABLE
+        # print(get_analytics('Spikes', session_names=[session_name],
+        #                        columns=['sample_id', 'cluster_id']))
+    
+    elif analytic == "FiringRate40msHz":
+        spikes = get_analytics('Spikes', session_names=[session_name],
+                               columns=['ephys_timestamp', 'cluster_id'])
+        if spikes is None:
+            return None
+        data = ephys.get_FiringRate40msHz(spikes.reset_index(drop=True))
+        data_table = dict.fromkeys(data.columns, C.FIRING_RATE_40MS_HZ_ONE_DTYPE)
+    
+    elif analytic == "FiringRate40msZ":
+        fr_hz = get_analytics('FiringRate40msHz', session_names=[session_name],)
+                               
+        if fr_hz is None:
+            return None
+        data = ephys.get_FiringRate40msZ(fr_hz)
+        data_table = dict.fromkeys(data.columns, C.FIRING_RATE_40MS_Z_ONE_DTYPE)
+    
+    elif analytic == "FiringRateTrackbinsZ":
+        fr_data = get_analytics('FiringRate40msZ', session_names=[session_name])
+        track_data = get_analytics('UnityTrackwise', session_names=[session_name],)
+                                        # columns=['frame_z_position', 'frame_pc_timestamp'])
+        if fr_data is None:
+            return None
+        data = ephys.get_FiringRateTrackbinsHz(fr_data, track_data)
+        print(data)
+        data_table = dict.fromkeys(data.columns, C.FIRING_RATE_TRACKBINS_Z_ONE_DTYPE)
+    
+    
+    else:
+        raise ValueError(f"Unknown analytic: {analytic}")
 
     #TODO fix later
     if analytic != "UnityTrialwiseMetrics" and data is not None:
@@ -159,6 +205,8 @@ def get_analytics(analytic, mode="set", paradigm_ids=None, animal_ids=None,
             raise ValueError(f"Unknown mode {mode}")
     
     if mode == "set":
+        if len(aggr) == 0:
+            return None
         aggr = pd.concat(aggr)
         
         # session_ids = aggr.index.get_level_values("session_id").tolist()

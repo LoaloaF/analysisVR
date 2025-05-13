@@ -50,24 +50,25 @@ def merge_facecam_poses_with_frames(unity_framewise, facecam_poses):
 
     return unity_framewise
 
-def merge_behavior_events_with_frames(unity_framewise, behavior_events):
+def merge_behavior_events_with_frames(unity_framewise, portenta_data):
     # exclude the ball velocity events
-    behavior_events = behavior_events[behavior_events["event_name"] != "B"]
+    portenta_data = portenta_data[~np.isin(portenta_data["portenta_name"], 
+                                               ("B_forward", "B_rotate", "B_sideway"))]
     
     # decide which timestamp to use
     if unity_framewise["frame_ephys_timestamp"].isna().any():
         frame_time_col = "frame_pc_timestamp"
-        behavior_time_col = "event_pc_timestamp"
+        behavior_time_col = "portenta_pc_timestamp"
     else:
         frame_time_col = "frame_ephys_timestamp"
-        behavior_time_col = "event_ephys_timestamp"
+        behavior_time_col = "portenta_ephys_timestamp"
     
     # get the unique event types
-    event_types = behavior_events["event_name"].unique()
+    event_types = portenta_data["portenta_name"].unique()
     event_batch = 2000
     
     for each_event in event_types:
-        certain_event = behavior_events[behavior_events["event_name"] == each_event]
+        certain_event = portenta_data[portenta_data["portenta_name"] == each_event]
         
         frame_timestamps = unity_framewise[frame_time_col].values
         # event_timestamps = certain_event[behavior_time_col].values

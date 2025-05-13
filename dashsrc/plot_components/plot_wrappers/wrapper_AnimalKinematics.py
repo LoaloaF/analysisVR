@@ -95,8 +95,10 @@ def render(app: Dash, global_data: dict, vis_name: str) -> html.Div:
         if len(smooth_data) == 1:
             smooth_data = True
             
-        fig = plot_LickTrack.render_plot(data, global_data['SessionMetadata'], 
-                                                # metric, metric_max, smooth_data, 
+        # fig = plot_LickTrack.render_plot(data, global_data['SessionMetadata'], 
+        #                                         width, height)
+        fig = plot_AnimalKinematics.render_plot(data, global_data['SessionMetadata'], 
+                                                metric, metric_max, smooth_data, 
                                                 width, height)
         return fig
     

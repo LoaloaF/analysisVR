@@ -1,28 +1,41 @@
+import os
+import sys
+
+from analytics_constants import device_paths
+
 import h5py
 import numpy as np  
 import pandas as pd
 
-session_fullfname = '/home/vrmaster/logger/Rat_20250509_1300_deflate1.h5'
-with h5py.File(session_fullfname, 'r') as session_file:
-    data = np.array(session_file['dataset1'][:-20_000, :], dtype=np.int16)
+import matplotlib.pyplot as plt
 
-print(data[:, -1000:])
+nas_dir = device_paths()[0]
+session_path = os.path.join(nas_dir, 'RUN_rYL010/rYL010_P0000/2025-05-09_15-51_rYL010_P0000_AutoLickReward_164min')
+data = np.memmap(os.path.join(session_path, "Rat_20250509.uint16"), dtype=np.int16).reshape((1024, -1), order='F')
 print(data.shape)
 
-mapping = pd.read_csv('/home/vrmaster/logger/2025-04-04_18-15_rYL010_P1100_LinearTrackStop_5min_738_ephys_traces_mapping.csv')
+out_fullfname = os.path.join(session_path, "2025-05-08_15-51_rYL010_P1100_FreelyMoving_3min_738_ephys_traces_mapping.dat")
+
+mapping = pd.read_csv(os.path.join(session_path, "2025-05-08_15-51_rYL010_P1100_FreelyMoving_3min_738_ephys_traces_mapping.csv"))
 print(mapping)
 
-data = data[:, mapping.amplifier_id.values]
-# print(data[:, -20_000:])
-print(data.shape)
+# plt.plot(data[:10, 1_000_000:1_000_000+1000].T)
+# plt.savefig('test.png')
+# plt.show()
 
-
-out_fullfname = '/home/vrmaster/logger/2025-04-04_18-15_rYL010_P1100_LinearTrackStop_5min_738_ephys_traces.dat'
 open(out_fullfname, 'w').close() # this overwrite, careful
-with open(out_fullfname, 'ab') as f:
-    # data.flatten(order="F").tofile(f)
-    data.flatten().tofile(f)
 
 
-# o = np.memmap(out_fullfname, dtype=np.int16, mode='r').reshape(len(mapping), -1, order='F')
-# print(o.shape)
+chunk_size = 1 * 20_000 # 1 minute of data
+chunks = list(range(0, data.shape[1], chunk_size))
+for chunk_idx in chunks:
+    chunk_data = data[:, chunk_idx:chunk_idx+chunk_size]
+    # print(chunk)
+    
+    chunk_data = chunk_data[mapping.amplifier_id.values, :]
+    print(chunk_data.shape)
+    
+    with open(out_fullfname, 'ab') as f:
+        chunk_data.T.flatten().tofile(f)
+    print(f'Chunk {chunk_idx//chunk_size+1}/{len(chunks)} written to {os.path.basename(out_fullfname)}')
+    # exit()

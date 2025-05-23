@@ -12,4 +12,5 @@ outputs/
 mua_detection.py
 events.csv
 psytrack
+rasterm
 .DS_Store

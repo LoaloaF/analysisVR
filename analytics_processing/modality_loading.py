@@ -37,6 +37,10 @@ def session_modality_from_nas(session_fullfname, key, where=None, start=None,
         if key == 'paradigm_variable':
             # this table has many naming issues, fix them
             data = mT.fix_missing_paradigm_variable_names(data)
+        if (session_fullfname.endswith("2024-11-25_16-25_rYL006_P1100_LinearTrackStop_18min.hdf5") or
+            session_fullfname.endswith("2025-01-24_12-24_rYL006_P1100_LinearTrackStop_41min.hdf5")):
+            # non comprssed mea1k data, ephys timestamps have wrong offset
+            data = mT.fix_ephys_timestamps_offset(data)
     return data
 
 def _handle_ephys_from_nas(session_fullfname, start, stop, columns):

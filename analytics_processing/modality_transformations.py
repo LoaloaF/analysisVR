@@ -235,7 +235,30 @@ def fix_missing_paradigm_variable_names(data):
     data = data.rename(columns=renamer)
     return data
     
+def fix_ephys_timestamps_offset(data):
+    if not isinstance(data, pd.DataFrame):
+        return data
+    ephys_t_col = [col for col in data.columns if "ephys_timestamp" in col]
+    if len(ephys_t_col) == 0:
+        return data
 
+    # offset to 0
+    data[ephys_t_col] -= data[ephys_t_col].iloc[0]
+    if ephys_t_col[0] == "frame_ephys_timestamp":
+        data[ephys_t_col[0]] += 1.82 *1e6 # on average, other sessions have first unity frame after
+    elif ephys_t_col[0] == "ballvelocity_ephys_timestamp":
+        data[ephys_t_col[0]] += 0.82 *1e6 # on average, other sessions have first ball vel pack after
+    elif ephys_t_col[0] == "event_ephys_timestamp":
+        data[ephys_t_col[0]] += 8.2 *1e6 # on average, super uncertain
+    elif ephys_t_col[0] == "trial_start_ephys_timestamp":
+        data[ephys_t_col[0]] = pd.NA # hope it's never used
+    elif ephys_t_col[0] == "trial_end_ephys_timestamp":
+        data[ephys_t_col[0]] = pd.NA # hope it's never used
+        
+         
+    # camera missing, but not relevant for now
+    return data
+    
 
 
 

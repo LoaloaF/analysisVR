@@ -87,7 +87,8 @@ def merge_behavior_events_with_frames(unity_framewise, portenta_data):
         # Process in batches
         for start in range(0, len(certain_event), event_batch):
             end = start + event_batch
-            event_timestamps = certain_event[behavior_time_col].values[start:end]
+            # convert from pd.array to numpy array
+            event_timestamps = np.array(certain_event[behavior_time_col].values[start:end])
 
             # get the closest frame to each event
             abs_diff_event = np.abs(frame_timestamps[:, np.newaxis] - event_timestamps)

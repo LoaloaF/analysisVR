@@ -101,6 +101,7 @@ def vis_bias(fname):
     cbar.set_ticks([0, 1])  # Example: set ticks at 0, 0.5, and 1
     cbar.set_ticklabels(['', '>1 amplifier'],)  # Example: custom labels
     plt.savefig(os.path.join(output_dir, fname.replace('.npy', '_longend.png')))
+    plt.show()
     plt.close()
     
 def vis_bias_clipped_prop(fname):
@@ -120,6 +121,7 @@ def vis_bias_clipped_prop(fname):
     plt.ylim(0,1024)
     plt.ylabel("Clipping proportion")
     plt.savefig(os.path.join(output_dir, fname.replace('.npy', '.png')))
+    plt.show()
     plt.close()
     
 
@@ -132,18 +134,19 @@ Logger().init_logger(None, None, logging_level="INFO")
 
 
 # ephys rat 10 3 minute initial logger on ball session
-# session_dir = sessionlist_fullfnames_from_args(paradigm_ids=[1100], animal_ids=[10], session_ids=[8])[0][0]
-# raw_data_mmap, _ = session_modality_from_nas(session_dir, 'ephys_traces')
-# calc_bias(raw_data_mmap)
-# vis_bias('bias_logger_on_ball.npy')
-# vis_bias_clipped_prop('bias_logger_on_ball_clipped_prop.npy')
+session_dir = sessionlist_fullfnames_from_args(paradigm_ids=[1100], animal_ids=[10], session_ids=[8])[0][0]
+raw_data_mmap, _ = session_modality_from_nas(session_dir, 'ephys_traces')
+calc_bias(raw_data_mmap)
+vis_bias('bias_logger_on_ball.npy')
+vis_bias_clipped_prop('bias_logger_on_ball_clipped_prop.npy')
 
-path = os.path.join(nas_dir, 'RUN_rYL010/rYL010_P1100/2025-05-08_14-46_rYL010_P1100_LinearTrackStop_42min')
-fname = 'ephys_output.raw.h5'
-mapping = pd.read_csv(os.path.join(path, "2025-05-08_14-46_rYL010_P1100_LinearTrackStop_42min_738_ephys_traces_mapping.csv"))
-calc_bias_stepwise(path, fname, mapping)
-vis_bias('bias_tethered.npy')
-vis_bias_clipped_prop('bias_tethered_clipped_prop.npy')
+
+# path = os.path.join(nas_dir, 'RUN_rYL010/rYL010_P1100/2025-05-01_17-28_rYL010_P1100_LinearTrackStop_42min')
+# fname = 'ephys_output.raw.h5'
+# mapping = pd.read_csv(os.path.join(path, "2025-05-01_17-28_rYL010_P1100_LinearTrackStop_42min_738_ephys_traces_mapping.csv"))
+# # calc_bias_stepwise(path, fname, mapping, 'bias_tethered2')
+# vis_bias('bias_tethered2.npy')
+# vis_bias_clipped_prop('bias_tethered2_clipped_prop.npy')
 
 
 # path = os.path.join(nas_dir, 'RUN_rYL010/rYL010_P0000/2025-05-09_15-51_rYL010_P0000_AutoLickReward_164min')

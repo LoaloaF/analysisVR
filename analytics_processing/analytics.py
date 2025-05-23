@@ -31,7 +31,7 @@ def _compute_analytic(analytic, session_fullfname):
     
     elif analytic == "Portenta":
         data = m2a.get_Portenta(session_fullfname)
-        data_table = C.BEHAVIOR_EVENT_TABLE
+        data_table = C.PORTENTA_TABLE
     
     elif analytic == "Unity":
         data = m2a.get_Unity(session_fullfname)
@@ -49,8 +49,8 @@ def _compute_analytic(analytic, session_fullfname):
 
     elif analytic == "UnityFramewise":
         data = m2a.get_UnityFramewise(session_fullfname)
-        portenta_data = m2a.get_Portenta(session_fullfname)
-        # pose_data = m2a.get_FacecamPoses(session_fullfname)
+        portenta_data = get_analytics(analytic="Portenta",
+                                      session_names=[session_name])
         
         # integrate the behavior events and facecam poses
         data = integr_analytics.merge_behavior_events_with_frames(data, portenta_data)
@@ -100,7 +100,8 @@ def _compute_analytic(analytic, session_fullfname):
                                           session_names=[session_name],
                                           columns=['cluster_id_ssbatch', 'cluster_id', 
                                                    'cluster_color', 'cluster_type',
-                                                   'unit_count', 'ss_batch_id']
+                                                   'unit_count', 'ss_batch_id',
+                                                   'session_nsamples']
                                           )
         if sp_clust_metadata is None:
             return None
@@ -117,23 +118,48 @@ def _compute_analytic(analytic, session_fullfname):
         data = ephys.get_FiringRate40msHz(spikes.reset_index(drop=True))
         data_table = dict.fromkeys(data.columns, C.FIRING_RATE_40MS_HZ_ONE_DTYPE)
     
-    elif analytic == "FiringRate40msZ":
-        fr_hz = get_analytics('FiringRate40msHz', session_names=[session_name],)
+    # elif analytic == "FiringRate40msZ":
+    #     fr_hz = get_analytics('FiringRate40msHz', session_names=[session_name],)
                                
-        if fr_hz is None:
-            return None
-        data = ephys.get_FiringRate40msZ(fr_hz)
-        data_table = dict.fromkeys(data.columns, C.FIRING_RATE_40MS_Z_ONE_DTYPE)
+    #     if fr_hz is None:
+    #         return None
+    #     data = ephys.get_FiringRate40msZ(fr_hz)
+    #     data_table = dict.fromkeys(data.columns, C.FIRING_RATE_40MS_Z_ONE_DTYPE)
     
-    elif analytic == "FiringRateTrackbinsZ":
-        fr_data = get_analytics('FiringRate40msZ', session_names=[session_name])
+    elif analytic == "FiringRateTrackwiseHz":
+        fr_data = get_analytics('FiringRate40msHz', session_names=[session_name])
         track_data = get_analytics('UnityTrackwise', session_names=[session_name],)
                                         # columns=['frame_z_position', 'frame_pc_timestamp'])
         if fr_data is None:
             return None
-        data = ephys.get_FiringRateTrackbinsHz(fr_data, track_data)
-        print(data)
-        data_table = dict.fromkeys(data.columns, C.FIRING_RATE_TRACKBINS_Z_ONE_DTYPE)
+        data = ephys.get_FiringRateTrackwiseHz(fr_data, track_data)
+        data_table = dict.fromkeys(data.columns, C.FIRING_RATE_TRACKWISE_HZ_ONE_DTYPE)
+    
+    elif analytic == "PCsZonewise":
+        trackfr_data = get_analytics('FiringRateTrackwiseHz', session_names=[session_name])
+        track_data = get_analytics('UnityTrackwise', session_names=[session_name],)
+                                        # columns=['frame_z_position', 'frame_pc_timestamp'])
+        if trackfr_data is None:
+            return None
+        data = ephys.get_PCsZonewise(trackfr_data, track_data)
+        data_table = C.PCS_ZONEWISE_TABLE
+    
+    elif analytic == "SVMCueOutcomeChoicePred":
+        PCsZonewise = get_analytics('PCsZonewise', session_names=[session_name])
+        if PCsZonewise is None:
+            return None
+        data = ephys.get_SVMCueOutcomeChoicePred(PCsZonewise)
+        data_table = C.SVM_CUE_OUTCOME_CHOICE_PRED_TABLE
+    
+    # elif analytic == "FiringRateTrackbinsZ":
+    #     fr_data = get_analytics('FiringRate40msZ', session_names=[session_name])
+    #     track_data = get_analytics('UnityTrackwise', session_names=[session_name],)
+    #                                     # columns=['frame_z_position', 'frame_pc_timestamp'])
+    #     if fr_data is None:
+    #         return None
+    #     data = ephys.get_FiringRateTrackbinsHz(fr_data, track_data)
+    #     print(data)
+    #     data_table = dict.fromkeys(data.columns, C.FIRING_RATE_TRACKBINS_Z_ONE_DTYPE)
     
     
     else:
@@ -151,12 +177,13 @@ def _compute_analytic(analytic, session_fullfname):
 #     return int(anim_name[-3:]), int(parad_name[1:]), 0
 
 def get_analytics(analytic, mode="set", paradigm_ids=None, animal_ids=None, 
-                  session_ids=None, session_names=None, 
+                  session_ids=None, session_names=None, excl_session_names=None,
                   from_date=None, to_date=None, columns=None,):
     L = Logger()
     
     sessionlist_fullfnames, ids = sp.sessionlist_fullfnames_from_args(paradigm_ids, animal_ids, 
                                                                       session_ids, session_names, 
+                                                                      excl_session_names,
                                                                       from_date, to_date)
     
     aggr = []
@@ -195,8 +222,8 @@ def get_analytics(analytic, mode="set", paradigm_ids=None, animal_ids=None,
         
         elif mode == 'clear':
             if os.path.exists(analytics_fname):
-                L.logger.warning(f"Permantly DELETING {analytics_fname}in 3s !")
-                sleep(3)
+                L.logger.warning(f"Permantly DELETING {analytics_fname} in 1s !")
+                sleep(1)
                 os.remove(analytics_fname)
             else:
                 L.logger.warning(f"File {analytics_fname} does not exist, skipping.")
@@ -213,7 +240,7 @@ def get_analytics(analytic, mode="set", paradigm_ids=None, animal_ids=None,
         session_ids = aggr.index.unique("session_id").tolist()
         paradigm_ids = aggr.index.unique("paradigm_id").tolist()
         animal_ids = aggr.index.unique("animal_id").tolist()
-        mid_iloc = aggr.shape[0] // 2
+        mid_iloc = 0 # aggr.shape[0] // 2
         L.spacer("debug")
         L.logger.info(f"Returning {analytic} for {len(session_ids)} sessions.")
         L.logger.debug(f"Paradigm_ids: {paradigm_ids}, Animal_ids: {animal_ids}"

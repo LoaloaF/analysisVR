@@ -34,6 +34,7 @@ def get_Portenta(session_fullfname):
             "ballvelocity_raw","ballvelocity_yaw","ballvelocity_pitch",
             "ballvelocity_ephys_patched")
     balldata = session_modality_from_nas(session_fullfname, "ballvelocity", columns=cols)
+    print(balldata.dtypes)
     # split single ball sensor reading event into 3 separate rows for RAW, YAW, PITCH
     raw_data, yaw_data, pitch_data = mT.ballvel_modality_split_ball_velocity(balldata)
     # for merging all tables at the end, start with eventdata
@@ -46,6 +47,8 @@ def get_Portenta(session_fullfname):
     # merge and return
     portenta = pd.concat(portenta, ignore_index=True)
     portenta = portenta.sort_values(by=['portenta_pc_timestamp', 'portenta_name'])
+    portenta["portenta_ephys_patched"] = eventdata["portenta_ephys_patched"].astype(bool)
+    portenta['portenta_ephys_timestamp'] = portenta['portenta_ephys_timestamp'].astype(int)
     return portenta.reset_index(drop=True)
     
 def get_SesssionMetadata(session_fullfname):

@@ -28,6 +28,7 @@ def parse_paradigm_animals_from_nas(paradigm_id, nas_dir):
     return sorted([int(f[-3:]) for f in filtered_animals])
 
 def get_sessionlist_fullfnames(paradigm_ids, animal_ids, session_ids=None,
+                               excl_session_names=None,
                                 from_date=None, to_date=None):
     L = Logger()
     L.logger.debug("Searching NAS for applicable sessions...")
@@ -72,6 +73,10 @@ def get_sessionlist_fullfnames(paradigm_ids, animal_ids, session_ids=None,
                     continue
                 session_fname = session_fname[0]
                 
+                if excl_session_names is not None and session_fname[:-5] in excl_session_names:
+                    L.logger.debug(f"Session {session_fname} excluded")
+                    continue
+                
                 fullfname = os.path.join(parad_animal_subdir, session_dir, session_fname)
                 sessionlist_fullfnames.append(fullfname)
                 identifier.append((p_id, animal_id, s_id))
@@ -93,19 +98,24 @@ def sessionnames2fullfnames(session_names):
         animal_id, paradigm_id, s_id = extract_id_from_sessionname(session_name)
         session_dir = f"RUN_rYL{animal_id:03}", f"rYL{animal_id:03}_P{paradigm_id:04d}"
         fullfname = os.path.join(device_paths()[0], *session_dir, session_name, f"{session_name}.hdf5")
+        if not os.path.exists(fullfname):
+            Logger().logger.warning(f"Session {session_name} not found in NAS")
+            continue
         sessionlist_fullfnames.append(fullfname)
         s_ids.append((animal_id, paradigm_id, s_id))
     return sessionlist_fullfnames, s_ids
 
 def sessionlist_fullfnames_from_args(paradigm_ids=None, animal_ids=None, session_ids=None, 
-                                     session_names=None, from_date=None, to_date=None, ):
+                                     session_names=None, excl_session_names=None,
+                                     from_date=None, to_date=None, ):
     if session_names is None:
         sessionlist_fullfnames, ids = get_sessionlist_fullfnames(paradigm_ids, 
                                                                 animal_ids, session_ids,
+                                                                excl_session_names,
                                                                 from_date, to_date)
     else:
         sessionlist_fullfnames, ids = sessionnames2fullfnames(session_names)
-    Logger().logger.info(f"Paradigm_ids: {paradigm_ids}, animal_ids: {animal_ids}, "
+    Logger().logger.debug(f"Paradigm_ids: {paradigm_ids}, animal_ids: {animal_ids}, "
                          f"session_ids: {session_ids}, from_date: {from_date}, "
                          f"to_date: {to_date}\n\t"
                          f"Merging {len(sessionlist_fullfnames)} sessions\n")

@@ -194,13 +194,26 @@ SESSION_METADATA_TABLE = OrderedDict([
 #     ("metadata", pd.StringDtype()),
 # ])
 
-BEHAVIOR_EVENT_TABLE = OrderedDict([
-    ("event_name", pd.StringDtype()),
-    ("event_package_id", pd.Int64Dtype()),
-    ("event_pc_timestamp", pd.Int64Dtype()),
-    ("event_ephys_timestamp", pd.Int64Dtype()),
-    ("event_value", pd.StringDtype()),
-    ("event_ephys_patched", pd.Int8Dtype()),
+# BEHAVIOR_EVENT_TABLE = OrderedDict([
+#     ("event_name", pd.StringDtype()),
+#     ("event_package_id", pd.Int64Dtype()),
+#     ("event_pc_timestamp", pd.Int64Dtype()),
+#     ("event_ephys_timestamp", pd.Int64Dtype()),
+#     ("event_value", pd.StringDtype()),
+#     ("event_ephys_patched", pd.Int8Dtype()),
+# ])
+
+# [4791601 rows x 5 columns]
+# Index(['portenta_pc_timestamp', 'portenta_value', 'portenta_name',
+#        'portenta_ephys_timestamp', 'portenta_ephys_patched'],
+#       dtype='object')
+
+PORTENTA_TABLE = OrderedDict([
+    ("portenta_ephys_patched", pd.BooleanDtype()),
+    ("portenta_name", pd.StringDtype()),
+    ("portenta_pc_timestamp", pd.Int64Dtype()),
+    ("portenta_ephys_timestamp", pd.Int64Dtype()),
+    ("portenta_value", pd.Int64Dtype()),
 ])
 
 UNITY_TABLE = OrderedDict([
@@ -383,10 +396,14 @@ SPIKES_TABLE = OrderedDict([
     ("cluster_id", pd.Int16Dtype()),        # max 32767 
     ("sample_id", pd.UInt32Dtype()),          
     ("ephys_timestamp", pd.UInt64Dtype()),   
-    ("waveform", pd.StringDtype()),         # object (list of integers stored as strings)
     ('ss_batch_id', pd.UInt16Dtype()),
     ("cluster_color", pd.StringDtype()),
     ("amplitude_uV", pd.Int16Dtype()),      
+    ("channel_hpf_wf", pd.StringDtype()),         # object (list of integers stored as strings)
+    ("channel_2nd_hpf_wf", pd.StringDtype()),         # object (list of integers stored as strings)
+    ("channel_3rd_hpf_wf", pd.StringDtype()),         # object (list of integers stored as strings)
+    ("channel_3rd", pd.UInt16Dtype()),
+    ("channel_2nd", pd.UInt16Dtype()),
     ("channel", pd.UInt16Dtype()),
     ("shank", pd.UInt8Dtype()),
     ("depth", pd.UInt16Dtype()),
@@ -421,9 +438,36 @@ SPIKES_CLUSTER_METADATA_TABLE = OrderedDict([
     ('cluster_color', pd.StringDtype()),
 ])
 
-FIRING_RATE_40MS_HZ_ONE_DTYPE = pd.Int16Dtype() # variable length, all columns are int16
-FIRING_RATE_40MS_Z_ONE_DTYPE = pd.Float32Dtype() # variable length, all columns are float32
-FIRING_RATE_TRACKBINS_Z_ONE_DTYPE = pd.Float32Dtype() # variable length, all columns are float32
+# Index(['trial_id', 'trial_outcome', 'zone', 'HP', 'mPFC', 'behavior'], dtype='object')
+
+PCS_ZONEWISE_TABLE = OrderedDict([
+    ("trial_id", pd.Int16Dtype()),
+    ("trial_outcome", pd.Int16Dtype()),
+    ("cue", pd.Int16Dtype()),
+    ("zone", pd.StringDtype()),
+    ("HP", pd.StringDtype()),
+    ("mPFC", pd.StringDtype()),
+    ("behavior", pd.StringDtype()),
+])
+
+SVM_CUE_OUTCOME_CHOICE_PRED_TABLE = OrderedDict([
+    ('trial_id', pd.Int16Dtype()),
+    ('trial_outcome', pd.Int16Dtype()),
+    ('cue', pd.Int16Dtype()),
+    ('predictor', pd.StringDtype()),
+    ('zone', pd.StringDtype()),
+    ('model',pd.StringDtype()),
+    ('predicting', pd.StringDtype()),
+    ('y', pd.Float32Dtype()),
+    ('y_true', pd.Float32Dtype()),
+    ('acc', pd.Float32Dtype()),
+    ('acc_std', pd.Float32Dtype()),
+    ('f1', pd.Float32Dtype()),
+])  
+
+FIRING_RATE_40MS_HZ_ONE_DTYPE = pd.UInt64Dtype()
+# FIRING_RATE_40MS_Z_ONE_DTYPE = pd.Float32Dtype() # variable length, all columns are float32
+FIRING_RATE_TRACKWISE_HZ_ONE_DTYPE = pd.Float32Dtype() # variable length, all columns are float32
 # SPIKES_CLUSTER_METADATA_ARGS - {
 #     'order_cluster_by': 'rastermap',
 #     'rastermap_locality': .6,

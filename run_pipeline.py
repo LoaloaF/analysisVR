@@ -16,6 +16,7 @@ def main():
     argParser.add_argument("--paradigm_ids", nargs='+', default=None, type=int)
     argParser.add_argument("--animal_ids", nargs='+', default=None, type=int)
     argParser.add_argument("--session_names", nargs='+', default=None)
+    argParser.add_argument("--excl_session_names", nargs='+', default=None)
     argParser.add_argument("--from_date", default=None)
     argParser.add_argument("--to_date", default=None)
     argParser.add_argument("--logging_level", default="DEBUG")

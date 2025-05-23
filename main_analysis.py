@@ -20,7 +20,9 @@ def main():
 
     loaded_analytics = {"UnityTrackwise": None, "UnityFramewise": None, 
                         'UnityTrialwiseMetrics': None, "SessionMetadata": None, 
-                        "Portenta":None,"Spikes": None, "FiringRate200msHz": None,}
+                        "Portenta":None, "Spikes": None, "FiringRateTrackwiseHz": None,
+                        "SpikeClusterMetadata": None, "raw_traces": None,
+                        "SVMCueOutcomeChoicePred": None}
     loaded_raw_traces = {}
     
     

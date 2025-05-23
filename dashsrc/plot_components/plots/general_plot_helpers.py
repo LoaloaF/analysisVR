@@ -9,6 +9,7 @@ def draw_track_illustration(fig, row, col, track_details, min_track, max_track,
                             draw_cues=[2], choice_str='Stay', double_rewards=False):
     track_details = [pd.Series(details, name=zone) for zone, details in track_details.items()]
     track_details = pd.concat(track_details, axis=1).T
+    track_details.loc['cue2', 'start_pos'] = -80 # wrong metadat, update manually
     
     # draw the bars indicating track zones/ wall textures
     # iterate the two different type of tracks
@@ -29,7 +30,7 @@ def draw_track_illustration(fig, row, col, track_details, min_track, max_track,
                     x=[cuezone_center], y=[1], mode='text',
                     textposition='middle center', textfont=dict(size=12, weight='bold', color='white'),
                     showlegend=False, zorder=30,
-                ), row=1, col=1)
+                ), row=row, col=1)
 
             # cue bars
             yloc, yloc_offset = track_type-1, .17
@@ -60,14 +61,14 @@ def draw_track_illustration(fig, row, col, track_details, min_track, max_track,
                 # reward location annotation `Stop -> R`
                 r_width = track_details.loc[f'reward{r}', 'end_pos'] - track_details.loc[f'reward{r}', 'start_pos']
                 r_center = track_details.loc[f'reward{r}', 'start_pos'] + r_width/2
-                print("---")
+                # print("---")
                 annotations = [
                     ([r_center-8], [track_type-1+.42], choice_str, {}),
                     ([r_center-8], [track_type-1+.65], '→', {'size': 20}),
                     ([r_center-8], [track_type-1+.54], '        R', {'size': 16, 'weight': 'bold', 
                                                             'color': OUTCOME_COL_MAP[1]}),
                 ]
-                print(annotations)
+                # print(annotations)
                 text_args = {'mode': 'text', 'textposition': 'middle center', 'showlegend': False}
                 for x, y, text, font_dict in annotations:
                     fig.add_trace(go.Scatter(
@@ -111,6 +112,26 @@ def make_kinematics_figure(height):
     print("prop2: ", track_height_prop*2,hm_height,hm_label_height_prop)
   
     return fig
+
+def make_track_tuning_figure(height, n_units):
+    if height == -1:
+        height = (TRACK_VISUALIZATION_HEIGHT + EVENT_VISUALIZATION_HEIGHT + 
+                  TRACK_TUNING_PLOT_DEFAULT_HEIGHT + TRACK_TUNING_PLOT_DEFAULT_HSPACE) *n_units
+    # absolute px for top t2o axes, track illustration
+    trackvis_height_prop = TRACK_VISUALIZATION_HEIGHT/height
+    event_height = EVENT_VISUALIZATION_HEIGHT/height
+    tuning_height = TRACK_TUNING_PLOT_DEFAULT_HEIGHT/height
+    spacer_height = TRACK_TUNING_PLOT_DEFAULT_HSPACE/height
+    all_height_props = [pr for _ in range(n_units) for pr in [trackvis_height_prop, event_height, tuning_height, spacer_height]]
+    
+    # Create subplots with a slim top axis
+    fig = make_subplots(
+        rows=4*n_units, cols=1,
+        row_heights= all_height_props,
+        shared_xaxes=True,
+        vertical_spacing=.0002,
+    )
+    return fig, height
 
 import plotly.express as px
 import plotly.colors as pc

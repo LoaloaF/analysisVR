@@ -14,6 +14,8 @@ from ..plot_components.plot_wrappers import wrapper_StayRatio
 from ..plot_components.plot_wrappers import wrapper_EvolvingStayTime
 from ..plot_components.plot_wrappers import wrapper_EvolvingStayDecision
 from ..plot_components.plot_wrappers import wrapper_RawSpikes
+from ..plot_components.plot_wrappers import wrapper_TrackFiringRate
+from ..plot_components.plot_wrappers import wrapper_SVMPredictions
 
 def create_sessionwise_vis_containers(app: Dash, loaded_analytics: dict, loaded_raw_traces: dict):
     viss_row_container = []
@@ -26,6 +28,9 @@ def create_sessionwise_vis_containers(app: Dash, loaded_analytics: dict, loaded_
                 analysis_div = wrapper_RawSpikes.render(app, loaded_analytics, 
                                                         loaded_raw_traces,
                                                         vis_name=vis_name)
+            case "SVMPredictions":
+                analysis_div = wrapper_SVMPredictions.render(app, loaded_analytics, 
+                                                             vis_name=vis_name)
             case _:
                 analysis_div = html.Div([html.H5(vis_name)], id=f'{vis_name}-container', 
                                         style={'display': 'none', 
@@ -56,6 +61,10 @@ def create_multisession_vis_containers(app: Dash, loaded_analytics: dict):
             case "EvolvingStayDecision":
                 analysis_div = wrapper_EvolvingStayDecision.render(app, loaded_analytics, 
                                                               vis_name=vis_name)
+            case "TrackFiringRate":
+                analysis_div = wrapper_TrackFiringRate.render(app, loaded_analytics,
+                                                              vis_name=vis_name)
+            
             case _:
                 analysis_div = html.Div([html.H5(vis_name)], id=f'{vis_name}-container', 
                                         style={'display': 'none', 'backgroundColor': 'gray'})
@@ -72,10 +81,10 @@ def create_layout(app: Dash, loaded_analytics: dict, loaded_raw_traces: dict) ->
             ], width=2),
             dbc.Col([
                 session_wise_vis_buttons.render(app),
-            ], width=5),
+            ], width=4),
             dbc.Col([
                 data_loading_controls.render(app, loaded_analytics, loaded_raw_traces)
-            ], width=5),
+            ], width=6),
         ], align="center"),
         html.Hr(style={"borderTop": "2px solid #bbb", "marginBottom": "20px"}),
         create_sessionwise_vis_containers(app, loaded_analytics, loaded_raw_traces),

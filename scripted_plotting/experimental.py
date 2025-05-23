@@ -4,11 +4,14 @@ import sys
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 sys.path.insert(1, os.path.join(sys.path[0], '..', '..', 'ephysVR'))
 
+import numpy as np
 # from dashsrc.plot_components import staytimes_plot_sessions as staytimes_plot_sessions
 # from dashsrc.plot_components.plots import plot_AnimalKinematics
 # from dashsrc.plot_components.plots import plot_StayRatioOverTime
 # from dashsrc.plot_components.plots import plot_2DStaytimes
 # from dashsrc.plot_components.plots import plot_LickTrack
+from dashsrc.plot_components.plots import plot_SVMPredictions
+from dashsrc.plot_components.plots import plot_SessionWaveforms
 from dashsrc.plot_components.plots import plot_RawSpikes
 from dashsrc.plot_components.plots import plot_rawEvents
 from dashsrc.plot_components.plots import plot_fr
@@ -24,7 +27,7 @@ from analytics_processing.sessions_from_nas_parsing import sessionlist_fullfname
 output_dir = "./outputs/experimental/"
 data = {}
 nas_dir = C.device_paths()[0]
-Logger().init_logger(None, None, logging_level="INFO")
+Logger().init_logger(None, None, logging_level="DEBUG")
 
 
 
@@ -105,20 +108,27 @@ Logger().init_logger(None, None, logging_level="INFO")
 # # ephys
 # paradigm_ids = [1100]
 # animal_ids = [6]
-# session_ids = [4]
-# width = 715
-# height = 1070
+# session_ids = [25]
+# # animal_ids = [10]
+# # session_ids = [7,8]
+# width = 1400
+# height = 1400
 # group_by = None
 # data["Spikes"] = analytics.get_analytics('spikes', mode='set',
 #                                          paradigm_ids=paradigm_ids,
 #                                          animal_ids=animal_ids,
 #                                          session_ids=session_ids)
+# data['SpikeClusterMetadata'] = analytics.get_analytics('SpikeClusterMetadata', mode='set',
+#                                                     paradigm_ids=paradigm_ids,
+#                                                     animal_ids=animal_ids,
+#                                                     session_ids=session_ids)
 
-# session_dir = sessionlist_fullfnames_from_args(paradigm_ids, animal_ids, session_ids)[0][0]
-# raw_data_mmap, mapping = session_modality_from_nas(session_dir, 'ephys_traces')
-# data['ephys_traces'] = raw_data_mmap
-# data['implant_mapping'] = mapping
-# fig = plot_RawSpikes.render_plot(data['ephys_traces'], data['implant_mapping'], data['Spikes'])
+# # session_dir = sessionlist_fullfnames_from_args(paradigm_ids, animal_ids, session_ids)[0][0]
+# # raw_data_mmap, mapping = session_modality_from_nas(session_dir, 'ephys_traces')
+# # data['ephys_traces'] = raw_data_mmap
+# # data['implant_mapping'] = mapping
+# fig = plot_SessionWaveforms.render_plot(data['Spikes'], data['SpikeClusterMetadata'],
+#                                         width, height,)
 # fig.show()
 
 
@@ -224,63 +234,61 @@ Logger().init_logger(None, None, logging_level="INFO")
 # fig.show()
 
 
+# # ephys
+# paradigm_ids = [1100]
+# animal_ids = [6]
+# width = 715
+# height = 1070
+# # session_ids = [2]
+
+# for s_id in range(0,33):
+#     session_ids = [s_id]
+
+#     # data["BehaviorEvents"] = analytics.get_analytics('BehaviorEvents', mode='set',
+#     #                                         paradigm_ids=paradigm_ids,
+#     #                                         animal_ids=animal_ids,
+#     #                                         session_ids=session_ids)
+#     data["FiringRateTrackbinsZ"] = analytics.get_analytics('FiringRateTrackbinsZ', mode='set',
+#                                             paradigm_ids=paradigm_ids,
+#                                             animal_ids=animal_ids,
+#                                             session_ids=session_ids)
+#     if data["FiringRateTrackbinsZ"] is None:
+#         print(f"FiringRateTrackbinsZ not found for session {session_ids[0]}")
+#         continue
+#     data["UnityTrackwise"] = analytics.get_analytics('UnityTrackwise', mode='set',
+#                                             paradigm_ids=paradigm_ids,
+#                                             animal_ids=animal_ids,
+#                                             session_ids=session_ids)
+#     fig = plot_fr.render_plot(data['FiringRateTrackbinsZ'], data['UnityTrackwise'], 
+#                               s_id=session_ids[0],)
+#     fig.show()
+
+
+
+
+
+
 # ephys
 paradigm_ids = [1100]
 animal_ids = [6]
 width = 715
 height = 1070
-# session_ids = [2]
+session_ids = None
+session_names = ["2024-12-09_17-45_rYL006_P1100_LinearTrackStop_26min"]
 
-for s_id in range(0,33):
-    session_ids = [s_id]
+svm_output = analytics.get_analytics('SVMCueOutcomeChoicePred', mode='set',
+                             paradigm_ids=paradigm_ids,
+                             animal_ids=animal_ids,
+                             session_names=session_names,
+                             session_ids=session_ids)
+metad = analytics.get_analytics('SessionMetadata', mode='set',
+                             paradigm_ids=paradigm_ids,
+                             animal_ids=animal_ids,
+                             session_names=session_names,
+                             session_ids=session_ids)
 
-    # data["BehaviorEvents"] = analytics.get_analytics('BehaviorEvents', mode='set',
-    #                                         paradigm_ids=paradigm_ids,
-    #                                         animal_ids=animal_ids,
-    #                                         session_ids=session_ids)
-    data["FiringRateTrackbinsZ"] = analytics.get_analytics('FiringRateTrackbinsZ', mode='set',
-                                            paradigm_ids=paradigm_ids,
-                                            animal_ids=animal_ids,
-                                            session_ids=session_ids)
-    if data["FiringRateTrackbinsZ"] is None:
-        print(f"FiringRateTrackbinsZ not found for session {session_ids[0]}")
-        continue
-    # data["Spikes"] = analytics.get_analytics('Spikes', mode='set',
-    #                                         paradigm_ids=paradigm_ids,
-    #                                         animal_ids=animal_ids,
-    #                                         session_ids=session_ids)
-    data["UnityTrackwise"] = analytics.get_analytics('UnityTrackwise', mode='set',
-                                            paradigm_ids=paradigm_ids,
-                                            animal_ids=animal_ids,
-                                            session_ids=session_ids)
-    # print()
-    # # save as python pickle object locally
-    # with open('data.pkl', 'wb') as f:
-    #     pickle.dump(data, f)
-        
-    # # load it
-    # with open('data.pkl', 'rb') as f:
-    #     data = pickle.load(f) 
 
-    # fr_hz = get_FiringRate200msHz(data['Spikes'])
-    # # print(fr_hz)
-    # fr_Z = get_FiringRate200msZ(fr_hz)
-    # # print(fr_Z)
-
-    # data['FiringRate200msHz'] = fr_hz
-    # data['FiringRate200msZ'] = fr_Z
-    # print(data['FiringRate200msZ'])
-
-        
-    # fig = plot_rawEvents.render_plot(data['Spikes'], data['BehaviorEvents'])
-        
-    fig = plot_fr.render_plot(data['FiringRateTrackbinsZ'], data['UnityTrackwise'], 
-                              s_id=session_ids[0],)
-    fig.show()
-    # exit()
-    # except Exception as e:
-    #     print(f"Error in session {session_ids[0]}: {e}")
-    #     continue
-
+fig = plot_SVMPredictions.render_plot(svm_output, metad)
+fig.show()
 
 

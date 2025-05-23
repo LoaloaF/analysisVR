@@ -22,15 +22,15 @@ from .data_selection_components import (
     register_paradigm_dropdown_callback,
 )
 from .data_selection import group_filter_data
-from ..plots import plot_AnimalKinematics
-from ..plots import plot_LickTrack
+from ..plots import plot_TrackFiringRate
 
 import dashsrc.components.dashvis_constants as C
 
 def render(app: Dash, global_data: dict, vis_name: str) -> html.Div:
-    analytic = 'UnityTrackwise'
+    prim_analytic = 'UnityTrackwise'
+    sec_analytic = 'FiringRateTrackwiseHz'
     # components with data depedency need these arguments
-    comp_args = vis_name, global_data, analytic
+    comp_args = vis_name, global_data, prim_analytic
     
     # Register the callbacks
     register_paradigm_dropdown_callback(app, *comp_args)
@@ -68,13 +68,13 @@ def render(app: Dash, global_data: dict, vis_name: str) -> html.Div:
         Input(OUTCOME_FILTER_ID, 'value'),
         Input(CUE_FILTER_ID, 'value'),
         Input(TRIAL_FILTER_ID, 'value'),
-        Input(WIDTH_INP_ID, 'value'),
-        Input(HEIGHT_INP_ID, 'value'),
+        # Input(WIDTH_INP_ID, 'value'),
+        # Input(HEIGHT_INP_ID, 'value'),
         )
     def update_plot(selected_paradigm, selected_animal, session_range,
                     metric, metric_max, smooth_data,
-                    outcome_filter, cue_filter, trial_filter,
-                    width, height):
+                    outcome_filter, cue_filter, trial_filter,):
+                    #width, height
     
         if not all((selected_paradigm, selected_animal, metric_max)):
             return {}
@@ -82,26 +82,28 @@ def render(app: Dash, global_data: dict, vis_name: str) -> html.Div:
         paradigm_slice = slice(selected_paradigm, selected_paradigm)
         animal_slice = slice(selected_animal, selected_animal)
         session_slice = [sid for sid in np.arange(session_range[0], session_range[1] + 1)
-                         if sid in global_data[analytic].index.unique('session_id')]
+                         if sid in global_data[sec_analytic].index.unique('session_id')]
         
         # paradigm, animal and session filtering
-        data = global_data[analytic].loc[pd.IndexSlice[paradigm_slice, animal_slice, 
+        prim_data = global_data[prim_analytic].loc[pd.IndexSlice[paradigm_slice, animal_slice, 
                                                        session_slice, :]]
-        # filter the data based on the group by values
-        print("\nbefore:\n", data)
-        data, _ = group_filter_data(data, outcome_filter, cue_filter, 
-                                    trial_filter)
-        print("\nafter:\n", data)
+        sec_data = global_data[sec_analytic].loc[pd.IndexSlice[paradigm_slice, animal_slice,
+                                                       session_slice, :]]
+        n_sessions = len(session_slice)
         
+        # filter the data based on the group by values
+        prim_data, _ = group_filter_data(prim_data, outcome_filter, cue_filter, 
+                                    trial_filter)
+        sec_data, _ = group_filter_data(sec_data, outcome_filter, cue_filter, 
+                                    trial_filter)
         # list to single value
         if len(smooth_data) == 1:
             smooth_data = True
             
-        # fig = plot_LickTrack.render_plot(data, global_data['SessionMetadata'], 
-        #                                         width, height)
-        fig = plot_AnimalKinematics.render_plot(data, global_data['SessionMetadata'], 
-                                                metric, metric_max, smooth_data, 
-                                                width, height)
+        fig = plot_TrackFiringRate.render_plot(prim_data, sec_data, global_data['SessionMetadata'], 
+                                               global_data['SpikeClusterMetadata'],
+                                                metric, n_sessions, metric_max, smooth_data, )
+                                                #width, height)
         return fig
     
     return html.Div([
@@ -110,7 +112,7 @@ def render(app: Dash, global_data: dict, vis_name: str) -> html.Div:
             # Left side for plots
             dbc.Col([
                 graph,
-            ], width=8),
+            ], width=10),
             # Right side for UI controls
             dbc.Col([
                 # three rows, header, dropdown/tickpoxes, range slider
@@ -122,23 +124,20 @@ def render(app: Dash, global_data: dict, vis_name: str) -> html.Div:
                     dbc.Col([
                         # Dropdown for paradigm selection, animal selection
                         *paradigm_dropd, *animal_dropd, *metrics_radioi,
-                    ], width=4),
+                    ], width=6),
                     
                     # Other options in right column
                     dbc.Col([
                         *outcome_filter, *cue_filter, *trial_filter,
                         html.Hr(),
                         *maxmetric_inp, *smooth_checkl,
-                    ], width=4),
+                    ], width=6),
 
-                    # Other options in right column
-                    dbc.Col([
-                        *width_input, *height_input,
-                    ], width=4),
+                    
                 ]),
                 # Range slider for session selection
                 *session_slider
-            ], width=4)
+            ], width=2)
         ]),
         html.Hr()
     ], id=f"{vis_name}-container")  # Initial state is hidden

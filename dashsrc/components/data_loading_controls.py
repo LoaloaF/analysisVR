@@ -1,6 +1,7 @@
 import os
 from dash import html, dcc, Input, Output, State, Dash, no_update
 import dash_bootstrap_components as dbc
+from dash import ctx  # Dash >= 2.9
 
 import numpy as np
 
@@ -22,8 +23,43 @@ def render(app: Dash, loaded_analytics: dict, loaded_raw_traces: dict) -> html.D
     D2M_LOAD_DATA_BUTTON_ID = 'd2m-load-data-button'
     LOADING_OUTPUT_ID = 'loading-output'
 
-    # outputs specific for plot-wise data selection
+    all_vis_names = C.SESSION_WISE_VISS + C.ANIMAL_WISE_VISS
 
+
+    @app.callback(
+        Output(D2M_ANALYTICS_DROPDOWN_ID, 'value'),
+        [
+            Input('d2m-auto-select-analytics', 'value'),
+            *[Input(f'{vis_name}-button', 'n_clicks') for vis_name in all_vis_names]
+        ],
+        State(D2M_ANALYTICS_DROPDOWN_ID, 'value')
+    )
+    def auto_select_analytics(auto_select, *args_and_cur_value):
+        *args, cur_value = args_and_cur_value
+
+        # Only update if "auto_select" is checked
+        if auto_select and 'auto_select' in auto_select:
+            selected_viss = []
+            for i, n_clicks in enumerate(args):
+                if n_clicks is not None and n_clicks % 2 != 0:
+                    selected_viss.append(all_vis_names[i])
+
+            selected_analytics = list(set([
+                analytic
+                for vis_name in selected_viss
+                for analytic in C.get_vis_name_req_data(vis_name)
+            ]))
+
+            print("Auto-select triggered:", selected_viss, selected_analytics)
+            return selected_analytics
+
+        # No update (preserve user's manual selection)
+        print("Auto-select not triggered, preserving:", cur_value)
+        return no_update
+
+
+
+    # outputs specific for plot-wise data selection
     @app.callback(
         Output(D2M_LOAD_DATA_BUTTON_ID, 'style'),
         Output(LOADING_OUTPUT_ID, 'children'),
@@ -51,9 +87,23 @@ def render(app: Dash, loaded_analytics: dict, loaded_raw_traces: dict) -> html.D
 
     default_animals = [6]
     default_paradigms = [1100]
-    default_analytics = ['SessionMetadata', 'UnityTrackwise']
+    default_analytics = ['SessionMetadata', 'UnityTrackwise', "FiringRateTrackwiseHz", 
+                         "SpikeClusterMetadata"]
 
     return dbc.Row([
+        dbc.Col([
+            dcc.Checklist(
+                id='d2m-auto-select-analytics',
+                options=[
+                    {'label': 'match-vis', 'value': 'auto_select'},
+                ],
+                value=['auto_select'],
+                inline=True,
+                style={"marginTop": 15},
+                inputStyle={"marginRight": 10}
+            ),
+        ], width=2),
+        
         dbc.Col([
             dcc.Dropdown(
                 id=D2M_ANALYTICS_DROPDOWN_ID,
@@ -63,7 +113,8 @@ def render(app: Dash, loaded_analytics: dict, loaded_raw_traces: dict) -> html.D
                 placeholder="Select one or more analytics",
                 style={"marginTop": 15}
             ),
-        ], width=4),
+
+        ], width=3),
 
         dbc.Col([
             dcc.Dropdown(
@@ -74,7 +125,7 @@ def render(app: Dash, loaded_analytics: dict, loaded_raw_traces: dict) -> html.D
                 placeholder="Select paradigms",
                 style={"marginTop": 15}
             ),
-        ], width=3),
+        ], width=2),
 
         dbc.Col([
             dcc.Dropdown(
@@ -112,9 +163,10 @@ def _load_all_data(selected_analytics, loaded_analytics, loaded_raw_traces, sele
         if len(selected_animals) == 0:
             selected_animals = None
         
-        dat = analytics.get_analytics(analytic, mode='set', session_ids=None,
+        dat = analytics.get_analytics(analytic, mode='set', #session_ids=None,
                                       paradigm_ids=selected_paradigms,
-                                      animal_ids=selected_animals)
+                                      animal_ids=selected_animals,
+                                      session_ids=np.arange(1,3))
         loaded_analytics[analytic] = dat
         
         # check if also raw_traces was in the passed selected_analytics list

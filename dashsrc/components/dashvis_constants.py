@@ -9,9 +9,10 @@ from plotly.colors import convert_colors_to_same_type
 ANIMALS = 6,9, 10,11,12,13,15
 PARADIGMS = 800, 1100, 500
 
-SESSION_WISE_VISS = ('SessionKinematics', "RawSpikes")
+SESSION_WISE_VISS = ('SessionKinematics', "RawSpikes", 'SVMPredictions')
 ANIMAL_WISE_VISS = ('Kinematics', 'StayPerformance', 'StayRatio', 'SessionsOverview', 
-                    'EvolvingStayTime', 'EvolvingStayDecision')
+                    'EvolvingStayTime', 'EvolvingStayDecision',
+                    'TrackFiringRate',)
 DATA_LOADED_SessionKinematics_ID = 'SessionKinematics-data-loaded'
 DATA_LOADED_Kinematics_ID = 'Kinematics-data-loaded'
 DATA_LOADED_StayRatio_ID = 'Staytimes-data-loaded'
@@ -20,6 +21,8 @@ DATA_LOADED_SessionsOverview_ID = 'SessionsOverview-data-loaded'
 DATA_LOADED_EvolvingStayTime_ID = 'EvolvingStayTime-data-loaded'
 DATA_LOADED_EvolvingStayDecision_ID = 'EvolvingStayDecision-data-loaded'
 DATA_LOADED_RawSpikes_ID = 'RawSpikes-data-loaded'
+DATA_LOADED_TrackFiringRate_ID = 'TrackFiringRate-data-loaded'
+DATA_LOADED_SVMPredictions_ID = 'SVMPredictions-data-loaded'
 
 def get_vis_name_data_loaded_id(vis_name):
     match vis_name:
@@ -39,6 +42,10 @@ def get_vis_name_data_loaded_id(vis_name):
             data_loaded_id = DATA_LOADED_EvolvingStayDecision_ID
         case 'RawSpikes':
             data_loaded_id = DATA_LOADED_RawSpikes_ID
+        case 'TrackFiringRate':
+            data_loaded_id = DATA_LOADED_TrackFiringRate_ID
+        case 'SVMPredictions':
+            data_loaded_id = DATA_LOADED_SVMPredictions_ID
         case _:
             raise ValueError(f"Unknown vis_name: {vis_name} for matching "
                             "with its data_loaded_id")
@@ -65,6 +72,11 @@ def get_vis_name_req_data(vis_name):
             req_data = 'UnityTrialwiseMetrics',
         case 'RawSpikes':
             req_data = 'Spikes', 'raw_traces'
+        case 'TrackFiringRate':
+            req_data = ('FiringRateTrackwiseHz', "SpikeClusterMetadata", 
+                       'UnityTrackwise', 'SessionMetadata')
+        case 'SVMPredictions':
+            req_data = 'SVMCueOutcomeChoicePred', 'SessionMetadata'
         case _:
             raise ValueError(f"Unknown vis_name: {vis_name} for matching "
                             "with its data_loaded_id")
@@ -112,8 +124,12 @@ MULTI_MARKERS_ALPHA = .6
 
 KINEMATICS_HEATMAP_DEFAULT_HEIGHT = 450
 KINEMATICS_HEATMAP_DEFAULT_WIDTH = 600
-TRACK_VISUALIZATION_HEIGHT = 30
 KINEMATICS_HEATMAP_XLABELSIZE_HEIGHT = 40
+TRACK_VISUALIZATION_HEIGHT = 60
+
+TRACK_TUNING_PLOT_DEFAULT_HEIGHT = 400
+EVENT_VISUALIZATION_HEIGHT = 50
+TRACK_TUNING_PLOT_DEFAULT_HSPACE = 50
 
 MIN_DATE_YEAR = 2024
 MIN_DATE_MONTH = 7 

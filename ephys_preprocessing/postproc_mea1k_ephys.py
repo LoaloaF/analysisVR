@@ -11,13 +11,15 @@ import analytics_processing.sessions_from_nas_parsing as sp
 import analytics_processing.modality_loading as ml
 from analytics_processing.analytics_constants import device_paths
 
-from scipy.signal import butter
-from scipy.signal import filtfilt
+# from scipy.signal import butter
+# from scipy.signal import filtfilt
 
-from sklearn.model_selection import GridSearchCV, train_test_split
+# slow imports requing C compilation
+from sklearn.model_selection import GridSearchCV
 from sklearn.svm import SVC
 from sklearn.pipeline import Pipeline
 from sklearn.metrics import classification_report
+
 
 from sklearn.preprocessing import StandardScaler
 from sklearn.decomposition import PCA
@@ -407,12 +409,12 @@ def get_FiringRateTrackwiseHz(fr, track_data):
     def time_bin_avg(posbin_data, ):
         # cue = posbin_data.cue.iloc[0]
         # trial_outcome = posbin_data.trial_outcome.iloc[0]
-        pos_bin = posbin_data.from_z_position_bin.iloc[0]
+        pos_bin = posbin_data.from_position_bin.iloc[0]
         print(f"{pos_bin:04}", end='\r')
         trial_aggr = []
-        print("--------------------")
-        print(f"{pos_bin=}, trial_id:")
-        print(posbin_data.trial_id)
+        # print("--------------------")
+        # print(f"{pos_bin=}, trial_id:")
+        # print(posbin_data.trial_id)
         # print(posbin_data)
         
         
@@ -444,21 +446,23 @@ def get_FiringRateTrackwiseHz(fr, track_data):
                               labels=posbin_data.trial_id[:-1],
         )
         trials_exist_mask = (assigned_bin.value_counts() != 0).values
-        print(f"Trials exist mask sum: {trials_exist_mask.sum()}")
+        # print(f"Trials exist mask sum: {trials_exist_mask.sum()}")
         
         # slice out the 40ms fr bins that overlap with the trial-wise position bin
         trial_fr = fr[assigned_bin.notna()].copy().astype(np.float32)
         # add a column indicating the 
         trial_fr['posbin_t_edges'] = assigned_bin[assigned_bin.notna()]
-        print(trial_fr.shape)
+        # print(trial_fr.shape)
         posbin_trial_wise_fr = trial_fr.groupby('posbin_t_edges', observed=True).mean()
-        print(posbin_trial_wise_fr.shape)
+        # print(posbin_trial_wise_fr.shape)
         posbin_trial_wise_fr /= interval.length.values[trials_exist_mask, None] /1e6 # us to s
-        print(posbin_trial_wise_fr.shape)
+        # print(posbin_trial_wise_fr.shape)
 
         # add meta data, cue outcome, position bin, trial id        
         posbin_trial_wise_fr['cue'] = posbin_data[trials_exist_mask].cue.values
         posbin_trial_wise_fr['trial_outcome'] = posbin_data[trials_exist_mask].trial_outcome.values
+        posbin_trial_wise_fr['choice_R1'] = posbin_data[trials_exist_mask].choice_R1.values
+        posbin_trial_wise_fr['choice_R2'] = posbin_data[trials_exist_mask].choice_R2.values
         posbin_trial_wise_fr['bin_length'] = interval.length.values[trials_exist_mask]/1e6
         posbin_trial_wise_fr.index = posbin_data.trial_id.values[trials_exist_mask]
         # print(posbin_trial_wise_fr)
@@ -471,132 +475,26 @@ def get_FiringRateTrackwiseHz(fr, track_data):
                                             fr.pop("to_ephys_timestamp"))
 
     print("Track bin: ")
-    fr_hz_averages = track_data.groupby(['from_z_position_bin']).apply(time_bin_avg)
-    fr_hz_averages.index = fr_hz_averages.index.rename(['from_z_position_bin', 'trial_id'],)
+    fr_hz_averages = track_data.groupby(['from_position_bin']).apply(time_bin_avg)
+    fr_hz_averages.index = fr_hz_averages.index.rename(['from_position_bin', 'trial_id'],)
     fr_hz_averages.reset_index(inplace=True, drop=False)
-    print(fr_hz_averages)
+    # print(fr_hz_averages)
     # exit()
     return fr_hz_averages
-    
-    # import matplotlib.pyplot as plt
-    # im = fr_hz_averages.iloc[:, :-3].groupby(level="from_z_position_bin").mean().T
-    # print(im.shape)
-    # plt.imshow(im, aspect='auto', interpolation='nearest')
-    # plt.colorbar()
-    # plt.show()
-    
-    # exit()
-    
-    
-    
-    # spikes.set_index('ephys_timestamp', inplace=True)
-    # print("")
-    # print("")
-    # print("")
-    # print("Processing trial ID: ")
-    # aggr_data = []
-    # for trial_id in track_data.trial_id.unique():
-    #     print(trial_id, end='\r')
-    #     trial_data = track_data[track_data.trial_id == trial_id]
-    #     # to_posbin_t = trial_data.posbin_from_ephys_timestamp
-    #     # interval = pd.IntervalIndex.from_breaks(to_posbin_t.values)
-    #     to_posbin_t = trial_data.posbin_from_ephys_timestamp.values
-    #     posbin_deltat = np.diff(to_posbin_t) /1e6 # us to s
-    #     print(posbin_deltat[:5])
-    #     if (posbin_deltat==0).sum() > 0:
-    #         raise ValueError(f"Track binning timestamps are not unique for {trial_id}")
-        
-    #     assigned_bin = pd.cut(spikes.index.values,
-    #                           bins=to_posbin_t,
-    #                           labels=trial_data.from_z_position_bin.values[:-1],
-    #     )
-    #     trial_spikes = spikes[assigned_bin.notna()].copy()
-    #     trial_spikes['from_z_position_bin'] = assigned_bin[assigned_bin.notna()]
-    #     trial_spike_cnt = trial_spikes.groupby(['from_z_position_bin', 'cluster_id'], observed=False)\
-    #                                           ['sample_id'].count().unstack('cluster_id')
-    #     print(trial_spike_cnt.head(5))
-    #     trial_spike_cnt /= posbin_deltat[:, None]
-    #     trial_spike_cnt.reset_index(inplace=True, drop=False)
-    #     trial_spike_cnt['trial_id'] = trial_id
-    #     aggr_data.append(trial_spike_cnt)
-    #     # print(f"Assigned {assigned_bin.notna().sum()} spikes to {trial_id} track bin")
-    #     # print(spikes[assigned_bin.notna(),])
-    #     print(aggr_data[-1].head(5))
-    #     exit()
-    # aggr_data = pd.concat(aggr_data, axis=0).fillna(0)
-    # print(aggr_data)
-    # aggr_data = aggr_data.reindex(columns=sorted(aggr_data.columns))
-    # print(aggr_data)
-    # return None
-
-    
-# def print_hdf5_keys(file_path, max_elements=1000):
-#     with h5py.File(file_path, 'r') as f:
-#         print(f.keys())
-#         # Define groups of keys for better organization
-#         groups = {
-#             "Metadata": ['#refs#', '#subsystem#', 'annotatedOnly', 'curatedOn', 'detectedOn', 'sortTime', 'sortedOn'],
-#             "Cluster Information": ['clusterCenters', 'clusterCentroids', 'clusterNotes', 'clusterSites', 'unitCount', 
-#                                      'unitISIRatio', 'unitIsoDist', 'unitLRatio', 'unitPeakSites', 'unitPeaks', 
-#                                      'unitPeaksRaw', 'unitSNR', 'unitVpp', 'unitVppRaw', 'waveformSim'],
-#             "Spike Information": ['spikeAmps', 'spikeClusters', 'spikeDelta', 'spikeNeigh', 'spikePositions', 
-#                                    'spikeRho', 'spikeSites', 'spikeSites2', 'spikeSites3', 'spikeTimes', 
-#                                    'spikesByCluster', 'spikesBySite', 'spikesBySite2', 'spikesBySite3'],
-#             "Waveform Information": ['meanWfGlobal', 'meanWfGlobalRaw', 'meanWfLocal', 'meanWfLocalRaw', 
-#                                       'meanWfRawHigh', 'meanWfRawLow', 'featuresShape', 'filtShape', 'rawShape'],
-#             "Thresholds and Metrics": ['meanSiteThresh', 'nSitesOverThresh', 'siteRMS', 'siteThresh', 
-#                                         'rhoCutGlobal', 'rhoCutSite', 'rhoCuts', 'ordRho'],
-#             "History": ['history', 'editPos', 'detectTime']
-#         }
-
-#         # Print keys for each group
-#         for group_name, keys in groups.items():
-#             print(f"\n{'=' * 40}")
-#             print(f"Group: {group_name}")
-#             print(f"{'=' * 40}")
-#             for key in keys:
-#                 try:
-#                     if key in f and key not in ['spikesBySite', 'spikesBySite2', 'spikesBySite3']:
-#                         data = f[key]
-#                         # Check if the dataset is small enough to print
-#                         if data.size <= max_elements:
-#                             print(f"{key}: {data.shape} {data.dtype} -> {data[()]}")
-#                         else:
-#                             print(f"{key}: {data.shape} {data.dtype} (Too large to print)")
-#                     else:
-#                         print(f"{key}: Key not found")
-#                 except Exception as e:
-#                     print(f"{key}: Failed to unpack ({e})")
-
-#         # Print any remaining keys not in predefined groups
-#         remaining_keys = set(f.keys()) - {key for group in groups.values() for key in group}
-#         if remaining_keys:
-#             print(f"\n{'=' * 40}")
-#             print("Group: Other Keys")
-#             print(f"{'=' * 40}")
-#             for key in remaining_keys:
-#                 try:
-#                     data = f[key]
-#                     # Check if the dataset is small enough to print
-#                     if data.size <= max_elements:
-#                         print(f"{key}: {data.shape} {data.dtype} -> {data[()]}")
-#                     else:
-#                         print(f"{key}: {data.shape} {data.dtype} (Too large to print)")
-#                 except Exception as e:
-#                     print(f"{key}: Failed to unpack ({e})")
-
 
 def get_PCsZonewise(fr, track_data):
     L = Logger()
     PCs_var_explained = .8
-    fr = fr.set_index(['trial_id', 'from_z_position_bin', 'cue', 'trial_outcome'], append=True, )
+    fr = fr.set_index(['trial_id', 'from_position_bin', 'cue', 'trial_outcome', 
+                       'choice_R1', 'choice_R2'], append=True, )
     fr.index = fr.index.droplevel(3) # entry_id
-    # outcome = fr.loc[:, 'trial_outcome']
+
     fr.drop(columns=['bin_length', ], inplace=True)
     fr.columns = fr.columns.astype(int)
     fr = fr.reindex(columns=sorted(fr.columns))
     
-    track_data = track_data.set_index(['trial_id', 'from_z_position_bin', 'cue', 'trial_outcome'], append=True, )
+    track_data = track_data.set_index(['trial_id', 'from_position_bin', 'cue', 'trial_outcome', 
+                                       'choice_R1', 'choice_R2'], append=True, )
     track_data.index = track_data.index.droplevel(3) # entry_id
     
     zones = {
@@ -619,7 +517,8 @@ def get_PCsZonewise(fr, track_data):
             predictor = fr.iloc[:, 20:]
             predictor_name = 'mPFC'
         elif i == 2:
-            predictor = track_data.loc[:, ['posbin_z_velocity', 'posbin_z_acceleration', 'L_count']]
+            predictor = track_data.loc[:, ['posbin_velocity', 'posbin_acceleration', 'lick_count',
+                                           'posbin_raw', 'posbin_yaw', 'posbin_pitch']]
             predictor_name = 'behavior'
             
         debug_msg = (f"Embedding {predictor_name} with PCA:\n")
@@ -630,7 +529,7 @@ def get_PCsZonewise(fr, track_data):
             scaler = StandardScaler()
             zone_data.loc[:,:] = scaler.fit_transform(zone_data)
              
-            zone_data_Z_trialwise = zone_data.unstack(level='from_z_position_bin')
+            zone_data_Z_trialwise = zone_data.unstack(level='from_position_bin')
             zone_data_Z_trialwise.index = zone_data_Z_trialwise.index.droplevel([0,1,2])
             zone_data_Z_trialwise = zone_data_Z_trialwise.fillna(0).astype(float)
             
@@ -649,7 +548,7 @@ def get_PCsZonewise(fr, track_data):
 
     aggr_embeds = pd.concat(aggr_embeds, axis=1).stack(level=0, future_stack=True)
     aggr_embeds.reset_index(inplace=True, drop=False)
-    aggr_embeds.rename(columns={"level_3": "zone"}, inplace=True)
+    aggr_embeds.rename(columns={"level_5": "track_zone"}, inplace=True)
     
     # check for in proper sessions that lack spikes for most of the session
     valid_ephys_mask = aggr_embeds['mPFC'].notna()
@@ -666,96 +565,9 @@ def get_PCsZonewise(fr, track_data):
 
             
 def get_SVMCueOutcomeChoicePred(PCsZonewise):
-    # slow imports requing C compilation
     L = Logger()
 
-    # def fit_SVMs_for_zone(X, Ys, name):
-    #     predictions = []
-    #     for Y_name, y in Ys.items():
-    #         # print(Y_name, X.shape, y.shape)
-    #         X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, 
-    #                                                             random_state=42)
-    #         lbl_counts = pd.Series(y_train).value_counts()
-    #         if lbl_counts.min() < 5 or len(lbl_counts) < 2:
-    #             L.logger.warning(f"Not enough samples for {Y_name} in {name}:"
-    #                              f"({lbl_counts}")
-    #             continue
-    #         elif len(lbl_counts) != 2:
-    #             L.logger.warning(f"More than 2 classes for {Y_name} in {name}:"
-    #                              f"({lbl_counts}")
-    #             # continue
-    #         for kernel in ('linear', 'rbf'):
-    #             # define SVC pipeline (scaling + classifier)
-    #             pipeline = Pipeline([
-    #                 ('scaler', StandardScaler()),
-    #                 ('svc', SVC(kernel=kernel, gamma='scale'))
-    #             ])
-
-    #             # 4define hyperparameter grid
-    #             Cs = [0.05, 0.1, .5, 0.75, 1, 2.5, 5, 10, 20]
-    #             param_grid = {
-    #                 'svc__C': Cs,
-    #             }
-
-    #             # set up GridSearchCV with cross-validation
-    #             grid_search = GridSearchCV(
-    #                 estimator=pipeline,
-    #                 param_grid=param_grid,
-    #                 cv=6,                    # 10-fold cross-validation
-    #                 scoring='accuracy',
-    #                 n_jobs=-1,               # Use all CPUs
-    #                 verbose=False,
-    #             )
-    #             # fit the model
-    #             grid_search.fit(X_train, y_train)
-    #             y_pred = grid_search.predict(X_test)
-
-    #             # print best parameters and evaluate
-    #             best_C_idx = grid_search.best_params_['svc__C']
-    #             acc = grid_search.cv_results_['mean_test_score'][Cs.index(best_C_idx)]
-    #             std = grid_search.cv_results_['std_test_score'][Cs.index(best_C_idx)]
-    #             res = classification_report(y_test, y_pred, output_dict=True,
-    #                                         zero_division=0)
-    #             f1 = res['weighted avg']['f1-score']
-    #             pred = grid_search.predict(X)
-                
-                
-    #             # print(f"---\n{Y_name} {name} {kernel}")
-    #             if Y_name == 'cue' and kernel == 'linear' and name[1] == 'afterCueZone' and name[0] == 'HP':
-    #                 print(f"---\n{Y_name} {name} {kernel}")
-    #                 print(f"Best C: {best_C_idx}, acc: {acc:.3f} +/- {std:.3f}, f1: {f1:.3f}")
-    #                 # print(classification_report(y, pred))
-    #                 print(pred)
-    #                 print(y)
-    #                 # exit()
-                
-                
-    #             col_index = pd.MultiIndex.from_tuples([(*list(name), kernel, Y_name, n) for n in 
-    #                                                    ('y', 'y_true', 'acc', 'acc_std', 'f1')],
-    #                                                     names=['predictor', 'zone', 'model', 'predicting', 'output'])
-    #             pred_output = np.concatenate([pred[:,None], y[:,None], 
-    #                                            np.tile(np.array([acc, std, f1]), (len(pred),1))], 
-    #                                           axis=1)
-    #             predictions.append(pd.DataFrame(pred_output, columns=col_index, 
-    #                                             index=PCsZonewise.index))
-                
-    #     #         if kernel == 'linear':
-    #     #             print("---")
-    #     #             print(Y_name)
-    #     #             print(classification_report(y_test, y_pred))
-    #     # exit()
-    #     # print(predictions)
-    #     if predictions == []:
-    #         L.logger.warning(f"None enough trials to fit any SVM for {name}")
-    #         return None
-    #     return pd.concat(predictions, axis=1)
-    
-    
-        
-    # # Simulate index used in prediction output
-    # PCsZonewise_index = pd.RangeIndex(start=0, stop=110, step=1)
-
-    def fit_SVMs_with_bootstrap(X, Ys, name, n_iterations=100):
+    def fit_SVMs_with_bootstrap(X, Ys, name, n_iterations=60):
         predictions = []
         rng = np.random.default_rng(42)
 
@@ -816,18 +628,18 @@ def get_SVMCueOutcomeChoicePred(PCsZonewise):
                 final_model.fit(X, y)
                 pred = final_model.predict(X)
                 
-                print(f"---\n{Y_name} {name} {kernel}")
-                if Y_name == 'cue' and kernel == 'linear' and name[1] == 'afterCueZone' and name[0] == 'HP':
-                    print(f"---\n{Y_name} {name} {kernel}")
-                    print(classification_report(y_oob, y_pred))
-                    print(pred)
-                    print(y)
-                    # exit()
+                # print(f"---\n{Y_name} {name} {kernel}")
+                # if Y_name == 'cue' and kernel == 'linear' and name[1] == 'afterCueZone' and name[0] == 'HP':
+                #     print(f"---\n{Y_name} {name} {kernel}")
+                #     print(classification_report(y_oob, y_pred))
+                #     print(pred)
+                #     print(y)
+                #     # exit()
                 
 
                 col_index = pd.MultiIndex.from_tuples([(*list(name), kernel, Y_name, n) for n in 
                                                     ('y', 'y_true', 'acc', 'acc_std', 'f1')],
-                                                    names=['predictor', 'zone', 'model', 'predicting', 'output'])
+                                                    names=['predictor', 'track_zone', 'model', 'predicting', 'output'])
                 pred_output = np.concatenate([
                     pred[:, None], y[:, None],
                     np.tile(np.array([np.mean(accs), np.std(accs), np.mean(f1s)]), (len(pred), 1))
@@ -850,12 +662,16 @@ def get_SVMCueOutcomeChoicePred(PCsZonewise):
     np.random.seed(42)
 
     def parse_string_to_array(x):
+        # TODO why?
+        if isinstance(x, np.ndarray):
+            return x
         if pd.isna(x):
             return x
         return np.fromstring(x.strip("[]"), sep=", ", dtype=np.float32)
-        
-    PCsZonewise = PCsZonewise.set_index(['zone', 'trial_id', 'trial_outcome', 'cue'], 
-                                        append=False).unstack(level='zone')
+    
+    PCsZonewise = PCsZonewise.set_index(['track_zone', 'trial_id', 'trial_outcome', 
+                                         'cue', 'choice_R1', 'choice_R2'], 
+                                        append=False).unstack(level='track_zone')
     all_zones = []
     for column in PCsZonewise.columns:
         X_list = PCsZonewise[column].apply(parse_string_to_array)
@@ -876,8 +692,8 @@ def get_SVMCueOutcomeChoicePred(PCsZonewise):
         Y_outcome = PCsZonewise[mask].index.get_level_values('trial_outcome').values
         Y_outcome = Y_outcome.astype(bool).astype(int)
         # TODO: add choice
-        Y_choice_R1 = np.random.randint(0, 2, size=(Y_cue.shape[0]))
-        Y_choice_R2 = np.random.randint(0, 2, size=(Y_cue.shape[0]))
+        Y_choice_R1 = PCsZonewise[mask].index.get_level_values('choice_R1').values.astype(int)
+        Y_choice_R2 = PCsZonewise[mask].index.get_level_values('choice_R2').values.astype(int)
         
         predictions = fit_SVMs_with_bootstrap(X, Ys={'cue':Y_cue, 'outcome':Y_outcome, 'choice_R1':Y_choice_R1, 'choice_R2': Y_choice_R2}, name=column)
         all_zones.append(predictions)

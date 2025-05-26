@@ -54,6 +54,45 @@ MODALITY_KEYS = ['ephys_traces', 'event', 'ballvelocity', 'metadata',
                  'unitycam_packages', 'facecam_packages', 'bodycam_packages',
                  'unity_frame', 'unity_trial', 'paradigm_variable', ]
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 SESSION_METADATA_TABLE = OrderedDict([
     ("trial_id", pd.Int32Dtype()),
     ("session_name", pd.StringDtype()),
@@ -156,155 +195,283 @@ SESSION_METADATA_TABLE = OrderedDict([
     ("paradigm_variable_columns", pd.StringDtype()),  # Lists are stored as strings
 ])
 
-# # TODO check dtypes
-# SESSION_METADATA_TABLE = OrderedDict([
-#     ("trial_id", pd.Int16Dtype()),
-#     ("session_name", pd.StringDtype()),
-#     ("paradigm_name", pd.StringDtype()),
-#     ("paradigm_id", pd.Int16Dtype()),
-#     ("animal_name", pd.StringDtype()),
-#     ("animal_id", pd.Int16Dtype()),
-#     ("animal_weight", pd.StringDtype()),
-#     ("start_time", pd.StringDtype()),
-#     ("stop_time", pd.StringDtype()),
-#     ("duration_minutes", pd.Float32Dtype()),
-#     ("notes", pd.StringDtype()),
-#     ("rewardPostSoundDelay", pd.Float32Dtype()),
-#     ("rewardAmount", pd.Float32Dtype()),
-#     ("successSequenceLength", pd.Float32Dtype()),
-#     ("trialPackageVariables", pd.StringDtype()),
-#     ("trialPackageVariablesDefault", pd.StringDtype()),
-#     ("track_details", pd.StringDtype()),
-    
-#     ("GAP", pd.Float32Dtype()), # random keys from here on
-#     ("session_id", pd.StringDtype()),
-#     ("duration", pd.StringDtype()),
-#     ("punishmentLength", pd.Float32Dtype()),
-#     ("punishmentInactivationLength", pd.Float32Dtype()),
-#     ("onWallZoneEntry", pd.StringDtype()),
-#     ("onInterTrialInterval", pd.StringDtype()),
-#     ("interTrialIntervalLength", pd.Float32Dtype()),
-#     ("abortInterTrialIntervalLength", pd.Float32Dtype()),
-#     ("maxiumTrialLength", pd.Float32Dtype()),
-#     ("sessionFREEVAR2", pd.StringDtype()),
-#     ("sessionDescription", pd.StringDtype()),
-#     ("sessionFREEVAR4", pd.StringDtype()),
-#     ("trialPackageVariablesFulllNames", pd.StringDtype()),
-#     ("trialPackageVariablesFullNames", pd.StringDtype()),
-#     ("metadata", pd.StringDtype()),
-# ])
-
-# BEHAVIOR_EVENT_TABLE = OrderedDict([
-#     ("event_name", pd.StringDtype()),
-#     ("event_package_id", pd.Int64Dtype()),
-#     ("event_pc_timestamp", pd.Int64Dtype()),
-#     ("event_ephys_timestamp", pd.Int64Dtype()),
-#     ("event_value", pd.StringDtype()),
-#     ("event_ephys_patched", pd.Int8Dtype()),
-# ])
-
-# [4791601 rows x 5 columns]
-# Index(['portenta_pc_timestamp', 'portenta_value', 'portenta_name',
-#        'portenta_ephys_timestamp', 'portenta_ephys_patched'],
-#       dtype='object')
-
-PORTENTA_TABLE = OrderedDict([
-    ("portenta_ephys_patched", pd.BooleanDtype()),
-    ("portenta_name", pd.StringDtype()),
-    ("portenta_pc_timestamp", pd.Int64Dtype()),
-    ("portenta_ephys_timestamp", pd.Int64Dtype()),
-    ("portenta_value", pd.Int64Dtype()),
-])
-
-UNITY_TABLE = OrderedDict([
-    # compeletly conastant across all paradigms, usful in 2D
-    ("frame_x_position", pd.Float32Dtype()),
-    ("frame_angle", pd.Float32Dtype()),
-    
-    # 00% of session constant thoughout session, except cue
-    ("lick_triggers_reward", pd.BooleanDtype()),
-    ("maximum_reward_number", pd.Int32Dtype()),
-    ("stay_time", pd.Float32Dtype()),
-    ("multi_reward_requires_stop", pd.BooleanDtype()),
-    ("both_R1_R2_rewarded", pd.BooleanDtype()),
-    ("flip_Cue1R1_Cue2R2", pd.BooleanDtype()),
-    ("prob_cue1_trial", pd.Float32Dtype()),
-    ("movement_gain_scaler", pd.Float32Dtype()),
-    
-    ("cue", pd.Int16Dtype()),
-    
-    # constant for each frame of a trial
-    ("trial_id", pd.Int16Dtype()),
-    ("trial_start_frame", pd.Int32Dtype()),
-    ("trial_start_pc_timestamp", pd.Int64Dtype()),
-    ("trial_end_frame", pd.Int32Dtype()),
-    ("trial_end_pc_timestamp", pd.Int64Dtype()),
-    ("trial_pc_duration", pd.Int32Dtype()),
-    ("trial_outcome", pd.Int32Dtype()),
-    ("trial_start_ephys_timestamp", pd.Int64Dtype()),
-    ("trial_end_ephys_timestamp", pd.Int64Dtype()),
-    
-    # slowly chanfing as animals runs through the zones    
-    ("zone", pd.StringDtype()),
-    ("frame_state", pd.Int16Dtype()),
-
-    # chaning every 1cm
-    ("from_z_position_bin", pd.Int16Dtype()),  # Nullable integer
-    ("to_z_position_bin", pd.Int16Dtype()),    # Nullable integer
-    
-    # changing every frame if animal not 100% still
-    ("frame_z_position", pd.Float32Dtype()),
-    # changing every frame
-    ("frame_id", pd.Int64Dtype()),
-    ("frame_pc_timestamp", pd.Int64Dtype()),
-    ("frame_ephys_timestamp", pd.Int64Dtype()), # Nullable integer
-    ("ballvelocity_first_package", pd.Int64Dtype()),
-    ("ballvelocity_last_package", pd.Int64Dtype()),
-    ("frame_blinker", pd.BooleanDtype()),      # Nullable boolean
-
-])
-
 # Define the schema with pandas dtypes
-UNITY_FAMEWISE_TABLE = OrderedDict([
-    ("frame_x_position", pd.Float32Dtype()),
-    ("frame_angle", pd.Float32Dtype()),
-    
-    ("lick_reward", pd.BooleanDtype()),
-    ("maximum_reward_number", pd.Int32Dtype()),
-    ("stay_time", pd.Float32Dtype()),
-    ("cue", pd.Int16Dtype()),
-    
+SCHEMA_TrackKinematics = OrderedDict([
+    # slowly changing as animals runs through the zones
     ("trial_id", pd.Int16Dtype()),
-    ("trial_start_frame", pd.Int32Dtype()),
-    ("trial_start_pc_timestamp", pd.Int64Dtype()),
-    ("trial_end_frame", pd.Int32Dtype()),
-    ("trial_end_pc_timestamp", pd.Int64Dtype()),
-    ("trial_pc_duration", pd.Int32Dtype()),
-    ("trial_outcome", pd.Int32Dtype()),
-    ("trial_start_ephys_timestamp", pd.Int64Dtype()),
-    ("trial_end_ephys_timestamp", pd.Int64Dtype()),
-    
-    ("zone", pd.StringDtype()),
+    ("frame_ephys_patched", pd.BooleanDtype()), # Nullable boolean
+    ("track_zone", pd.StringDtype()),
     ("frame_state", pd.Int16Dtype()),
     
-    ("L_count", pd.Int16Dtype()),
-    ("R_count", pd.Int16Dtype()),
-    ("S_count", pd.Int16Dtype()),
-    ("V_count", pd.Int16Dtype()),
+    # changing every 1cm
+    ("from_cm_position_bin", pd.Int16Dtype()),  # Nullable integer
+    ("to_cm_position_bin", pd.Int16Dtype()),    # Nullable integer
     
-    ("from_z_position_bin", pd.Int16Dtype()),  # Nullable integer
-    ("to_z_position_bin", pd.Int16Dtype()),    # Nullable integer
-    ("frame_z_position", pd.Float32Dtype()),
-    ("frame_z_velocity", pd.Float32Dtype()),  # Nullable float
-    ("frame_z_acceleration", pd.Float32Dtype()), # Nullable float
+    # changing every frame
+    ("frame_position", pd.Float32Dtype()),
+    ("frame_velocity", pd.Float32Dtype()),  # Nullable float
+    ("frame_acceleration", pd.Float32Dtype()), # Nullable float
+    ("frame_raw", pd.Int16Dtype()),
+    ("frame_yaw", pd.Int16Dtype()),
+    ("frame_pitch", pd.Int16Dtype()),
     ("frame_id", pd.Int64Dtype()),
     ("frame_pc_timestamp", pd.Int64Dtype()),
     ("frame_ephys_timestamp", pd.Int64Dtype()), # Nullable integer
     ("ballvelocity_first_package", pd.Int64Dtype()),
     ("ballvelocity_last_package", pd.Int64Dtype()),
-    ("frame_blinker", pd.BooleanDtype()),      # Nullable boolean
+])
+
+SCHEMA_BehaviorTrialwise = OrderedDict([
+    ('trial_id', pd.Int16Dtype()),
+    ('trial_start_frame', pd.Int32Dtype()),
+    ('trial_start_pc_timestamp', pd.Int64Dtype()),
+    ('trial_end_frame', pd.Int32Dtype()),
+    ('trial_end_pc_timestamp', pd.Int64Dtype()),
+    ('trial_pc_duration', pd.Int32Dtype()),
+    ('trial_outcome', pd.Int16Dtype()),
+    ('trial_start_ephys_timestamp', pd.Int64Dtype()),
+    ('trial_end_ephys_timestamp', pd.Int64Dtype()),
+    ('trial_start_ephys_patched', pd.BooleanDtype()),
+    ('trial_end_ephys_patched', pd.BooleanDtype()),
+    ('velocity_threshold_at_R1', pd.Float32Dtype()),
+    ('maximum_reward_number', pd.Int16Dtype()),
+    ('cue', pd.Int16Dtype()),
+    ('both_R1_R2_rewarded', pd.BooleanDtype()),
+    ('velocity_threshold_at_R2', pd.Float32Dtype()),
+    
+    # Correct reward zone metrics
+    ('correctR_avg_velocity', pd.Float32Dtype()),
+    ('correctR_choice', pd.BooleanDtype()),
+    ('correctR_enter_ephys_t', pd.Int64Dtype()),
+    ('correctR_exit_ephys_t', pd.Int64Dtype()),
+    ('correctR_min_velocity', pd.Float32Dtype()),
+    ('correctR_reward_ephys_t', pd.Int64Dtype()),
+    ('correctR_staytime', pd.Float32Dtype()),
+    
+    # Incorrect reward zone metrics
+    ('incorrectR_avg_velocity', pd.Float32Dtype()),
+    ('incorrectR_choice', pd.BooleanDtype()),
+    ('incorrectR_enter_ephys_t', pd.Int64Dtype()),
+    ('incorrectR_exit_ephys_t', pd.Int64Dtype()),
+    ('incorrectR_min_velocity', pd.Float32Dtype()),
+    ('incorrectR_staytime', pd.Float32Dtype()),
+    
+    # Track zone metrics - before_reward1
+    ('trackzone_before_reward1_avg_velocity', pd.Float32Dtype()),
+    ('trackzone_before_reward1_enter_ephys_t', pd.Int64Dtype()),
+    ('trackzone_before_reward1_exit_ephys_t', pd.Int64Dtype()),
+    ('trackzone_before_reward1_min_velocity', pd.Float32Dtype()),
+    ('trackzone_before_reward1_staytime', pd.Float32Dtype()),
+    
+    # Track zone metrics - before_reward2
+    ('trackzone_before_reward2_avg_velocity', pd.Float32Dtype()),
+    ('trackzone_before_reward2_enter_ephys_t', pd.Int64Dtype()),
+    ('trackzone_before_reward2_exit_ephys_t', pd.Int64Dtype()),
+    ('trackzone_before_reward2_min_velocity', pd.Float32Dtype()),
+    ('trackzone_before_reward2_staytime', pd.Float32Dtype()),
+    
+    # Track zone metrics - between_cues
+    ('trackzone_between_cues_avg_velocity', pd.Float32Dtype()),
+    ('trackzone_between_cues_enter_ephys_t', pd.Int64Dtype()),
+    ('trackzone_between_cues_exit_ephys_t', pd.Int64Dtype()),
+    ('trackzone_between_cues_min_velocity', pd.Float32Dtype()),
+    ('trackzone_between_cues_staytime', pd.Float32Dtype()),
+    
+    # Track zone metrics - cue2
+    ('trackzone_cue2_avg_velocity', pd.Float32Dtype()),
+    ('trackzone_cue2_enter_ephys_t', pd.Int64Dtype()),
+    ('trackzone_cue2_exit_ephys_t', pd.Int64Dtype()),
+    ('trackzone_cue2_min_velocity', pd.Float32Dtype()),
+    ('trackzone_cue2_staytime', pd.Float32Dtype()),
+    
+    # Track zone metrics - cue2_passed
+    ('trackzone_cue2_passed_avg_velocity', pd.Float32Dtype()),
+    ('trackzone_cue2_passed_enter_ephys_t', pd.Int64Dtype()),
+    ('trackzone_cue2_passed_exit_ephys_t', pd.Int64Dtype()),
+    ('trackzone_cue2_passed_min_velocity', pd.Float32Dtype()),
+    ('trackzone_cue2_passed_staytime', pd.Float32Dtype()),
+    
+    # Track zone metrics - cue2_visible
+    ('trackzone_cue2_visible_avg_velocity', pd.Float32Dtype()),
+    ('trackzone_cue2_visible_enter_ephys_t', pd.Int64Dtype()),
+    ('trackzone_cue2_visible_exit_ephys_t', pd.Int64Dtype()),
+    ('trackzone_cue2_visible_min_velocity', pd.Float32Dtype()),
+    ('trackzone_cue2_visible_staytime', pd.Float32Dtype()),
+    
+    # Track zone metrics - post_reward
+    ('trackzone_post_reward_avg_velocity', pd.Float32Dtype()),
+    ('trackzone_post_reward_enter_ephys_t', pd.Int64Dtype()),
+    ('trackzone_post_reward_exit_ephys_t', pd.Int64Dtype()),
+    ('trackzone_post_reward_min_velocity', pd.Float32Dtype()),
+    ('trackzone_post_reward_staytime', pd.Float32Dtype()),
+    
+    # Track zone metrics - reward1
+    ('trackzone_reward1_avg_velocity', pd.Float32Dtype()),
+    ('trackzone_reward1_choice', pd.BooleanDtype()),
+    ('choice_R1', pd.BooleanDtype()),
+    ('trackzone_reward1_enter_ephys_t', pd.Int64Dtype()),
+    ('trackzone_reward1_exit_ephys_t', pd.Int64Dtype()),
+    ('trackzone_reward1_min_velocity', pd.Float32Dtype()),
+    ('trackzone_reward1_staytime', pd.Float32Dtype()),
+    
+    # Track zone metrics - reward2
+    ('trackzone_reward2_avg_velocity', pd.Float32Dtype()),
+    ('trackzone_reward2_choice', pd.BooleanDtype()),
+    ('choice_R2', pd.BooleanDtype()),
+    ('trackzone_reward2_enter_ephys_t', pd.Int64Dtype()),
+    ('trackzone_reward2_exit_ephys_t', pd.Int64Dtype()),
+    ('trackzone_reward2_min_velocity', pd.Float32Dtype()),
+    ('trackzone_reward2_staytime', pd.Float32Dtype()),
+])
+
+SCHEMA_BehaviorEvents = OrderedDict([
+    ('trial_id', pd.Float32Dtype()),  # Float due to NaN values
+    ('cue', pd.Int16Dtype()),       # Float due to NaN values
+    ('trial_outcome', pd.Int16Dtype()),  # Float due to NaN values
+    ('choice_R1', pd.BooleanDtype()), 
+    ('choice_R2', pd.BooleanDtype()),
+    ('event_pc_timestamp', pd.Int64Dtype()),
+    ('event_ephys_timestamp', pd.Int64Dtype()),
+    ('event_value', pd.Int32Dtype()),
+    ('event_name', pd.StringDtype()),
+    ('event_name_full', pd.StringDtype()),
+    ('event_ephys_patched', pd.BooleanDtype()),
+])
+
+# TODO
+SCHEMA_BehaviorPose = OrderedDict([
+  ('trial_id', pd.Int16Dtype()),  
+])
+
+SCHEMA_BehaviorFramewise = OrderedDict([
+    *SCHEMA_BehaviorTrialwise.items(), # merged in slowly changing trialwise data
+    *SCHEMA_TrackKinematics.items(),   # merged in framewise kinematics data, unchanged too
+    # *SCHEMA_BehaviorPose,
+    ("lick_count", pd.Int16Dtype()),  # Number of licks in the frame
+    ("lick_mean_value", pd.Float32Dtype()),  # Mean lick duration in the frame
+    ("reward-removed_count", pd.Int16Dtype()),  # Number of reward removed events in the frame
+    ("reward-removed_mean_value", pd.Float32Dtype()),  # Mean time in us of reward removed events in the frame
+    ("reward-sound_count", pd.Int16Dtype()),  # Number of reward sound events in the frame
+    ("reward-sound_mean_value", pd.Float32Dtype()),  # Mean time of reward sound in the frame
+    ("reward-valve-open_count", pd.Int16Dtype()),  # Number of reward valve open events in the frame
+    ("reward-valve-open_mean_value", pd.Float32Dtype()),  # Mean time in us of reward valve open in the frame
+])
+
+SCHEMA_BehaviorTrackwise = OrderedDict([
     
 ])
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# PORTENTA_TABLE = OrderedDict([
+#     ("portenta_ephys_patched", pd.BooleanDtype()),
+#     ("portenta_name", pd.StringDtype()),
+#     ("portenta_pc_timestamp", pd.Int64Dtype()),
+#     ("portenta_ephys_timestamp", pd.Int64Dtype()),
+#     ("portenta_value", pd.Int64Dtype()),
+# ])
+
+# UNITY_TABLE = OrderedDict([
+#     # compeletly conastant across all paradigms, usful in 2D
+#     ("frame_x_position", pd.Float32Dtype()),
+#     ("frame_angle", pd.Float32Dtype()),
+    
+#     # 00% of session constant thoughout session, except cue
+#     ("lick_triggers_reward", pd.BooleanDtype()),
+#     ("maximum_reward_number", pd.Int32Dtype()),
+#     ("stay_time", pd.Float32Dtype()),
+#     ("multi_reward_requires_stop", pd.BooleanDtype()),
+#     ("both_R1_R2_rewarded", pd.BooleanDtype()),
+#     ("flip_Cue1R1_Cue2R2", pd.BooleanDtype()),
+#     ("prob_cue1_trial", pd.Float32Dtype()),
+#     ("movement_gain_scaler", pd.Float32Dtype()),
+    
+#     ("cue", pd.Int16Dtype()),
+    
+#     # constant for each frame of a trial
+#     ("trial_id", pd.Int16Dtype()),
+#     ("trial_start_frame", pd.Int32Dtype()),
+#     ("trial_start_pc_timestamp", pd.Int64Dtype()),
+#     ("trial_end_frame", pd.Int32Dtype()),
+#     ("trial_end_pc_timestamp", pd.Int64Dtype()),
+#     ("trial_pc_duration", pd.Int32Dtype()),
+#     ("trial_outcome", pd.Int32Dtype()),
+#     ("trial_start_ephys_timestamp", pd.Int64Dtype()),
+#     ("trial_end_ephys_timestamp", pd.Int64Dtype()),
+    
+#     # slowly chanfing as animals runs through the zones    
+#     ("zone", pd.StringDtype()),
+#     ("frame_state", pd.Int16Dtype()),
+
+#     # chaning every 1cm
+#     ("from_z_position_bin", pd.Int16Dtype()),  # Nullable integer
+#     ("to_z_position_bin", pd.Int16Dtype()),    # Nullable integer
+    
+#     # changing every frame if animal not 100% still
+#     ("frame_z_position", pd.Float32Dtype()),
+#     # changing every frame
+#     ("frame_id", pd.Int64Dtype()),
+#     ("frame_pc_timestamp", pd.Int64Dtype()),
+#     ("frame_ephys_timestamp", pd.Int64Dtype()), # Nullable integer
+#     ("ballvelocity_first_package", pd.Int64Dtype()),
+#     ("ballvelocity_last_package", pd.Int64Dtype()),
+#     ("frame_blinker", pd.BooleanDtype()),      # Nullable boolean
+
+# ])
+
+# # Define the schema with pandas dtypes
+# UNITY_FAMEWISE_TABLE = OrderedDict([
+#     ("frame_x_position", pd.Float32Dtype()),
+#     ("frame_angle", pd.Float32Dtype()),
+    
+#     ("lick_reward", pd.BooleanDtype()),
+#     ("maximum_reward_number", pd.Int32Dtype()),
+#     ("stay_time", pd.Float32Dtype()),
+#     ("cue", pd.Int16Dtype()),
+    
+#     ("trial_id", pd.Int16Dtype()),
+#     ("trial_start_frame", pd.Int32Dtype()),
+#     ("trial_start_pc_timestamp", pd.Int64Dtype()),
+#     ("trial_end_frame", pd.Int32Dtype()),
+#     ("trial_end_pc_timestamp", pd.Int64Dtype()),
+#     ("trial_pc_duration", pd.Int32Dtype()),
+#     ("trial_outcome", pd.Int32Dtype()),
+#     ("trial_start_ephys_timestamp", pd.Int64Dtype()),
+#     ("trial_end_ephys_timestamp", pd.Int64Dtype()),
+    
+#     ("zone", pd.StringDtype()),
+#     ("frame_state", pd.Int16Dtype()),
+    
+#     ("L_count", pd.Int16Dtype()),
+#     ("R_count", pd.Int16Dtype()),
+#     ("S_count", pd.Int16Dtype()),
+#     ("V_count", pd.Int16Dtype()),
+    
+#     ("from_z_position_bin", pd.Int16Dtype()),  # Nullable integer
+#     ("to_z_position_bin", pd.Int16Dtype()),    # Nullable integer
+#     ("frame_z_position", pd.Float32Dtype()),
+#     ("frame_z_velocity", pd.Float32Dtype()),  # Nullable float
+#     ("frame_z_acceleration", pd.Float32Dtype()), # Nullable float
+#     ("frame_id", pd.Int64Dtype()),
+#     ("frame_pc_timestamp", pd.Int64Dtype()),
+#     ("frame_ephys_timestamp", pd.Int64Dtype()), # Nullable integer
+#     ("ballvelocity_first_package", pd.Int64Dtype()),
+#     ("ballvelocity_last_package", pd.Int64Dtype()),
+#     ("frame_blinker", pd.BooleanDtype()),      # Nullable boolean
+    
+# ])
 
 # UNITY_TRIALWISE_TABLE = OrderedDict([
 #     ("stay_time", pd.Float32Dtype()),                      #   1
@@ -344,46 +511,46 @@ POSITION_BIN_TABLE_EXCLUDE = ["frame_x_position", "frame_angle",
                               "ballvelocity_first_package", 
                               "ballvelocity_last_package", "frame_blinker"]
 
-UNITY_TRACKWISE_TABLE = OrderedDict([
-    ("lick_reward", pd.BooleanDtype()),
-    ("maximum_reward_number", pd.Int32Dtype()),
-    ("stay_time", pd.Float32Dtype()),
-    ("cue", pd.Int16Dtype()),
+# UNITY_TRACKWISE_TABLE = OrderedDict([
+#     ("lick_reward", pd.BooleanDtype()),
+#     ("maximum_reward_number", pd.Int32Dtype()),
+#     ("stay_time", pd.Float32Dtype()),
+#     ("cue", pd.Int16Dtype()),
     
-    ("trial_id", pd.Int16Dtype()),
-    ("trial_start_frame", pd.Int32Dtype()),
-    ("trial_start_pc_timestamp", pd.Int64Dtype()),
-    ("trial_end_frame", pd.Int32Dtype()),
-    ("trial_end_pc_timestamp", pd.Int64Dtype()),
-    ("trial_pc_duration", pd.Int32Dtype()),
-    ("trial_outcome", pd.Int32Dtype()),
-    ("trial_start_ephys_timestamp", pd.Int64Dtype()),
-    ("trial_end_ephys_timestamp", pd.Int64Dtype()),
+#     ("trial_id", pd.Int16Dtype()),
+#     ("trial_start_frame", pd.Int32Dtype()),
+#     ("trial_start_pc_timestamp", pd.Int64Dtype()),
+#     ("trial_end_frame", pd.Int32Dtype()),
+#     ("trial_end_pc_timestamp", pd.Int64Dtype()),
+#     ("trial_pc_duration", pd.Int32Dtype()),
+#     ("trial_outcome", pd.Int32Dtype()),
+#     ("trial_start_ephys_timestamp", pd.Int64Dtype()),
+#     ("trial_end_ephys_timestamp", pd.Int64Dtype()),
     
-    ("zone", pd.StringDtype()),
-    ("posbin_state", pd.Int16Dtype()),
+#     ("zone", pd.StringDtype()),
+#     ("posbin_state", pd.Int16Dtype()),
     
-    ("from_z_position_bin", pd.Int16Dtype()),
-    ("to_z_position_bin", pd.Int16Dtype()),
+#     ("from_z_position_bin", pd.Int16Dtype()),
+#     ("to_z_position_bin", pd.Int16Dtype()),
     
-    ("nframes_in_bin", pd.Int16Dtype()),
+#     ("nframes_in_bin", pd.Int16Dtype()),
     
-    ("L_count", pd.Int16Dtype()),
-    ("R_count", pd.Int16Dtype()),
-    ("S_count", pd.Int16Dtype()),
-    ("V_count", pd.Int16Dtype()),
+#     ("L_count", pd.Int16Dtype()),
+#     ("R_count", pd.Int16Dtype()),
+#     ("S_count", pd.Int16Dtype()),
+#     ("V_count", pd.Int16Dtype()),
     
-    ("posbin_z_position", pd.Float32Dtype()),
-    ("posbin_z_velocity", pd.Float32Dtype()), # Nullable float
-    ("posbin_z_acceleration", pd.Float32Dtype()), # Nullable float
+#     ("posbin_z_position", pd.Float32Dtype()),
+#     ("posbin_z_velocity", pd.Float32Dtype()), # Nullable float
+#     ("posbin_z_acceleration", pd.Float32Dtype()), # Nullable float
     
-    ("posbin_from_frame_id", pd.Int64Dtype()),
-    ("posbin_from_pc_timestamp", pd.Int64Dtype()),
-    ("posbin_from_ephys_timestamp", pd.Int64Dtype()), # Nullable integer
-    ("posbin_to_posbin_id", pd.Int64Dtype()),
-    ("posbin_to_pc_timestamp", pd.Int64Dtype()),
-    ("posbin_to_ephys_timestamp", pd.Int64Dtype()), # Nullable integer
-])
+#     ("posbin_from_frame_id", pd.Int64Dtype()),
+#     ("posbin_from_pc_timestamp", pd.Int64Dtype()),
+#     ("posbin_from_ephys_timestamp", pd.Int64Dtype()), # Nullable integer
+#     ("posbin_to_posbin_id", pd.Int64Dtype()),
+#     ("posbin_to_pc_timestamp", pd.Int64Dtype()),
+#     ("posbin_to_ephys_timestamp", pd.Int64Dtype()), # Nullable integer
+# ])
 
 # MULTI_UNITS_TABLE = OrderedDict([
 #     ("spike_time", pd.Int64Dtype()),
@@ -444,7 +611,7 @@ PCS_ZONEWISE_TABLE = OrderedDict([
     ("trial_id", pd.Int16Dtype()),
     ("trial_outcome", pd.Int16Dtype()),
     ("cue", pd.Int16Dtype()),
-    ("zone", pd.StringDtype()),
+    ("track_zone", pd.StringDtype()),
     ("HP", pd.StringDtype()),
     ("mPFC", pd.StringDtype()),
     ("behavior", pd.StringDtype()),
@@ -455,7 +622,7 @@ SVM_CUE_OUTCOME_CHOICE_PRED_TABLE = OrderedDict([
     ('trial_outcome', pd.Int16Dtype()),
     ('cue', pd.Int16Dtype()),
     ('predictor', pd.StringDtype()),
-    ('zone', pd.StringDtype()),
+    ('track_zone', pd.StringDtype()),
     ('model',pd.StringDtype()),
     ('predicting', pd.StringDtype()),
     ('y', pd.Float32Dtype()),

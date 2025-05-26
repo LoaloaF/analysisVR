@@ -175,7 +175,116 @@ def event_modality_calc_timeintervals_around_lick(lickdata, interval):
 # =============================================================================
 # unity frame modality transformations
 # =============================================================================
+
+# join frames and ball velocity packages and aggregate ball velocity to frame resolution
+def frame_wise_ball_velocity(frames, ball_vel):
+    ball_vel.set_index("ballvelocity_package_id", inplace=True)
+    # Create IntervalIndex with both sides closed, first frame does not have a previous frame
+    first_pckg_ids = frames.iloc[1:]['ballvelocity_first_package'].values
+    last_pckg_ids = frames.iloc[:-1]['ballvelocity_last_package'].values
     
+    # do a first check if the difference between package ids is 1
+    f2f_diff = first_pckg_ids-last_pckg_ids
+    invalid_diff = f2f_diff != 1
+    if invalid_diff.any():
+        Logger().logger.warning(f"Frame to frame ballvell package id difference "
+                                f"is not 1 for all, {len(f2f_diff[invalid_diff])}:"
+                                f" {f2f_diff[invalid_diff]}")
+        # check if the invalid frames are outside of ITI
+        invalid_frames = frames.iloc[1:][invalid_diff]
+        if (invalid_frames['trial_id'] != -1).any(): 
+            # raise ValueError(f"Irregularities outside ITI: \n{invalid_frames}")
+            Logger().logger.warning(f"Irregularities outside ITI: \n{invalid_frames}")
+    
+    # create intervals for each frame, except the first which can't be validated to not be overlapping
+    intervals = pd.IntervalIndex.from_arrays(frames.iloc[1:].loc[~invalid_diff, 'ballvelocity_first_package'],
+                                             frames.iloc[1:].loc[~invalid_diff, 'ballvelocity_last_package'],
+                                             closed='both')
+
+    # Assign collection of ball velocity packages to its frame interval
+    Logger().logger.debug(f"Assigning ball velocity packages to frame intervals...")
+    ball_vel['frame_bin'] = pd.cut(ball_vel.index, bins=intervals)
+    frame_wise_ryp = ball_vel.loc[:, ['frame_bin','ballvelocity_raw',
+                                      'ballvelocity_yaw','ballvelocity_pitch']]
+
+    frame_wise_ryp = frame_wise_ryp.groupby('frame_bin', observed=False).sum().rename(
+        {'ballvelocity_raw': 'frame_raw',
+         'ballvelocity_yaw': 'frame_yaw',
+         'ballvelocity_pitch': 'frame_pitch'}, axis=1)
+
+    # instead of bin indices, go back to frame indices
+    frame_wise_ryp.index = frames.iloc[1:].loc[~invalid_diff].index
+    return frame_wise_ryp
+
+
+# trial complementation using frames 
+def calc_trialwise_metrics(trials, track_kinematics, trial_variable):
+    def _calc_trial_staytimes(zone_trial_frames):
+        trial_id = zone_trial_frames["trial_id"].iloc[0]
+        zone = zone_trial_frames["track_zone"].iloc[0]
+        if trial_id == -1:
+            return pd.Series(dtype='int64')        
+        zone_trial_metrics = {}
+
+        if zone_trial_frames.empty:
+            zone_staytime = 0
+            enter_zone_ephys_t = np.nan
+            exit_zone_ephys_t = np.nan
+        
+        else:
+            enter_zone_ephys_t = zone_trial_frames["frame_ephys_timestamp"].iloc[0]
+            exit_zone_ephys_t = zone_trial_frames["frame_ephys_timestamp"].iloc[-1]
+            # can be nan, so use PC time 
+            enter_zone_pc_t = zone_trial_frames["frame_pc_timestamp"].iloc[0]
+            exit_zone_pc_t = zone_trial_frames["frame_pc_timestamp"].iloc[-1]
+            zone_staytime = (exit_zone_pc_t - enter_zone_pc_t) / 1e6  # convert to seconds
+        
+        # add enter and exit timestamps to the trial metrics, and duration
+        zone_trial_metrics[f"trackzone_{zone}_enter_ephys_t"] = enter_zone_ephys_t
+        zone_trial_metrics[f"trackzone_{zone}_exit_ephys_t"] = exit_zone_ephys_t
+        zone_trial_metrics[f"trackzone_{zone}_staytime"] = zone_staytime
+        
+        # add velocity metrics
+        zone_trial_metrics[f"trackzone_{zone}_avg_velocity"] = zone_trial_frames["frame_velocity"].mean()
+        zone_trial_metrics[f"trackzone_{zone}_min_velocity"] = zone_trial_frames["frame_velocity"].min()
+        
+        # for the reward zones, check if the animal stopped in the zone
+        if (zone == "reward1") or (zone == "reward2"): 
+            # add the time of entry into the reward zone
+            R1_vel_threshold = trial_variable.set_index('trial_id').loc[trial_id, "velocity_threshold_at_R1"]
+            R2_vel_threshold = trial_variable.set_index('trial_id').loc[trial_id, "velocity_threshold_at_R1"]
+            thr = R1_vel_threshold if zone == "reward1" else R2_vel_threshold
+            stopping_mask = zone_trial_frames["frame_velocity"] < thr
+            zone_trial_metrics[f"trackzone_{zone}_choice"] = stopping_mask.any()
+            # copy, shorter key for convenience
+            R_str = "R1" if zone == "reward1" else "R2"
+            zone_trial_metrics.update({f"choice_{R_str}": stopping_mask.any()})
+        
+        # check if the zone is a reward zone and if the trial was correct or incorrect
+        cue = trials[trials["trial_id"] == trial_id]["cue"].item()
+        if (zone == "reward1" and cue == 1) or (zone == "reward2" and cue == 2): 
+            # add keys for convenience, just a copy of the zone keys, but indicating correct R zone            
+            corr_metrics = {k.replace(f"trackzone_{zone}", 'correctR'): v 
+                            for k,v in zone_trial_metrics.items()}
+            zone_trial_metrics.update(corr_metrics)
+            
+            if stopping_mask.sum() > 0 :
+                reward_t = zone_trial_frames["frame_ephys_timestamp"][stopping_mask].iloc[0]
+                zone_trial_metrics[f"correctR_reward_ephys_t"] = reward_t
+            
+        # incorrect one
+        elif (zone == "reward2" and cue == 1) or (zone == "reward1" and cue == 2):
+            # add keys for convenience, just a copy of the zone keys, but indicating incorrect R zone
+            incorr_metrics = {k.replace(f"trackzone_{zone}", 'incorrectR'): v 
+                              for k,v in zone_trial_metrics.items()}
+            zone_trial_metrics.update(incorr_metrics)
+        return pd.Series(zone_trial_metrics)
+
+    result = track_kinematics.groupby(["trial_id", "track_zone"]).apply(_calc_trial_staytimes)
+    result.index = result.index.droplevel(1)  # drop the track_zone level
+    result = result.unstack(level=1).reset_index(drop=True)
+    return result
+
 def unity_modality_track_spatial_bins(frames):
     z = frames['frame_z_position'].astype(int)
     bin_edges = np.arange(z.min(), z.max()+1, 1)
@@ -200,17 +309,43 @@ def unity_modality_track_zones(frames, track_details):
 
 def unity_modality_track_kinematics(frames):
     positions = frames["frame_z_position"].copy()
-    positions[frames["trial_id"]==-1] = np.nan
+    # positions[frames["trial_id"]==-1] = np.nan
     
     # data in microseconds, convert to seconds
     scaler = 1e6
     tstamps = frames["frame_pc_timestamp"] /scaler
-    velocity = pd.Series(np.gradient(positions,tstamps,), index=frames.index, 
+    # print("Timestamps: ", tstamps)
+    # print("Positions: ", positions)
+    velocity = pd.Series(np.gradient(positions, tstamps,), index=frames.index, 
                          name='frame_z_velocity')
+    # print(velocity)
     acceleration = pd.Series(np.gradient(velocity, velocity.index), index=frames.index, 
                              name='frame_z_acceleration')
     return velocity, acceleration # in cm/s, cm/s^2
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# =============================================================================
+# modality specific patching
+# =============================================================================
 
 def fix_missing_paradigm_variable_names(data):
     if data is None:
@@ -227,11 +362,15 @@ def fix_missing_paradigm_variable_names(data):
         "NP": 'prob_cue1_trial',
         "GF": 'movement_gain_scaler',
     }
-    if all([True if c in data.columns else False for c in ["ST_2","SR","DR","RF","NP","GF"]]):
-        # paradigm P1100 hacky fix to correct an old label from P0800...
+    # paradigm P1100 hacky fix to correct an old label from P0800...
+    if all(True if c in data.columns else False for c in ['trial_id', 'stay_time', 'maximum_reward_number', 'cue', 'DR']):
         renamer['stay_time'] = 'velocity_threshold_at_R1'
-        renamer['stop_threshold'] = 'velocity_threshold_at_R1'
-    
+        data['ST_2'] = data['stay_time']
+        
+    # if all([True if c in data.columns else False for c in ["ST_2","SR","DR","RF","NP","GF"]]) or \
+    #     renamer['stop_threshold'] = 'velocity_threshold_at_R1'
+        
+    Logger().logger.debug(Logger().fmtmsg(("Renaming variables with:\n", renamer)))
     data = data.rename(columns=renamer)
     return data
     
@@ -424,43 +563,6 @@ def frame_wise_events(frames, events):
     # exit()
 
 
-# join frames and ball velocity packages and aggregate ball velocity to frame resolution
-def frame_wise_ball_velocity(frames, ball_vel):
-    ball_vel.set_index("ballvelocity_package_id", inplace=True)
-    # Create IntervalIndex with both sides closed, first frame does not have a previous frame
-    first_pckg_ids = frames.iloc[1:]['ballvelocity_first_package'].values
-    last_pckg_ids = frames.iloc[:-1]['ballvelocity_last_package'].values
-
-    # do a first check if the difference between package ids is 1
-    f2f_diff = first_pckg_ids-last_pckg_ids
-    invalid_diff = f2f_diff != 1
-    if invalid_diff.any():
-        Logger().logger.warning(f"Frame to frame ballvell package id difference "
-                                f"is not 1 for all, {f2f_diff[invalid_diff]}")
-        # check if the invalid frames are outside of ITI
-        invalid_frames = frames.iloc[1:][invalid_diff]
-        if (invalid_frames['trial_id'] != -1).any(): 
-            # raise ValueError(f"Irregularities outside ITI: \n{invalid_frames}")
-            Logger().logger.warning(f"Irregularities outside ITI: \n{invalid_frames}")
-    
-    # create intervals for each frame, except the first which can't be validated to not be overlapping
-    intervals = pd.IntervalIndex.from_arrays(frames.iloc[1:].loc[~invalid_diff, 'ballvelocity_first_package'],
-                                             frames.iloc[1:].loc[~invalid_diff, 'ballvelocity_last_package'],
-                                             closed='both')
-    
-    # Assign collection of ball velocity packages to its frame interval
-    Logger().logger.debug(f"Assigning ball velocity packages to frame intervals...")
-    ball_vel['frame_bin'] = pd.cut(ball_vel.index, bins=intervals)
-    frame_wise_ryp = ball_vel.loc[:, ['frame_bin','ballvelocity_raw',
-                                      'ballvelocity_yaw','ballvelocity_pitch']]
-    
-    frame_wise_ryp = frame_wise_ryp.groupby('frame_bin', observed='False').sum().rename(
-        {'ballvelocity_raw': 'frame_raw',
-         'ballvelocity_yaw': 'frame_yaw',
-         'ballvelocity_pitch': 'frame_pitch'}, axis=1)
-    # instead of bin indices, go back to frame indices
-    frame_wise_ryp.index = frames.iloc[1:].loc[~invalid_diff].index
-    return frame_wise_ryp
 
 def _validate_ballvell_package_ids():
     pass

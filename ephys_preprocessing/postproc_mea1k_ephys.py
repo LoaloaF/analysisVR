@@ -508,7 +508,7 @@ def get_PCsZonewise(fr, track_data):
     }
     
     aggr_embeds = []
-    for i in range(3):
+    for i in range(4):
         # which modality to use for prediction
         if i == 0:
             predictor = fr.iloc[:, :20]
@@ -520,6 +520,9 @@ def get_PCsZonewise(fr, track_data):
             predictor = track_data.loc[:, ['posbin_velocity', 'posbin_acceleration', 'lick_count',
                                            'posbin_raw', 'posbin_yaw', 'posbin_pitch']]
             predictor_name = 'behavior'
+        elif i == 3:
+            predictor = fr.iloc[:]
+            predictor_name = 'HP-mPFC'
             
         debug_msg = (f"Embedding {predictor_name} with PCA:\n")
         for zone, (from_z, to_z) in zones.items():
@@ -567,7 +570,7 @@ def get_PCsZonewise(fr, track_data):
 def get_SVMCueOutcomeChoicePred(PCsZonewise):
     L = Logger()
 
-    def fit_SVMs_with_bootstrap(X, Ys, name, n_iterations=100):
+    def fit_SVMs_with_bootstrap(X, Ys, name, n_iterations=200):
         predictions = []
         rng = np.random.default_rng(42)
 
@@ -589,6 +592,8 @@ def get_SVMCueOutcomeChoicePred(PCsZonewise):
                 Cs = [0.1, .5, 1, 5, 10,]
                 accs, f1s = [], []
 
+                aggr_predictions = np.ones((n_iterations, len(X)), dtype=int) * -1
+                print(aggr_predictions.shape)
                 for i in range(n_iterations):
                     indices = rng.choice(len(X), size=len(X), replace=True)
                     X_boot, y_boot = X[indices], y[indices]
@@ -621,22 +626,35 @@ def get_SVMCueOutcomeChoicePred(PCsZonewise):
 
                     accs.append(balanced_accuracy_score(y_oob, y_pred))
                     f1s.append(report['macro avg']['f1-score'])
-
-                # Fit final model on full data for predictions
-                final_model = GridSearchCV(
-                    estimator=Pipeline([
-                        ('scaler', StandardScaler()),
-                        ('svc', SVC(kernel=kernel, gamma='scale'))
-                    ]),
-                    param_grid={'svc__C': Cs},
-                    cv=6,
-                    scoring='f1_macro',
-                    n_jobs=-1
-                )
-                final_model.fit(X, y)
-                pred = final_model.predict(X)
-                # print(np.stack((y, pred)).T)
-                # print(classification_report(y, pred, zero_division=0))
+                    
+                    # every row is one bootstrap iteration
+                    aggr_predictions[i, oob_mask] = y_pred
+                
+                # get the "average" prediction across bootstrap iterations
+                aggr_predictions = pd.DataFrame(aggr_predictions)
+                aggr_predictions[aggr_predictions == -1] = np.nan
+                pred = aggr_predictions.mode(axis=0).iloc[0].values
+                
+                # difference
+                f1_aggr = classification_report(y, pred, output_dict=True, zero_division=0)['macro avg']['f1-score']
+                
+                print(f"mean: {np.mean(f1s):.3f}, aggr: {f1_aggr:.3f}, "
+                      f"diff: {np.mean(f1s) - f1_aggr:.3f}")
+                
+                # # Fit final model on full data for predictions
+                # final_model = GridSearchCV(
+                #     estimator=Pipeline([
+                #         ('scaler', StandardScaler()),
+                #         ('svc', SVC(kernel=kernel, gamma='scale'))
+                #     ]),
+                #     param_grid={'svc__C': Cs},
+                #     cv=6,
+                #     scoring='f1_macro',
+                #     n_jobs=-1
+                # )
+                # final_model.fit(X, y)
+                # pred = final_model.predict(X)
+                # # print(np.stack((y, pred)).T)
                 
                 # print(f"---\n{Y_name} {name} {kernel}")
                 # if Y_name == 'cue' and kernel == 'linear' and name[1] == 'afterCueZone' and name[0] == 'HP':

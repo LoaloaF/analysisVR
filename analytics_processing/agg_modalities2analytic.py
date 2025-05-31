@@ -3,7 +3,7 @@ import json
 import pandas as pd
 import numpy as np
 import os
-# import yaml
+import yaml
 from CustomLogger import CustomLogger as Logger
 import analytics_processing.analytics_constants as C
 
@@ -114,59 +114,58 @@ def get_BehaviorEvents(session_fullfname, trialwise_data):
 
 # TODO: implement this function
 def get_BehaviorPose(session_fullfname, track_kinematics):
-    pass    
-# def get_FacecamPoses(session_fullfname):
-#     data = session_modality_from_nas(session_fullfname, "facecam_packages")
-#     nas_dir, _, _ = device_paths()
-#     project_path = os.path.join(nas_dir, "pose_estimation", "ratvt_butt-Haotian-2024-10-04") # modify based on the model
-#     project_yaml_path = os.path.join(project_path, "config.yaml")
-#     # modify the project_path in the yaml file based on the current nas_dir
-#     with open(project_yaml_path, 'r') as file:
-#         yaml_content = yaml.safe_load(file)
+    data = session_modality_from_nas(session_fullfname, "facecam_packages")
+    nas_dir, _, _ = device_paths()
+    project_path = os.path.join(nas_dir, "pose_estimation", "ratvt_butt-Haotian-2024-10-04") # modify based on the model
+    project_yaml_path = os.path.join(project_path, "config.yaml")
+    # modify the project_path in the yaml file based on the current nas_dir
+    with open(project_yaml_path, 'r') as file:
+        yaml_content = yaml.safe_load(file)
 
-#     project_base_path = yaml_content.get('project_base_path')
-#     modify_project_path = os.path.join(nas_dir, project_base_path)
-#     yaml_content['project_path'] = modify_project_path
+    project_base_path = yaml_content.get('project_base_path')
+    modify_project_path = os.path.join(nas_dir, project_base_path)
+    yaml_content['project_path'] = modify_project_path
 
-#     # Write the updated content back to the YAML file
-#     with open(project_yaml_path, 'w') as file:
-#         yaml.safe_dump(yaml_content, file)
+    # Write the updated content back to the YAML file
+    with open(project_yaml_path, 'w') as file:
+        yaml.safe_dump(yaml_content, file)
 
-#     session_dir = os.path.dirname(session_fullfname)
-#     file_name = os.path.basename(session_fullfname)
+    session_dir = os.path.dirname(session_fullfname)
+    file_name = os.path.basename(session_fullfname)
 
-#     all_files = [file for file in os.listdir(session_dir)]
-#     # check if there is already DLC csv files
-#     dlc_csv_files = [file for file in all_files if "DLC" in file and file.endswith(".csv")]
+    all_files = [file for file in os.listdir(session_dir)]
+    # check if there is already DLC csv files
+    dlc_csv_files = [file for file in all_files if "DLC" in file and file.endswith(".csv")]
 
-#     if not dlc_csv_files:
-#         # check if there is already facecam mp4 for analysis
-#         if "facecam.mp4" not in all_files:
-#             aU.hdf5_frames2mp4(session_dir, file_name)
+    if not dlc_csv_files:
+        # check if there is already facecam mp4 for analysis
+        if "facecam.mp4" not in all_files:
+            aU.hdf5_frames2mp4(session_dir, file_name)
         
-#         video_path = os.path.join(session_dir, "facecam.mp4")
-#         import deeplabcut # only done here to avoid unnecessary import
-#         deeplabcut.analyze_videos(
-#             config=f"{project_path}/config.yaml",
-#             videos=video_path,
-#             videotype='mp4',  # Replace with the video file format if different
-#             batchsize=8,
-#             save_as_csv=True,  # Save as intermediate CSVs for inspection
-#         )
+        video_path = os.path.join(session_dir, "facecam.mp4")
+        
+        import deeplabcut # only done here to avoid unnecessary import
+        deeplabcut.analyze_videos(
+            config=f"{project_path}/config.yaml",
+            videos=video_path,
+            videotype='mp4',  # Replace with the video file format if different
+            batchsize=8,
+            save_as_csv=True,  # Save as intermediate CSVs for inspection
+        )
 
-#         all_files = [file for file in os.listdir(session_dir)]
-#         dlc_csv_files = [file for file in all_files if "DLC" in file and file.endswith(".csv")]
+        all_files = [file for file in os.listdir(session_dir)]
+        dlc_csv_files = [file for file in all_files if "DLC" in file and file.endswith(".csv")]
     
-#     # read the csv file and reformat
-#     df_pose = pd.read_csv(os.path.join(session_dir, dlc_csv_files[0]), low_memory=False)
-#     df_pose.drop(columns=['scorer'], inplace=True)
-#     # reset the column names
-#     new_columns = df_pose.iloc[0] + '_' + df_pose.iloc[1]
-#     df_pose.columns = new_columns
-#     df_pose = df_pose.iloc[2:]
-#     df_pose.reset_index(drop=True, inplace=True)
-#     df_pose = df_pose.add_prefix("facecam_pose_")
+    # read the csv file and reformat
+    df_pose = pd.read_csv(os.path.join(session_dir, dlc_csv_files[0]), low_memory=False)
+    df_pose.drop(columns=['scorer'], inplace=True)
+    # reset the column names
+    new_columns = df_pose.iloc[0] + '_' + df_pose.iloc[1]
+    df_pose.columns = new_columns
+    df_pose = df_pose.iloc[2:]
+    df_pose.reset_index(drop=True, inplace=True)
+    df_pose = df_pose.add_prefix("facecam_pose_")
 
-#     df_pose["facecam_image_pc_timestamp"] = data["facecam_image_pc_timestamp"]
-#     df_pose["facecam_image_ephys_timestamp"] = data["facecam_image_ephys_timestamp"]
-#     return df_pose 
+    df_pose["facecam_image_pc_timestamp"] = data["facecam_image_pc_timestamp"]
+    df_pose["facecam_image_ephys_timestamp"] = data["facecam_image_ephys_timestamp"]
+    return df_pose 

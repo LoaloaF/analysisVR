@@ -18,7 +18,7 @@ from analytics_processing.analytics_constants import device_paths
 from sklearn.model_selection import GridSearchCV
 from sklearn.svm import SVC
 from sklearn.pipeline import Pipeline
-from sklearn.metrics import classification_report
+from sklearn.metrics import classification_report, balanced_accuracy_score
 
 
 from sklearn.preprocessing import StandardScaler
@@ -508,7 +508,7 @@ def get_PCsZonewise(fr, track_data):
     }
     
     aggr_embeds = []
-    for i in range(3):
+    for i in range(4):
         # which modality to use for prediction
         if i == 0:
             predictor = fr.iloc[:, :20]
@@ -520,6 +520,9 @@ def get_PCsZonewise(fr, track_data):
             predictor = track_data.loc[:, ['posbin_velocity', 'posbin_acceleration', 'lick_count',
                                            'posbin_raw', 'posbin_yaw', 'posbin_pitch']]
             predictor_name = 'behavior'
+        elif i == 3:
+            predictor = fr.iloc[:]
+            predictor_name = 'HP-mPFC'
             
         debug_msg = (f"Embedding {predictor_name} with PCA:\n")
         for zone, (from_z, to_z) in zones.items():
@@ -567,12 +570,15 @@ def get_PCsZonewise(fr, track_data):
 def get_SVMCueOutcomeChoicePred(PCsZonewise):
     L = Logger()
 
-    def fit_SVMs_with_bootstrap(X, Ys, name, n_iterations=60):
+    def fit_SVMs_with_bootstrap(X, Ys, name, n_iterations=200):
         predictions = []
         rng = np.random.default_rng(42)
 
         for Y_name, y in Ys.items():
+            # if Y_name != 'choice_R1':
+            #     continue
             lbl_counts = pd.Series(y).value_counts()
+            print(Y_name)
             if lbl_counts.min() < 5 or len(lbl_counts) < 2:
                 L.logger.warning(f"Not enough samples for {Y_name} in {name}: ({lbl_counts})")
                 continue
@@ -581,12 +587,20 @@ def get_SVMCueOutcomeChoicePred(PCsZonewise):
                 continue
 
             for kernel in ('linear', 'rbf'):
-                Cs = [0.05, 0.1, .5, 0.75, 1, 2.5, 5, 10, 20]
-                accs, stds, f1s = [], [], []
+                # if kernel != 'linear':
+                #     continue
+                Cs = [0.1, .5, 1, 5, 10,]
+                accs, f1s = [], []
 
+                aggr_predictions = np.ones((n_iterations, len(X)), dtype=int) * -1
+                print(aggr_predictions.shape)
                 for i in range(n_iterations):
                     indices = rng.choice(len(X), size=len(X), replace=True)
                     X_boot, y_boot = X[indices], y[indices]
+                    # only a single cclass check:
+                    if len(np.unique(y_boot)) < 2:
+                        print("Skipping SVM fit due to single class in bootstrap sample")
+                        continue
                     oob_mask = np.ones(len(X), dtype=bool)
                     oob_mask[indices] = False
                     X_oob, y_oob = X[oob_mask], y[oob_mask]
@@ -602,7 +616,7 @@ def get_SVMCueOutcomeChoicePred(PCsZonewise):
                         estimator=pipeline,
                         param_grid={'svc__C': Cs},
                         cv=6,
-                        scoring='accuracy',
+                        scoring='balanced_accuracy',
                         n_jobs=-1,
                         verbose=False,
                     )
@@ -610,23 +624,37 @@ def get_SVMCueOutcomeChoicePred(PCsZonewise):
                     y_pred = grid_search.predict(X_oob)
                     report = classification_report(y_oob, y_pred, output_dict=True, zero_division=0)
 
-                    accs.append(np.mean(y_pred == y_oob))
-                    stds.append(np.std(y_pred == y_oob))
-                    f1s.append(report['weighted avg']['f1-score'])
-
-                # Fit final model on full data for predictions
-                final_model = GridSearchCV(
-                    estimator=Pipeline([
-                        ('scaler', StandardScaler()),
-                        ('svc', SVC(kernel=kernel, gamma='scale'))
-                    ]),
-                    param_grid={'svc__C': Cs},
-                    cv=6,
-                    scoring='accuracy',
-                    n_jobs=-1
-                )
-                final_model.fit(X, y)
-                pred = final_model.predict(X)
+                    accs.append(balanced_accuracy_score(y_oob, y_pred))
+                    f1s.append(report['macro avg']['f1-score'])
+                    
+                    # every row is one bootstrap iteration
+                    aggr_predictions[i, oob_mask] = y_pred
+                
+                # get the "average" prediction across bootstrap iterations
+                aggr_predictions = pd.DataFrame(aggr_predictions)
+                aggr_predictions[aggr_predictions == -1] = np.nan
+                pred = aggr_predictions.mode(axis=0).iloc[0].values
+                
+                # difference
+                f1_aggr = classification_report(y, pred, output_dict=True, zero_division=0)['macro avg']['f1-score']
+                
+                print(f"mean: {np.mean(f1s):.3f}, aggr: {f1_aggr:.3f}, "
+                      f"diff: {np.mean(f1s) - f1_aggr:.3f}")
+                
+                # # Fit final model on full data for predictions
+                # final_model = GridSearchCV(
+                #     estimator=Pipeline([
+                #         ('scaler', StandardScaler()),
+                #         ('svc', SVC(kernel=kernel, gamma='scale'))
+                #     ]),
+                #     param_grid={'svc__C': Cs},
+                #     cv=6,
+                #     scoring='f1_macro',
+                #     n_jobs=-1
+                # )
+                # final_model.fit(X, y)
+                # pred = final_model.predict(X)
+                # # print(np.stack((y, pred)).T)
                 
                 # print(f"---\n{Y_name} {name} {kernel}")
                 # if Y_name == 'cue' and kernel == 'linear' and name[1] == 'afterCueZone' and name[0] == 'HP':
@@ -638,15 +666,14 @@ def get_SVMCueOutcomeChoicePred(PCsZonewise):
                 
 
                 col_index = pd.MultiIndex.from_tuples([(*list(name), kernel, Y_name, n) for n in 
-                                                    ('y', 'y_true', 'acc', 'acc_std', 'f1')],
+                                                    ('y', 'y_true', 'n_PCs', 'acc', 'acc_std', 'f1')],
                                                     names=['predictor', 'track_zone', 'model', 'predicting', 'output'])
                 pred_output = np.concatenate([
                     pred[:, None], y[:, None],
-                    np.tile(np.array([np.mean(accs), np.std(accs), np.mean(f1s)]), (len(pred), 1))
+                    np.tile(np.array([X.shape[1], np.mean(accs), np.std(accs), np.mean(f1s)]), (len(pred), 1))
                 ], axis=1)
 
                 predictions.append(pd.DataFrame(pred_output, columns=col_index, index=PCsZonewise.index))
-    
         if predictions == []:
             L.logger.warning(f"None enough trials to fit any SVM for {name}")
             return None
@@ -674,6 +701,10 @@ def get_SVMCueOutcomeChoicePred(PCsZonewise):
                                         append=False).unstack(level='track_zone')
     all_zones = []
     for column in PCsZonewise.columns:
+        # if column[1] != 'beforeCueZone':
+        #     continue
+        # if column[0] in ('HP', 'mPFC'):
+        #     continue
         X_list = PCsZonewise[column].apply(parse_string_to_array)
         if X_list.isna().any():
             L.logger.warning(f"Missing trials for {column}...")
@@ -703,7 +734,7 @@ def get_SVMCueOutcomeChoicePred(PCsZonewise):
         return None
     
     all_zones = pd.concat(all_zones, axis=1)
-    all_zones = all_zones.stack(level=('predictor', 'zone', 'model', 'predicting'), future_stack=True).reset_index()
-    print(all_zones.columns)
-    print(all_zones)
+    all_zones = all_zones.stack(level=('predictor', 'track_zone', 'model', 'predicting'), future_stack=True).reset_index()
+    # print(all_zones.columns)
+    # print(all_zones)
     return all_zones

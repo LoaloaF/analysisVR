@@ -65,17 +65,17 @@ def _compute_analytic(analytic, session_fullfname):
         data_table = C.SCHEMA_BehaviorEvents
         
     # TODO impelemnt 
-    # elif analytic == "BehaviorPose":
-    #     cols = ['trial_id', 'trial_start_pc_timestamp', 'trial_end_pc_timestamp',
-    #             'cue', 'trial_outcome', 'choice_R1', 'choice_R2']
-    #     trialwise = get_analytics(analytic="BehaviorTrialwise", columns=cols,
-    #                               session_names=[session_name])
-    #     if trialwise is None:
-    #         L.logger.warning("Missing lower level analytic")
-    #         return None
+    elif analytic == "BehaviorPose":
+        cols = ['trial_id', 'trial_start_pc_timestamp', 'trial_end_pc_timestamp',
+                'cue', 'trial_outcome', 'choice_R1', 'choice_R2']
+        trialwise = get_analytics(analytic="BehaviorTrialwise", columns=cols,
+                                  session_names=[session_name])
+        if trialwise is None:
+            L.logger.warning("Missing lower level analytic")
+            return None
         
-    #     data = m2a.get_BehaviorPose(session_fullfname, trialwise)
-    #     data_table = C.SCHEMA_BehaviorPose
+        data = m2a.get_BehaviorPose(session_fullfname, trialwise)
+        data_table = C.SCHEMA_BehaviorPose
     
     elif analytic == "BehaviorFramewise":
         # 1. track kinematics
@@ -242,6 +242,10 @@ def _compute_analytic(analytic, session_fullfname):
             return None
         data = ephys.get_SVMCueOutcomeChoicePred(PCsZonewise)
         data_table = C.SVM_CUE_OUTCOME_CHOICE_PRED_TABLE
+
+        if data is None:
+            L.logger.warning("Failed to compute SVM Cue Outcome Choice Prediction")
+            return None
     
     # elif analytic == "FiringRateTrackbinsZ":
     #     fr_data = get_analytics('FiringRate40msZ', session_names=[session_name])

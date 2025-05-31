@@ -14,8 +14,8 @@ def draw_track_illustration(fig, row, col, track_details, min_track, max_track,
     # draw the bars indicating track zones/ wall textures
     # iterate the two different type of tracks
     for track_type in (1, 2):
-        fig.update_yaxes(row=1, col=1, range=(2,0), ticks='', showticklabels=False,)
-        fig.update_xaxes(range=(min_track, max_track), row=1, col=1, ticks='outside', 
+        fig.update_yaxes(row=row, col=col, range=(2,0), ticks='', showticklabels=False,)
+        fig.update_xaxes(range=(min_track, max_track), row=row, col=col, ticks='outside', 
                          showticklabels=False)
         
         # iterate early and late cues

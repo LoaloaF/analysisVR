@@ -16,8 +16,8 @@ def render_plot(spikes, spike_metadata, width, height):
     print(sessions)
     
     
-    tile_height = 370
-    tile_width = 130
+    tile_height = 160
+    tile_width = 40
     
     fig = make_subplots(
         rows=len(clusters), cols=len(sessions),
@@ -149,11 +149,12 @@ def render_plot(spikes, spike_metadata, width, height):
                 if wfs.isnull().all():
                     continue
                 
-                wfs = np.stack(wfs.apply(lambda x: np.fromstring(x.strip("[]"), sep=" ", 
-                                                                 dtype=np.int32)))
+                # wfs = np.stack(wfs.apply(lambda x: np.fromstring(x.strip("[]"), sep=" ", 
+                #                                                  dtype=np.int32)))
+                wfs = np.stack(wfs[:1000].apply(lambda x:x))
                 print(f"Channel {site_col} {chnl}: ", wfs.shape)
                 
-                wfs = wfs[:, 5:-10]
+                # wfs = wfs[:, 5:-10]
                 
                 draw_waveform(wfs, chnl, k, j==0, sess_spike_metadata,
                               gnrl_annotation)

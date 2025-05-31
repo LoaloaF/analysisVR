@@ -9,14 +9,14 @@ from .. .components.dcc_graphs import get_general_graph_component
 from .data_selection_components import (
     animal_dropdown_component,
     session_dropdown_component,
-    metric_radioitems_component,
+    models_radioitems_component,
     groupby_radioitems_component,
-    variance_radioitems_component,
+    metrics_radioitems_component,
     outcome_group_filter_component,
     cue_group_filter_component,
     trial_group_filter_component,
     max_metric_input_component,
-    smooth_checklist_component,
+    use_subset_component,
     
     register_animal_dropdown_callback,
     register_session_dropdown_callback,
@@ -39,10 +39,10 @@ def render(app: Dash, global_data: dict, vis_name: str) -> html.Div:
     session_dropd, SESSION_DROPD_ID = session_dropdown_component(*comp_args)
     # these don't need data to be initialized    
     groupby_radioi, GROUPBY_RADIOI_ID = groupby_radioitems_component(vis_name)
-    metrics_radioi, METRICS_RADIOI_ID = metric_radioitems_component(vis_name)
+    models_radioi, MODELS_RADIOI_ID = models_radioitems_component(vis_name)
     maxmetric_inp, MAXMETRIC_INP_ID = max_metric_input_component(vis_name, initial_value=80)
-    smooth_checkl, SMOOTH_CHECKL_ID = smooth_checklist_component(vis_name)
-    varianve_radioi, VARIANCE_RADIOI_ID = variance_radioitems_component(vis_name)
+    use_subset_checkl, USE_SUBSET_ID = use_subset_component(vis_name)
+    metrics_radioi, METRICS_RADIOI_ID = metrics_radioitems_component(vis_name)
     outcome_filter, OUTCOME_FILTER_ID = outcome_group_filter_component(vis_name)
     cue_filter, CUE_FILTER_ID = cue_group_filter_component(vis_name)
     trial_filter, TRIAL_FILTER_ID = trial_group_filter_component(vis_name)
@@ -54,16 +54,16 @@ def render(app: Dash, global_data: dict, vis_name: str) -> html.Div:
         Input(ANIMAL_DROPD_ID, 'value'),
         Input(SESSION_DROPD_ID, 'value'),
         Input(GROUPBY_RADIOI_ID, 'value'),
-        Input(METRICS_RADIOI_ID, 'value'),
+        Input(MODELS_RADIOI_ID, 'value'),
         Input(MAXMETRIC_INP_ID, 'value'),
-        Input(SMOOTH_CHECKL_ID, 'value'),
-        Input(VARIANCE_RADIOI_ID, 'value'),
+        Input(USE_SUBSET_ID, 'value'),
+        Input(METRICS_RADIOI_ID, 'value'),
         Input(OUTCOME_FILTER_ID, 'value'),
         Input(CUE_FILTER_ID, 'value'),
         Input(TRIAL_FILTER_ID, 'value'),
     )
     def update_plot(selected_animal, selected_session, group_by, 
-                    metric, metric_max, smooth_data, var_viz,
+                    model, metric_max, use_subset, which_metric,
                     outcome_filter, cue_filter, trial_filter):
         
         # only render the plot if all the necessary data selections are made   
@@ -80,6 +80,7 @@ def render(app: Dash, global_data: dict, vis_name: str) -> html.Div:
         
         # print("----")
         # print(data)
+        print(model)
         
         # check max trial id for the session, before potential filtering
         n_trials = data['trial_id'].max().item()
@@ -96,14 +97,16 @@ def render(app: Dash, global_data: dict, vis_name: str) -> html.Div:
         # selected_sessions = [s for s in selected_sessions if s in global_data['UnityTrackwise'].index.unique('session_id')]
         
         # list to single value
-        if len(var_viz) == 1:
-            var_viz = var_viz[0]
-        if len(smooth_data) == 1:
-            smooth_data = True
+        # if len(var_viz) == 1:
+        #     var_viz = var_viz[0]
+        # if len(smooth_data) == 1:
+        #     smooth_data = True
         
-        fig = plot_SVMPredictions.render_plot(data, global_data['SessionMetadata'],)
+        print(data)
+        fig = plot_SVMPredictions.render_plot(data, global_data['SessionMetadata'],
+                                              model, use_subset, which_metric,
+                                              )
                                                 #  n_trials, group_by, group_by_values,
-                                                #  metric, metric_max, 
                                                 #  smooth_data, var_viz)
         return fig
     
@@ -113,7 +116,7 @@ def render(app: Dash, global_data: dict, vis_name: str) -> html.Div:
             # Left side for plots
             dbc.Col([
                 graph,
-            ], width=7),
+            ], width=9),
             # Right side for UI controls
             dbc.Col([
                 # three rows, header, dropdown/tickpoxes, range slider
@@ -124,13 +127,13 @@ def render(app: Dash, global_data: dict, vis_name: str) -> html.Div:
                 dbc.Row([
                     dbc.Col([
                         # Dropdown for animal session and metric selection
-                        *animal_dropd, *session_dropd, *metrics_radioi,
+                        *animal_dropd, *session_dropd, *models_radioi,
                     ], width=4),
                     
                     # Other options in middle column
                     dbc.Col([
                         # Radioitems for group by selection and variance visualization
-                        *groupby_radioi, *varianve_radioi,
+                        *groupby_radioi, *metrics_radioi,
                     ], width=4),
                     
                     # Other options in right column
@@ -138,10 +141,10 @@ def render(app: Dash, global_data: dict, vis_name: str) -> html.Div:
                         # Filter checklist, max metric and smooth data
                         *outcome_filter, *cue_filter, *trial_filter,
                         html.Hr(),
-                        *maxmetric_inp, *smooth_checkl,
+                        *maxmetric_inp, *use_subset_checkl,
                     ], width=4),
                 ]),
-            ], width=5)
+            ], width=3)
         ]),
         html.Hr()
     ], id=f"{vis_name}-container")  # Initial state is hidden

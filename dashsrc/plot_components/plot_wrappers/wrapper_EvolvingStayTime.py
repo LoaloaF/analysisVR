@@ -25,14 +25,14 @@ from ..plots import plot_EvolvingStayDecision
 import dashsrc.components.dashvis_constants as C
 
 def render(app: Dash, global_data: dict, vis_name: str) -> html.Div:
-    analytic = 'UnityTrialwiseMetrics'
+    analytic = 'BehaviorTrialwise'
     # components with data depedency need these arguments
     comp_args = vis_name, global_data, analytic
     
     # Register the callbacks
     register_paradigm_dropdown_callback(app, *comp_args)
     register_animal_dropdown_callback(app, *comp_args)
-    register_session_slider_callback(app, *comp_args, override_default_last_session=10) 
+    register_session_slider_callback(app, *comp_args, default_select_sessions=(8, 26))
     
     # create the html components to have their IDs (needed for the callbacks)
     paradigm_dropd, PARADIGM_DROPD_ID = paradigm_dropdown_component(*comp_args)

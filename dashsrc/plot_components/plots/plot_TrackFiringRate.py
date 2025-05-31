@@ -15,11 +15,11 @@ from dashsrc.components.dashvis_constants import *
 def _parse_args(n_trials, group_by, metric, metric_max):
     # parse arguemnts and set defaults    
     if metric == 'Velocity':
-        metric_col = 'posbin_z_velocity'
+        metric_col = 'posbin_velocity'
         y_axis_label = 'Velocity [cm/s]'
         y_axis_range = 0, metric_max
     elif metric == 'Acceleration':
-        metric_col = 'posbin_z_acceleration'
+        metric_col = 'posbin_acceleration'
         y_axis_label = 'Acceleration [cm/s^2]'
         y_axis_range = -metric_max, metric_max
     elif metric == 'Lick':
@@ -108,7 +108,7 @@ def _configure_axis(fig, height, width, y_axis_range, y_axis_label):
 def _draw_all_single_trials(fig, data, metric_col, cmap_transparent, group_col):
     # Create the main plot with line grouping by trial_id and color based on group_by
     for trial_id, trial_data in data.groupby('trial_id'):
-        trace = go.Scatter(x=trial_data['from_z_position_bin'], 
+        trace = go.Scatter(x=trial_data['from_position_bin'], 
                         y=trial_data[metric_col], mode='lines',
                         line=dict(color=cmap_transparent[trial_data[group_col].iloc[0]]),
                         name=f'Tr. {trial_id}')
@@ -119,7 +119,7 @@ def _draw_percentile_area_plot(fig, upper_perc, lower_perc, metric_col, transp_c
     # draw essentially 2 lines and fill the area between them
     # print(upper_perc, lower_perc)
     fig.add_trace(go.Scatter(
-        x=upper_perc['from_z_position_bin'].tolist() + lower_perc['from_z_position_bin'].tolist()[::-1],
+        x=upper_perc['from_position_bin'].tolist() + lower_perc['from_position_bin'].tolist()[::-1],
         y=upper_perc[metric_col].tolist() + lower_perc[metric_col].tolist()[::-1],
         fill='toself',
         fillcolor=transp_color,
@@ -130,13 +130,13 @@ def _draw_percentile_area_plot(fig, upper_perc, lower_perc, metric_col, transp_c
     
 def render_plot(track_data, fr, metadata, spike_metadata, metric, n_sessions,
                 metric_max, smooth_data, width=-1, height=-1):
-    fr = fr.set_index(['trial_id', 'from_z_position_bin', 'cue'], append=True, )
+    fr = fr.set_index(['trial_id', 'from_position_bin', 'cue', 'choice_R1', 'choice_R2'], append=True, )
     fr.drop(columns=['trial_outcome','bin_length'], inplace=True)
     fr.columns = fr.columns.astype(int)
     fr = fr.reindex(columns=sorted(fr.columns))
     
     print(fr)
-    fr = fr.groupby(['from_z_position_bin', 'session_id']).mean().sort_index(level=['session_id', 'from_z_position_bin']).fillna(0)
+    fr = fr.groupby(['from_position_bin', 'session_id']).mean().sort_index(level=['session_id', 'from_position_bin']).fillna(0)
     # print(fr)
     
     # fr.columns = fr.columns.astype(int)
@@ -173,7 +173,7 @@ def render_plot(track_data, fr, metadata, spike_metadata, metric, n_sessions,
         fig.update_yaxes(title_text=f"Neuron {i}", row=tuning_row, col=1)
         
         #TODO if P1100: choice_str='Stop', if DR == 1 draw_cues=[]
-        min_track, max_track = track_data['from_z_position_bin'].min(), track_data['from_z_position_bin'].max()
+        min_track, max_track = track_data['from_position_bin'].min(), track_data['from_position_bin'].max()
         draw_track_illustration(fig, row=track_visrow, col=1,  track_details=json.loads(metadata.iloc[12]['track_details']), 
                                 min_track=min_track, max_track=max_track, choice_str='Stop', draw_cues=[2], double_rewards=False)
 
@@ -183,7 +183,7 @@ def render_plot(track_data, fr, metadata, spike_metadata, metric, n_sessions,
         neuron_i_fr = fr.iloc[:, i].unstack(level='session_id').fillna(0).copy()
         print(neuron_i_fr)
         # neuron_i_fr.drop(columns=[10,24,25], inplace=True)
-        neuron_i_fr.index = np.sort(track_data['from_z_position_bin'].unique())
+        neuron_i_fr.index = np.sort(track_data['from_position_bin'].unique())
         # if cluster_id == 24:
         #     print(neuron_i_fr)
         # neuron_i_fr = neuron_i_fr.drop(columns=[10, 25])
@@ -246,8 +246,8 @@ def render_plot(track_data, fr, metadata, spike_metadata, metric, n_sessions,
         
         
         # event plot
-        event_cnt = track_data.loc[:, ['from_z_position_bin', 'V_count', 'L_count', 'R_count', #'S_count', 
-                                      ]].groupby('from_z_position_bin').sum().astype(float).T
+        event_cnt = track_data.loc[:, ['from_position_bin', 'reward-removed_count', 'lick_count', 'reward-valve-open_count', #'S_count', 
+                                      ]].groupby('from_position_bin').sum().astype(float).T
         # print(event_cnt)
         event_cnt /= event_cnt.max(axis=1).values[:, np.newaxis]
         # print(event_cnt)
@@ -276,9 +276,9 @@ def render_plot(track_data, fr, metadata, spike_metadata, metric, n_sessions,
             data[metric_col] = data[metric_col].rolling(window=10, center=True, min_periods=1).mean()
         
         # # last spatial bins can ba NaN, remove them
-        # min_max_pos_bin = data['from_z_position_bin'].min(), data['from_z_position_bin'].max()
-        # data = data[(data['from_z_position_bin'] > min_max_pos_bin[0]) &
-        #             (data['from_z_position_bin'] < min_max_pos_bin[1])]
+        # min_max_pos_bin = data['from_position_bin'].min(), data['from_position_bin'].max()
+        # data = data[(data['from_position_bin'] > min_max_pos_bin[0]) &
+        #             (data['from_position_bin'] < min_max_pos_bin[1])]
             
         # # TODO handle this properly
         # # deal with double outcomes
@@ -291,7 +291,7 @@ def render_plot(track_data, fr, metadata, spike_metadata, metric, n_sessions,
         # print(outcome_r1)
         
         #TODO if P1100: choice_str='Stop', if DR == 1 draw_cues=[]
-        min_track, max_track = data['from_z_position_bin'].min(), data['from_z_position_bin'].max()
+        min_track, max_track = data['from_position_bin'].min(), data['from_position_bin'].max()
         draw_track_illustration(fig, row=1, col=1,  track_details=json.loads(metadata.iloc[0]['track_details']), 
                                 min_track=min_track, max_track=max_track, choice_str='Stop', draw_cues=[], double_rewards=True)
 
@@ -300,12 +300,12 @@ def render_plot(track_data, fr, metadata, spike_metadata, metric, n_sessions,
             _draw_all_single_trials(fig, data, metric_col, cmap_transparent, group_col)
             
         if group_by == "None":
-            med_values = data.groupby('from_z_position_bin')[metric_col].mean().reset_index()
+            med_values = data.groupby('from_position_bin')[metric_col].mean().reset_index()
             # print(med_values.isna().sum())
             # print(med_values[med_values.isna()])
             # Add the mean trace to the main plot
             mean_trace = go.Scatter(
-                x=med_values['from_z_position_bin'],
+                x=med_values['from_position_bin'],
                 y=med_values[metric_col],
                 mode='lines',
                 line=dict(color='black', width=3),
@@ -314,18 +314,18 @@ def render_plot(track_data, fr, metadata, spike_metadata, metric, n_sessions,
             fig.add_trace(mean_trace, row=2, col=1)
             
             if var_viz == '80th percent.':
-                upper_perc = data.groupby('from_z_position_bin')[metric_col].quantile(0.9).reset_index().dropna()
-                lower_perc = data.groupby('from_z_position_bin')[metric_col].quantile(0.1).reset_index().dropna()
+                upper_perc = data.groupby('from_position_bin')[metric_col].quantile(0.9).reset_index().dropna()
+                lower_perc = data.groupby('from_position_bin')[metric_col].quantile(0.1).reset_index().dropna()
                 _draw_percentile_area_plot(fig, upper_perc, lower_perc, metric_col, 'rgba(128,128,128,0.3)')
         
         else:
             for group_lbl, group_values in group_by_values.items():
                 group_data = data[data[group_col].isin(group_values)]
                 
-                groupwise_med_values = group_data.groupby(['from_z_position_bin', group_col])[metric_col].median().reset_index()
+                groupwise_med_values = group_data.groupby(['from_position_bin', group_col])[metric_col].median().reset_index()
                 # groupwise_med_values = groupwise_med_values[groupwise_med_values[group_col].isin(group_values)]
                 # when group_values has more than one value, this dim needs to collapse to one value
-                groupwise_med_values = groupwise_med_values.groupby('from_z_position_bin').median().reset_index()
+                groupwise_med_values = groupwise_med_values.groupby('from_position_bin').median().reset_index()
                 if group_by == 'Part of session':
                     # we only draw one line for a set of trials (eg first 3rd of trials),
                     # for line color, use the trial_id in the middle of the set (used for cmap below)
@@ -337,7 +337,7 @@ def render_plot(track_data, fr, metadata, spike_metadata, metric, n_sessions,
                 
                 # draw the group median line
                 trace = go.Scatter(
-                    x=groupwise_med_values['from_z_position_bin'],
+                    x=groupwise_med_values['from_position_bin'],
                     y=groupwise_med_values[metric_col],
                     mode='lines',
                     line=dict(color=color, width=2),
@@ -347,8 +347,8 @@ def render_plot(track_data, fr, metadata, spike_metadata, metric, n_sessions,
                 
                 # draw the 80th percentile area plot
                 if var_viz == '80th percent.':
-                    upper_perc = group_data.groupby('from_z_position_bin')[metric_col].quantile(0.9).reset_index().dropna()
-                    lower_perc = group_data.groupby('from_z_position_bin')[metric_col].quantile(0.1).reset_index().dropna()
+                    upper_perc = group_data.groupby('from_position_bin')[metric_col].quantile(0.9).reset_index().dropna()
+                    lower_perc = group_data.groupby('from_position_bin')[metric_col].quantile(0.1).reset_index().dropna()
                     _draw_percentile_area_plot(fig, upper_perc, lower_perc, metric_col, transp_color)
                 
     fig = _configure_axis(fig, height, width, y_axis_range, y_axis_label)

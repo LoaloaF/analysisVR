@@ -26,7 +26,7 @@ from .data_selection import group_filter_data
 from ..plots import plot_SessionKinematics
 
 def render(app: Dash, global_data: dict, vis_name: str) -> html.Div:
-    analytic = 'UnityTrackwise'
+    analytic = 'BehaviorTrackwise'
     # components with data depedency need these arguments
     comp_args = vis_name, global_data, analytic
     

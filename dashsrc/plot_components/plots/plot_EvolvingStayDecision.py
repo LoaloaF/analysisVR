@@ -10,10 +10,13 @@ from .general_plot_helpers import make_discr_trial_cmap
 def render_plot(data, mode_span, width, height):
 
     # Data transformations    
-    data.loc[:, ['staytime_reward1', 'staytime_reward2']] /= 1_000_000  # us to s
-    # clip to 0, 10 seconds
-    data.loc[:, ['chose_reward1', 'chose_reward2']] = (data.loc[:, ['staytime_reward1', 'staytime_reward2']] > 2).values
     print(data)
+    print(data.iloc[0])
+    print(data.columns.to_list())
+    # data.loc[:, ['staytime_reward1', 'staytime_reward2']] /= 1_000_000  # us to s
+    # clip to 0, 10 seconds
+    # data.loc[:, ['chose_reward1', 'chose_reward2']] = (data.loc[:, ['staytime_reward1', 'staytime_reward2']] > 2).values
+    # print(data)
     # exit()
     
     # reset trial_id to set of sessions, each is unique
@@ -30,18 +33,24 @@ def render_plot(data, mode_span, width, height):
     
     
     
-    print(data)
+    # print(data.flip_Cue1R1_Cue2R2.drop_duplicates())
+    print(data.groupby(level='session_id').apply(lambda x: x.iloc[0].flip_Cue1R1_Cue2R2))
+    print(data.groupby(level='session_id').apply(lambda x: x.iloc[0].both_R1_R2_rewarded))
     # print(metadata)
     print("================")
     # # do the plotting
     trials = data.index.get_level_values('entry_id')
     fig = make_subplots(rows=1, cols=1)
+
+    # TODO shouldn't need cast    
+    data['choice_R1'] = data['choice_R1'].astype(bool)
+    data['choice_R2'] = data['choice_R2'].astype(bool)
     
-    
-    data['chose_only_R1'] = data['chose_reward1'] & ~data['chose_reward2']
-    data['chose_only_R2'] = ~data['chose_reward1'] & data['chose_reward2']
-    data['chose_both'] = data['chose_reward1'] & data['chose_reward2']
-    data['chose_neither'] = ~data['chose_reward1'] & ~data['chose_reward2']
+    # choices[choices=="None"] = np.nan
+    data['chose_only_R1'] = (data['choice_R1']) & (~data['choice_R2'])
+    data['chose_only_R2'] = (~data['choice_R1']) & (data['choice_R2'])
+    data['chose_both'] = (data['choice_R1']) & (data['choice_R2'])
+    data['chose_neither'] = (~data['choice_R1']) & (~data['choice_R2'])
     
     y_ticks = [],[]
     for i in [0,1]:
@@ -52,11 +61,10 @@ def render_plot(data, mode_span, width, height):
         cue_data[f'chose_only_R{other_cue}'] = cue_data[f'chose_only_R{other_cue}'] * -1
         cue_data['chose_both'] = cue_data['chose_both'] * 1
         cue_data['chose_neither'] = cue_data['chose_neither'] * 0
-        print(cue_data.iloc[:, -4:])
         cue_data['choice'] = cue_data.iloc[:, -4:].sum(axis=1)
-        print(cue_data['choice'])
         
-        cue_data['smoothed_choice'] = cue_data['choice'].rolling(mode_span).apply(lambda x: x.mode().iloc[0] if not x.mode().empty else np.nan, raw=False)
+        cue_data['smoothed_choice'] = cue_data.groupby(level='session_id')['choice'].rolling(
+            mode_span, min_periods=2).apply(lambda x: x.mode().iloc[0] if not x.mode().empty else np.nan, raw=False).values
         
         y_ticks[0].extend(list(np.array([-1, 0, 1, 2]) +6*i))
         y_ticks[1].extend([f'only R{other_cue}', 'Neither', 'Both', f'only R{cue}'])
@@ -116,6 +124,7 @@ def render_plot(data, mode_span, width, height):
         # add session seperators lines
         for s_id in data.index.unique(level='session_id'):
             s_data = data.loc[pd.IndexSlice[:,:,s_id,:]]
+            
             last_id = s_data.index.get_level_values('entry_id').max()
             
             for j in range(2):
@@ -126,15 +135,20 @@ def render_plot(data, mode_span, width, height):
                     x1=last_id+.001,
                     y1=y_bounds[1] +6*i if not j else y_bounds[1] +13,
                     line=dict(color='rgba(128,128,128,.8)', width=2, dash='dash'),
+                    # label=dict(text=f'S{s_id:02d} end',
+                    #             font=dict(size=12, color='rgba(128,128,128,.8)')),
+                    # legendgroup=f'Session {s_id:02d}',
+                    # showlegend=False,
                 )
             # with annotation aligned to the right
+            length = s_data.trial_start_pc_timestamp.max()-s_data.trial_start_pc_timestamp.min()
             if i == 0:
                 fig.add_annotation(
                     x=last_id, 
                     y=y_bounds[0] +6*i,
-                    text=f'S{s_id:02d}',
+                    text=f'S{s_id:02d}, {round(length/1e6 /60)}min',
                     showarrow=False,
-                    font=dict(size=12, color='rgba(128,128,128,.8)'),
+                    font=dict(size=10, color='rgba(128,128,128,.8)'),
                     xanchor='right',  # Align text horizontally to the right
                 )
                 

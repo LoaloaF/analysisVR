@@ -105,31 +105,32 @@ Logger().init_logger(None, None, logging_level="DEBUG")
 # fig.show()
 
 
-# # ephys
-# paradigm_ids = [1100]
-# animal_ids = [6]
-# session_ids = [25]
-# # animal_ids = [10]
-# # session_ids = [7,8]
-# width = 1400
-# height = 1400
-# group_by = None
-# data["Spikes"] = analytics.get_analytics('spikes', mode='set',
-#                                          paradigm_ids=paradigm_ids,
-#                                          animal_ids=animal_ids,
-#                                          session_ids=session_ids)
-# data['SpikeClusterMetadata'] = analytics.get_analytics('SpikeClusterMetadata', mode='set',
-#                                                     paradigm_ids=paradigm_ids,
-#                                                     animal_ids=animal_ids,
-#                                                     session_ids=session_ids)
+# ephys
+paradigm_ids = [1100]
+animal_ids = [6]
+session_ids = None
+# animal_ids = [10]
+# session_ids = list(range(8))
+width = 1400
+height = 1400
+group_by = None
+data["Spikes"] = analytics.get_analytics('spikes', mode='set',
+                                         paradigm_ids=paradigm_ids,
+                                         animal_ids=animal_ids,
+                                         session_ids=session_ids)
+data["Spikes"] = data["Spikes"].iloc[:, :30]
+data['SpikeClusterMetadata'] = analytics.get_analytics('SpikeClusterMetadata', mode='set',
+                                                    paradigm_ids=paradigm_ids,
+                                                    animal_ids=animal_ids,
+                                                    session_ids=session_ids)
 
-# # session_dir = sessionlist_fullfnames_from_args(paradigm_ids, animal_ids, session_ids)[0][0]
-# # raw_data_mmap, mapping = session_modality_from_nas(session_dir, 'ephys_traces')
-# # data['ephys_traces'] = raw_data_mmap
-# # data['implant_mapping'] = mapping
-# fig = plot_SessionWaveforms.render_plot(data['Spikes'], data['SpikeClusterMetadata'],
-#                                         width, height,)
-# fig.show()
+# session_dir = sessionlist_fullfnames_from_args(paradigm_ids, animal_ids, session_ids)[0][0]
+# raw_data_mmap, mapping = session_modality_from_nas(session_dir, 'ephys_traces')
+# data['ephys_traces'] = raw_data_mmap
+# data['implant_mapping'] = mapping
+fig = plot_SessionWaveforms.render_plot(data['Spikes'], data['SpikeClusterMetadata'],
+                                        width, height,)
+fig.show()
 
 
 
@@ -268,27 +269,27 @@ Logger().init_logger(None, None, logging_level="DEBUG")
 
 
 
-# ephys
-paradigm_ids = [1100]
-animal_ids = [6]
-width = 715
-height = 1070
-session_ids = None
-session_names = ["2024-12-09_17-45_rYL006_P1100_LinearTrackStop_26min"]
+# # ephys
+# paradigm_ids = [1100]
+# animal_ids = [6]
+# width = 715
+# height = 1070
+# session_ids = None
+# session_names = ["2024-12-09_17-45_rYL006_P1100_LinearTrackStop_26min"]
 
-svm_output = analytics.get_analytics('SVMCueOutcomeChoicePred', mode='set',
-                             paradigm_ids=paradigm_ids,
-                             animal_ids=animal_ids,
-                             session_names=session_names,
-                             session_ids=session_ids)
-metad = analytics.get_analytics('SessionMetadata', mode='set',
-                             paradigm_ids=paradigm_ids,
-                             animal_ids=animal_ids,
-                             session_names=session_names,
-                             session_ids=session_ids)
+# svm_output = analytics.get_analytics('SVMCueOutcomeChoicePred', mode='set',
+#                              paradigm_ids=paradigm_ids,
+#                              animal_ids=animal_ids,
+#                              session_names=session_names,
+#                              session_ids=session_ids)
+# metad = analytics.get_analytics('SessionMetadata', mode='set',
+#                              paradigm_ids=paradigm_ids,
+#                              animal_ids=animal_ids,
+#                              session_names=session_names,
+#                              session_ids=session_ids)
 
 
-fig = plot_SVMPredictions.render_plot(svm_output, metad)
-fig.show()
+# fig = plot_SVMPredictions.render_plot(svm_output, metad)
+# fig.show()
 
 

@@ -27,7 +27,7 @@ from ..plots import plot_TrackFiringRate
 import dashsrc.components.dashvis_constants as C
 
 def render(app: Dash, global_data: dict, vis_name: str) -> html.Div:
-    prim_analytic = 'UnityTrackwise'
+    prim_analytic = 'BehaviorTrackwise'
     sec_analytic = 'FiringRateTrackwiseHz'
     # components with data depedency need these arguments
     comp_args = vis_name, global_data, prim_analytic

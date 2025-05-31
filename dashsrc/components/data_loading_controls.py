@@ -87,8 +87,7 @@ def render(app: Dash, loaded_analytics: dict, loaded_raw_traces: dict) -> html.D
 
     default_animals = [6]
     default_paradigms = [1100]
-    default_analytics = ['SessionMetadata', 'UnityTrackwise', "FiringRateTrackwiseHz", 
-                         "SpikeClusterMetadata"]
+    default_analytics = ['SessionMetadata',]
 
     return dbc.Row([
         dbc.Col([
@@ -163,10 +162,10 @@ def _load_all_data(selected_analytics, loaded_analytics, loaded_raw_traces, sele
         if len(selected_animals) == 0:
             selected_animals = None
         
-        dat = analytics.get_analytics(analytic, mode='set', #session_ids=None,
+        dat = analytics.get_analytics(analytic, mode='set', session_ids=None,
                                       paradigm_ids=selected_paradigms,
-                                      animal_ids=selected_animals,
-                                      session_ids=np.arange(1,3))
+                                      animal_ids=selected_animals,)
+                                    #   session_ids=np.arange(1,3))
         loaded_analytics[analytic] = dat
         
         # check if also raw_traces was in the passed selected_analytics list

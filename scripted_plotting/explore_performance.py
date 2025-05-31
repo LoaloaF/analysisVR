@@ -10,7 +10,7 @@ from analytics_processing import analytics
 
 output_dir = "./outputs/yl/"
 
-# analytic = 'UnityTrialwiseMetrics'
+# analytic = 'BehaviorTrialwise'
 # data = {}
 # # rat1_sessions = [*range(8), *range(12,20)]
 # rat6_sessions = None
@@ -26,7 +26,7 @@ output_dir = "./outputs/yl/"
 
 
 
-analytic = 'UnityTrackwise'
+analytic = 'BehaviorTrackwise'
 data = {}
 data[analytic] = analytics.get_analytics(analytic, mode='compute', 
                                          animal_ids=[8,], session_ids=None,

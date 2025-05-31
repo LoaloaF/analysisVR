@@ -57,24 +57,24 @@ def get_all_data_loaded_ids():
 def get_vis_name_req_data(vis_name):
     match vis_name:
         case 'SessionKinematics':
-            req_data = 'UnityTrackwise', 'SessionMetadata'
+            req_data = 'BehaviorTrackwise', 'SessionMetadata'
         case 'Kinematics':
-            req_data = 'UnityTrackwise', 'SessionMetadata'
+            req_data = 'BehaviorTrackwise', 'SessionMetadata'
         case 'StayPerformance':
-            req_data = 'UnityTrialwiseMetrics', 'SessionMetadata'
+            req_data = 'BehaviorTrialwise', 'SessionMetadata'
         case 'StayRatio':
-            req_data = 'UnityTrialwiseMetrics', 'SessionMetadata'
+            req_data = 'BehaviorTrialwise', 'SessionMetadata'
         case 'SessionsOverview':
             req_data = 'SessionMetadata',
         case 'EvolvingStayTime':
-            req_data = 'UnityTrialwiseMetrics',
+            req_data = 'BehaviorTrialwise',
         case 'EvolvingStayDecision':
-            req_data = 'UnityTrialwiseMetrics',
+            req_data = 'BehaviorTrialwise',
         case 'RawSpikes':
             req_data = 'Spikes', 'raw_traces'
         case 'TrackFiringRate':
             req_data = ('FiringRateTrackwiseHz', "SpikeClusterMetadata", 
-                       'UnityTrackwise', 'SessionMetadata')
+                       'BehaviorTrackwise', 'SessionMetadata')
         case 'SVMPredictions':
             req_data = 'SVMCueOutcomeChoicePred', 'SessionMetadata'
         case _:

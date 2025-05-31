@@ -12,7 +12,7 @@ from dashsrc.plot_components import kinematics_plot as kinematics_plot
 from analytics_processing import analytics
 
 
-analytic = 'UnityTrackwise'
+analytic = 'BehaviorTrackwise'
 data = {}
 data[analytic] = analytics.get_analytics(analytic, mode='set', 
                                          animal_ids=[1,], session_ids=[0,1], paradigm_ids=[800])

@@ -59,6 +59,21 @@ def metric_radioitems_component(vis_name):
             id=component_id
         )
     ], component_id
+    
+def models_radioitems_component(vis_name):
+    component_id = f'models-{vis_name}'
+    return [
+        html.Label("Model", style={"marginTop": 15}),
+        dcc.RadioItems(
+            [{'label':'linear-SVM', 'value':'linear'},
+             {'label': 'kernel-SVM', 'value': 'rbf'}],
+            
+            inputStyle={"margin-right": "5px"},
+            style={"marginLeft": 5},
+            value='linear',
+            id=component_id
+        )
+    ], component_id
 
 def groupby_radioitems_component(vis_name):
     component_id = f'group-by-{vis_name}'
@@ -86,10 +101,24 @@ def variance_radioitems_component(vis_name):
         )
     ], component_id
 
+def metrics_radioitems_component(vis_name):
+    component_id = f'metrics-vis-{vis_name}'
+    return [
+        html.Label("Model metric", style={"marginTop": 15}),
+        dcc.RadioItems(
+            [{'label': 'macro f1', 'value': 'f1'},
+             {'label': 'accur.', 'value': 'acc'}],
+            inputStyle={"margin-right": "5px"},
+            style={"marginLeft": 5},
+            value='acc',
+            id=component_id
+        )
+    ], component_id
+
 def outcome_group_filter_component(vis_name):
     component_id = f'outcome-group-filter-{vis_name}'
     return [
-        html.Label("Filter", style={"marginTop": 15}),
+        html.Label("Outcome subset", style={"marginTop": 15}),
         dcc.Checklist(
             id=component_id,
             options=['1 R', '1+ R', 'no R'],
@@ -102,11 +131,11 @@ def outcome_group_filter_component(vis_name):
 def cue_group_filter_component(vis_name):
     component_id = f'cue-group-filter-{vis_name}'
     return [
-        html.Label("Filter", style={"marginTop": 15}),
+        html.Label("Cue subset", style={"marginTop": 15}),
         dcc.Checklist(
             id=component_id,
-            options=['Early R', 'Late R'],
-            value=['Early R', 'Late R'],
+            options=['Cue1 trials', 'Cue2 trials'],
+            value=['Cue1 trials', 'Cue2 trials'],
             inline=True,
             inputStyle={"margin-right": "7px", "margin-left": "3px"}
         )
@@ -115,7 +144,7 @@ def cue_group_filter_component(vis_name):
 def trial_group_filter_component(vis_name):
     component_id = f'trial-group-filter-{vis_name}'
     return [
-        html.Label("Filter", style={"marginTop": 15}),
+        html.Label("Trial subset", style={"marginTop": 15}),
         dcc.Checklist(
             id=component_id,
             options=['1/3', '2/3', '3/3'],
@@ -131,6 +160,19 @@ def smooth_checklist_component(vis_name):
         html.Label("Display options", style={"marginTop": 0}),
         dcc.Checklist(
             ['Smooth'],
+            inputStyle={"margin-right": "5px"},
+            style={"marginLeft": 5, "marginTop": 5},
+            value=[],
+            id=component_id
+        )
+    ], component_id
+
+def use_subset_component(vis_name):
+    component_id = f'use-subset-{vis_name}'
+    return [
+        html.Label("Display options", style={"marginTop": 0}),
+        dcc.Checklist(
+            ['use subset'],
             inputStyle={"margin-right": "5px"},
             style={"marginLeft": 5, "marginTop": 5},
             value=[],
@@ -413,7 +455,7 @@ def register_session_dropdown_callback(app, vis_name, global_data, analytic):
         return session_ids
 
 def register_session_slider_callback(app, vis_name, global_data, analytic, 
-                                     override_default_last_session=None):
+                                     default_select_sessions=None):
     # html not used, just ensure that callcack is linked to correct component
     _, session_slider_comp_id = session_range_slider_component(vis_name)
     _, animal_dropd_comp_id = animal_dropdown_component(vis_name, global_data, analytic)
@@ -429,11 +471,11 @@ def register_session_slider_callback(app, vis_name, global_data, analytic,
             return 0, 10, (0,10), 
         
         last_session_id = data.index.unique("session_id").max()
-        if override_default_last_session is not None:
-            last_value = override_default_last_session
+        if default_select_sessions is not None:
+            from_sel, to_sel = default_select_sessions
         else:
-            last_value = last_session_id
-        return 0, last_session_id, (0, last_value)
+            from_sel, to_sel = 0, last_session_id
+        return 0, last_session_id, (from_sel, to_sel)
 
 def register_session_time_slider_callback(app, vis_name, global_data, analytic, loaded_raw_traces):
     # html not used, just ensure that callcack is linked to correct component

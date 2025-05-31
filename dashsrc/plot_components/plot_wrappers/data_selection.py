@@ -25,9 +25,9 @@ def group_filter_data(data, outcome_filter=['1 R', '1+ R', 'no R'],
         
         # cue filtering
         group_values = {}
-        if 'Early R' in cue_filter:
+        if 'Cue1 trials' in cue_filter:
             group_values['Early R'] = [1]
-        if 'Late R' in cue_filter:
+        if 'Cue2 trials' in cue_filter:
             group_values['Late R'] = [2]
         sess_d = sess_d[sess_d['cue'].isin(np.concatenate(list(group_values.values())))]
         if group_by == 'Cue':
@@ -47,9 +47,22 @@ def group_filter_data(data, outcome_filter=['1 R', '1+ R', 'no R'],
         sess_d = sess_d[sess_d['trial_id'].isin(incl_trials)]
         if group_by == 'Part of session':
             group_by_values = group_values
+            
+        # # choice filtering
+        # group_values = {}
+        # if 'Cue1 trials' in cue_filter:
+        #     group_values['Early R'] = [1]
+        # if 'Cue2 trials' in cue_filter:
+        #     group_values['Late R'] = [2]
+        # sess_d = sess_d[sess_d['cue'].isin(np.concatenate(list(group_values.values())))]
+        # if group_by == 'Cue':
+        #     group_by_values = group_values
+            
+            
         return sess_d
-    data = data.groupby(level='session_id').apply(group_filter_session, outcome_filter, cue_filter,
-                                                  trial_filter, group_by)
+    data = data.groupby(level='session_id').apply(group_filter_session, outcome_filter, 
+                                                  cue_filter, trial_filter, 
+                                                  group_by)
     # groupby prepends the groupby column to the index (duplicate session_id), remove it
     data = data.reset_index(level=0, drop=True) 
     return data, group_by_values

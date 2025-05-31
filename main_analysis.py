@@ -18,9 +18,17 @@ def main():
     
     Logger().init_logger(None, None, loglevel)
 
-    loaded_analytics = {"UnityTrackwise": None, "UnityFramewise": None, 
-                        'UnityTrialwiseMetrics': None, "SessionMetadata": None, 
-                        "Portenta":None, "Spikes": None, "FiringRateTrackwiseHz": None,
+    loaded_analytics = {
+                        # "UnityTrackwise": None, "UnityFramewise": None, 
+                        "TrackKinematics": None,
+                        "BehaviorTrialwise": None,
+                        "BehaviorEvents": None,
+                        "BehaviorFramewise": None,
+                        "BehaviorTrackwise": None,
+                        # 'UnityTrialwiseMetrics': None, 
+                        "SessionMetadata": None, 
+                        # "Portenta":None, 
+                        "Spikes": None, "FiringRateTrackwiseHz": None,
                         "SpikeClusterMetadata": None, "raw_traces": None,
                         "SVMCueOutcomeChoicePred": None}
     loaded_raw_traces = {}

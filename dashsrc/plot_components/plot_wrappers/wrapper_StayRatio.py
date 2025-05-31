@@ -25,7 +25,7 @@ from ..plots import plot_StayRatio
 import dashsrc.components.dashvis_constants as C
 
 def render(app: Dash, global_data: dict, vis_name: str) -> html.Div:
-    analytic = 'UnityTrialwiseMetrics'
+    analytic = 'BehaviorTrialwise'
     # components with data depedency need these arguments
     comp_args = vis_name, global_data, analytic
     

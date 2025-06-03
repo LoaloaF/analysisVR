@@ -394,17 +394,29 @@ def trace_group_selecter_component(vis_name):
         )
     ], component_id
 
+def predictor_dropdown_component(vis_name, global_data, analytic):
+    data = global_data[analytic]
+    component_id = f'predictor-dropdown-{vis_name}'
+    return [
+        html.Label("Select predictor", style={"marginTop": 15}),
+        dcc.Dropdown(
+            id=component_id,
+            options=[] if data is None else [data['predictor'].unique()],
+            placeholder="Predictor",
+        )
+    ], component_id
 
-
-
-
-
-
-
-
-
-
-
+def zone_dropdown_component(vis_name, global_data, analytic):
+    data = global_data[analytic]
+    component_id = f'zone-dropdown-{vis_name}'
+    return [
+        html.Label("Select track zone", style={"marginTop": 15}),
+        dcc.Dropdown(
+            id=component_id,
+            options=[] if data is None else [data['zone'].unique()],
+            placeholder="Zone",
+        )
+    ], component_id
 
 def register_paradigm_dropdown_callback(app, vis_name, global_data, analytic):
     # html not used, just ensure that callcack is linked to correct component
@@ -526,6 +538,117 @@ def register_session_time_step_callback(app, vis_name, direction='forward'):
             new_time = current_selected_time*1_000 + interval if direction == 'forward' else -interval*2
             new_time = max(0, new_time)
             return new_time/1_000 
+
+def register_trial_slider_callback(app, vis_name, global_data, analytic):
+    # html not used, just ensure that callcack is linked to correct component
+    _, trial_slider_comp_id = trial_range_slider_component(vis_name)
+    _, animal_dropd_comp_id = animal_dropdown_component(vis_name, global_data, analytic)
+    _, session_dropd_comp_id = session_dropdown_component(vis_name, global_data, analytic)
+    
+    @app.callback(
+        Output(trial_slider_comp_id, 'min'),
+        Output(trial_slider_comp_id, 'max'),
+        Output(trial_slider_comp_id, 'value'),
+        Input(animal_dropd_comp_id, 'value'),
+        Input(session_dropd_comp_id, 'value')
+    )
+    def update_trial_slider(selected_animal, selected_session):
+        data = global_data[analytic]
+        if selected_animal is None or selected_session is None or data is None:
+            return 0, 100, (0,100)
+        
+        last_trial_id = data.loc[pd.IndexSlice[:,selected_animal,selected_session,:]]['trial_id'].max()
+        return 1, last_trial_id, (1, last_trial_id)
+    
+def register_predictor_dropdown_callback(app, vis_name, global_data, analytic):
+    data_loaded_id = C.get_vis_name_data_loaded_id(vis_name)
+    # html not used, just ensure that callcack is linked to correct component
+    _, paradigm_dropd_comp_id = paradigm_dropdown_component(vis_name, global_data, analytic)
+    _, animal_dropd_comp_id = animal_dropdown_component(vis_name, global_data, analytic)
+    
+    _, predictor_dropd_comp_id = predictor_dropdown_component(vis_name, global_data, analytic)
+    
+    @app.callback(
+        Output(predictor_dropd_comp_id, 'options'),
+        Input(data_loaded_id, 'data'),
+        Input(paradigm_dropd_comp_id, 'value'),
+        Input(animal_dropd_comp_id, 'value'),
+    )
+    def update_predictor_options(data_loaded, selected_paradigm, selected_animal):
+        data = global_data[analytic]
+        if data_loaded and data is not None:
+            if selected_paradigm is not None and selected_animal is not None:
+                preds = data.loc[(selected_paradigm, selected_animal), 'predictor'].unique()
+                return preds
+        return []
+    
+def register_zone_dropdown_callback(app, vis_name, global_data, analytic):
+    data_loaded_id = C.get_vis_name_data_loaded_id(vis_name)
+    # html not used, just ensure that callcack is linked to correct component
+    _, paradigm_dropd_comp_id = paradigm_dropdown_component(vis_name, global_data, analytic)
+    _, animal_dropd_comp_id = animal_dropdown_component(vis_name, global_data, analytic)
+    
+    _, zone_dropd_comp_id = zone_dropdown_component(vis_name, global_data, analytic)
+    
+    @app.callback(
+        Output(zone_dropd_comp_id, 'options'),
+        Input(data_loaded_id, 'data'),
+        Input(paradigm_dropd_comp_id, 'value'),
+        Input(animal_dropd_comp_id, 'value'),
+    )
+    def update_zone_options(data_loaded, selected_paradigm, selected_animal):
+        data = global_data[analytic]
+        if data_loaded and data is not None:
+            if selected_paradigm is not None and selected_animal is not None:
+                print(data)
+                zones = data.loc[(selected_paradigm, selected_animal), 'track_zone'].unique()
+                return zones
+        return []
+
+
+def PCs_slider_component(vis_name):
+    component_id = f'PCs-slider-{vis_name}'
+    return [
+        html.Label("Average over PCs", style={"marginTop": 15}),
+        dcc.RangeSlider(
+            1, 15,
+            step=1,
+            value=[1, 15],
+            id=component_id
+        )
+    ], component_id
+    
+def register_PCs_slider_callback(app, vis_name, global_data, analytic):
+    # html not used, just ensure that callcack is linked to correct component
+    _, paradigm_dropd_comp_id = paradigm_dropdown_component(vis_name, global_data, analytic)
+    _, animal_dropd_comp_id = animal_dropdown_component(vis_name, global_data, analytic)
+    _, pred_dropd_comp_id = predictor_dropdown_component(vis_name, global_data, analytic)
+    _, zone_dropd_comp_id = zone_dropdown_component(vis_name, global_data, analytic)
+    
+    _, PCs_slider_comp_id = PCs_slider_component(vis_name)
+    
+    @app.callback(
+        Output(PCs_slider_comp_id, 'min'),
+        Output(PCs_slider_comp_id, 'max'),
+        Output(PCs_slider_comp_id, 'value'),
+        Input(paradigm_dropd_comp_id, 'value'),
+        Input(animal_dropd_comp_id, 'value'),
+        Input(pred_dropd_comp_id, 'value'),
+        Input(zone_dropd_comp_id, 'value')
+    )
+    def update_PCs_slider(selected_paradigm, selected_animal, selected_predictor, selected_zone):
+        data = global_data[analytic]
+        if not all((selected_paradigm, selected_animal, selected_predictor, selected_zone)) or data is None:
+            return 0, 15, (0,15)
+        
+        # get the PCs for the given paradigm, animal and predictor
+        data_sl = data.loc[(selected_paradigm, selected_animal)]
+        data_sl = data_sl[(data_sl.predictor == selected_predictor) &
+                          (data_sl.track_zone == selected_zone)]
+        nPCs = data_sl.shape[1] -2 # -2 because of paradigm_id and animal_id columns
+    
+        return 1, nPCs, (4, nPCs)
+    
 
 def register_trial_slider_callback(app, vis_name, global_data, analytic):
     # html not used, just ensure that callcack is linked to correct component

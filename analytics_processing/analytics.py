@@ -14,17 +14,18 @@ import analytics_processing.sessions_from_nas_parsing as sp
 
 import ephys_preprocessing.postproc_mea1k_ephys as ephys
 
-def _get_analytics_fname(session_dir, analysis_name):
+def _get_analytics_fname(session_dir, analytic):
     full_path = os.path.join(session_dir, "session_analytics")
     if not os.path.exists(full_path):
         print("Creating analytics directory for session ", os.path.basename(session_dir))
         os.makedirs(full_path)
-    fullfname = os.path.join(full_path, analysis_name+".parquet")
+    fullfname = os.path.join(full_path, analytic+".parquet")
     return fullfname
 
-def _compute_analytic(analytic, session_fullfname):
+def _compute_analytic(analytic, session_fullfname, all_sess_ffnames):
     L = Logger()
     session_name = os.path.basename(session_fullfname)[:-5]
+    session_names = [os.path.basename(s_ffname)[:-5] for s_ffname in all_sess_ffnames]
     L.logger.debug(f"Computing {analytic} for {session_name}:")
     
     # TODO still check this one, i still don't like sessionOverview handling
@@ -227,14 +228,24 @@ def _compute_analytic(analytic, session_fullfname):
         data = ephys.get_FiringRateTrackwiseHz(fr_data, track_data)
         data_table = dict.fromkeys(data.columns, C.FIRING_RATE_TRACKWISE_HZ_ONE_DTYPE)
     
-    elif analytic == "PCsZonewise":
+    elif set(analytic.split("-")) == {"PCsZonewise", "PCsZoneEmbeddings"}:
         trackfr_data = get_analytics('FiringRateTrackwiseHz', session_names=[session_name])
         track_data = get_analytics('BehaviorTrackwise', session_names=[session_name],)
                                         # columns=['frame_z_position', 'frame_pc_timestamp'])
         if trackfr_data is None:
             return None
+        # combo analytic TODO, do it properly, order is not guaranteed too, rename
         data = ephys.get_PCsZonewise(trackfr_data, track_data)
-        data_table = C.PCS_ZONEWISE_TABLE
+        # data1_table, data2_table = C.PCS_ZONEWISE_TABLE, None
+    
+    elif set(analytic.split("-")) == {"CCsZonewise", "CCsZonewiseAngles"}:
+        #  TODO rename to PCsZonewise, not bases
+        session_subspace_basis = get_analytics('PCsZoneBases', session_names=[session_name]) 
+        all_subspace_basis = get_analytics('PCsZoneBases', session_names=session_names)
+        if session_subspace_basis is None or all_subspace_basis is None:
+            L.logger.warning("Missing lower level analytic")
+            return None
+        data = ephys.get_PCsSubspaceAngles(session_subspace_basis, all_subspace_basis)
     
     elif analytic == "SVMCueOutcomeChoicePred":
         PCsZonewise = get_analytics('PCsZonewise', session_names=[session_name])
@@ -266,15 +277,17 @@ def _compute_analytic(analytic, session_fullfname):
     #     data = data.reindex(columns=data_table.keys())
     #     data = data.astype(data_table)
     
+ 
+    if not isinstance(data, tuple):   
     
+        try:
+            data = data.astype(schema)
+        except Exception as e:
+            pass
+            # data = data.astype(data_table)
+            
+        L.logger.debug(f"Computed analytic {analytic}:\n{data}\n{data.dtypes}")
     
-    try:
-        data = data.astype(schema)
-    except Exception as e:
-        pass
-        # data = data.astype(data_table)
-        
-    L.logger.debug(f"Computed analytic {analytic}:\n{data}\n{data.dtypes}")
     return data
 
 # def _extract_id_from_sessionname(session_name):
@@ -297,15 +310,29 @@ def get_analytics(analytic, mode="set", paradigm_ids=None, animal_ids=None,
         L.logger.debug(f"Processing {identif} {os.path.basename(session_fullfname)}"
                        f"\n{os.path.dirname(session_fullfname)}")
         analytics_fname = _get_analytics_fname(os.path.dirname(session_fullfname),
-                                               analysis_name=analytic)
+                                               analytic=analytic)
         
         if mode.endswith('compute'):
-            if os.path.exists(analytics_fname) and mode != "recompute":
-                L.logger.info(f"Output exists, skipping.")
-                continue
-            data = _compute_analytic(analytic, session_fullfname)
-            if data is not None:
+            # here, the user can specify multiple analytics, set mode is limited to one analytic
+            combo_analytic_fnames = []
+            for analyt in analytic.split('-'):
+                analytics_fname = _get_analytics_fname(os.path.dirname(session_fullfname),
+                                                       analytic=analyt)
+                if os.path.exists(analytics_fname) and mode != "recompute":
+                    L.logger.info(f"Output exists, skipping.")
+                    continue
+                combo_analytic_fnames.append(analytics_fname)
+            
+            data = _compute_analytic(analytic, session_fullfname, 
+                                     all_sess_ffnames=sessionlist_fullfnames)
+            if data is not None and not isinstance(data, tuple):
+                # default, single iteration of the lopp above, no combo analytics
                 data.to_parquet(analytics_fname, index=False, engine='pyarrow')
+            
+            elif data is not None and isinstance(data, tuple):
+                # combo analytics return a tuple of dataframes and save them separately
+                for analytics_fname, dat in zip(combo_analytic_fnames, data):
+                    dat.to_parquet(analytics_fname, index=False, engine='pyarrow')
             else:
                 L.logger.warning(f"Failed to compute {analytic} for {identif}")
             L.spacer("debug")

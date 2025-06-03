@@ -89,13 +89,13 @@ def get_sessionlist_fullfnames(paradigm_ids, animal_ids, session_ids=None,
 def extract_id_from_sessionname(session_name):
     session_name_split = session_name.split("_")
     anim_name, parad_name = session_name_split[2], session_name_split[3]
-    return int(anim_name[-3:]), int(parad_name[1:]), 0
+    return int(anim_name[-3:]), int(parad_name[1:])
 
 def sessionnames2fullfnames(session_names):
     Logger().logger.debug(f"Inferring NAS paths for list of session names...")
     sessionlist_fullfnames, s_ids = [], []
-    for session_name in session_names:
-        animal_id, paradigm_id, s_id = extract_id_from_sessionname(session_name)
+    for s_id, session_name in enumerate(session_names):
+        animal_id, paradigm_id = extract_id_from_sessionname(session_name)
         session_dir = f"RUN_rYL{animal_id:03}", f"rYL{animal_id:03}_P{paradigm_id:04d}"
         fullfname = os.path.join(device_paths()[0], *session_dir, session_name, f"{session_name}.hdf5")
         if not os.path.exists(fullfname):

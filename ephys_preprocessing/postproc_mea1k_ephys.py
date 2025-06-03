@@ -23,6 +23,7 @@ from sklearn.metrics import classification_report, balanced_accuracy_score
 
 from sklearn.preprocessing import StandardScaler
 from sklearn.decomposition import PCA
+from scipy.linalg import subspace_angles
 
 from dashsrc.plot_components.plot_utils import make_discr_cluster_id_cmap
 
@@ -505,9 +506,15 @@ def get_PCsZonewise(fr, track_data):
         'betweenRewardsZone': (110, 170),
         'reward2Zone': (170, 230),
         'postRewardZone': (230, 260),
+        'wholeTrack': (-168, 260),
     }
     
     aggr_embeds = []
+    aggr_subspace_basis = []
+
+    #TODO each sessions has differnt number of neurons
+    fr = fr.reindex(np.arange(1,78), axis=1).fillna(0)
+
     for i in range(4):
         # which modality to use for prediction
         if i == 0:
@@ -547,11 +554,25 @@ def get_PCsZonewise(fr, track_data):
             embedded = np.round(embedded, 3)
             aggr_embeds.append(pd.Series(embedded.tolist(), index=zone_data_Z_trialwise.index,
                                          name=(zone, predictor_name)))
+            
+            columns = pd.MultiIndex.from_product([[zone], [predictor_name], 
+                                                  np.arange(embedded.shape[1])])
+            aggr_subspace_basis.append(pd.DataFrame(pca.components_.round(3).T,
+                                                    columns=columns))
         L.logger.debug(debug_msg)
 
     aggr_embeds = pd.concat(aggr_embeds, axis=1).stack(level=0, future_stack=True)
     aggr_embeds.reset_index(inplace=True, drop=False)
     aggr_embeds.rename(columns={"level_5": "track_zone"}, inplace=True)
+    
+    # the subspace basis is a 2D array with pricipal components as columns, rows
+    # indicate predictors and track zones
+    #TODO warning right now due to old stacking behavior, will be fixed in future
+    aggr_subspace_basis = pd.concat(aggr_subspace_basis, axis=0).stack(level=(0,1), future_stack=False)
+    aggr_subspace_basis.reset_index(inplace=True, drop=False)
+    aggr_subspace_basis.rename(columns={"level_1": "track_zone",
+                                        "level_2": "predictor_name",}, inplace=True)
+    aggr_subspace_basis.drop(columns='level_0', inplace=True)
     
     # check for in proper sessions that lack spikes for most of the session
     valid_ephys_mask = aggr_embeds['mPFC'].notna()
@@ -564,8 +585,105 @@ def get_PCsZonewise(fr, track_data):
         Logger().logger.warning(msg)
         aggr_embeds.dropna(how='any', inplace=True)
     
-    return aggr_embeds
+    return aggr_subspace_basis, aggr_embeds
 
+def get_PCsSubspaceAngles(session_subspace_basis, all_subspace_basis):
+    session_subspace_basis.index = session_subspace_basis.index.droplevel((0,1))  # Drop the first level of the index if it exists
+    session_subspace_basis.set_index(["track_zone", 'predictor_name'], inplace=True, append=True)
+    session_subspace_basis.index = session_subspace_basis.index.droplevel("entry_id")  # Drop the entry_id level if it exists
+    
+    all_subspace_basis.index = all_subspace_basis.index.droplevel((0,1))  # Drop the first level of the index if it exists
+    all_subspace_basis.set_index(["track_zone", 'predictor_name'], inplace=True, append=True)
+    all_subspace_basis.index = all_subspace_basis.index.droplevel("entry_id")  # Drop the entry_id level if it exists
+    print(all_subspace_basis)
+    
+    angle_aggr = []
+    comps_aggr = []
+    for zone in all_subspace_basis.index.unique(level='track_zone'):
+        for predictor in all_subspace_basis.index.unique(level='predictor_name'):
+            # get the subspace basis for the session
+            # track_session_subspace = session_subspace_basis.loc[(zone, predictor), :]
+            # get the subspace basis for all sessions
+            zone_all_subspace = all_subspace_basis.loc[(slice(None),zone, predictor), :]
+            session_n_PCs = zone_all_subspace.groupby(level='session_id').apply(
+                                                       lambda x: x.notna().all(0).sum())
+            # some sessions have very low number of PCs, exclude those, will be NaN in the end
+            std = np.std(session_n_PCs.values)
+            cutoff = np.mean(session_n_PCs.values) - 2*std
+            
+            too_few_PCs_mask = session_n_PCs < cutoff
+            n_PCs = session_n_PCs[~too_few_PCs_mask].min()
+            
+            # # print(track_all_subspace)
+            # print(zone, predictor,)
+            # smth = session_n_PCs.to_frame(name='n_PCs').copy()
+            # smth['keep'] = smth.n_PCs > cutoff
+            # print(smth)
+            # print('-----')
+            
+            # print(zone, predictor,)
+            # print(n_PCs)
+            # n_PCs = 200
+            
+            # zone_all_subspace = zone_all_subspace.iloc[:, :n_PCs]
+            # zone_session_subspace = , :].iloc[:, :n_PCs]
+            
+            # print(zone_all_subspace, zone_session_subspace)
+            s0_subspace = session_subspace_basis.loc[(slice(None), zone, predictor)].values[:, :n_PCs]
+            if np.isnan(s0_subspace[:, :n_PCs]).any() or s0_subspace.shape[1] < n_PCs:
+                Logger().logger.warning(f"Session subspace has too few PCs for {zone} {predictor}.")
+                continue
+            
+            for s_id in session_n_PCs[~too_few_PCs_mask].index:
+                s_compare_subspace = zone_all_subspace.loc[s_id, :].values[:, :n_PCs]
+                # print(zone_all_subspace.loc[s_id, :])
+                
+                # print(s0_subspace, s_compare_subspace)
+                # print(s0_subspace.shape, s_compare_subspace.shape)
+                
+                # print("--")
+                M = s0_subspace.T @ s_compare_subspace
+                s0_c, S, s_comp_h_c = np.linalg.svd(M)
+                
+
+                canonc_angles = np.arccos(np.clip(S, -1, 1))
+                s0_c_subspace = (s0_subspace @ s0_c)
+                # print(s0_c_subspace)
+                # print(s0_c_subspace.shape)
+                # CC_U = (s1_PCs_U @ U_c[:, :])
+                # print(c1_U)
+                # print(c1_U.shape)
+                
+                # canonc_angles = subspace_angles(s0_subspace[:, :n_PCs],
+                #                                 s_compare_subspace[:, :n_PCs])
+                # canonc_angles = np.rad2deg(canonc_angles)
+                # print(canonc_angles)
+                
+                angle_aggr.append(pd.Series(canonc_angles, index=np.arange(n_PCs),
+                                            name=(zone, predictor, s_id)))
+                comps_aggr.append(pd.DataFrame(s0_c_subspace, columns=pd.MultiIndex.from_product(
+                                                 [[zone], [predictor], [s_id], np.arange(n_PCs)],
+                                                 names=['track_zone', 'predictor', 'comp_session_id', 'CC_i'],
+                                             )))
+                
+                # print(base_aggr[-1])
+    if len(angle_aggr) == 0:
+        return None
+    
+    angle_aggr = pd.concat(angle_aggr, axis=1).T
+    angle_aggr.index.names = ['track_zone', 'predictor', 'comp_session_id']
+    angle_aggr.reset_index(inplace=True, drop=False)
+    print(angle_aggr)
+    
+    comps_aggr = pd.concat(comps_aggr, axis=0)
+    print(comps_aggr)    
+    comps_aggr = comps_aggr.stack(level=['track_zone', 'predictor', 'comp_session_id'])
+    
+    
+    
+    
+    exit()
+    return aggr
             
 def get_SVMCueOutcomeChoicePred(PCsZonewise):
     L = Logger()

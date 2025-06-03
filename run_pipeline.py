@@ -27,7 +27,7 @@ def main():
     kwargs = vars(argParser.parse_args())
     
     L = Logger()
-    Logger().init_logger(None, None, kwargs.pop("logging_level"))
+    Logger().init_logger('loggy', None, kwargs.pop("logging_level"))
     L.logger.info(f"Running pipeline for `{kwargs['pipeline']}`")
     L.logger.debug(L.fmtmsg(kwargs))
     L.spacer()

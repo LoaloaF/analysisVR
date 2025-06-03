@@ -30,7 +30,9 @@ def main():
                         # "Portenta":None, 
                         "Spikes": None, "FiringRateTrackwiseHz": None,
                         "SpikeClusterMetadata": None, "raw_traces": None,
-                        "SVMCueOutcomeChoicePred": None}
+                        "SVMCueOutcomeChoicePred": None,
+                        "PCsZoneBases": None,
+                        "PCsSubspaceAngles": None}
     loaded_raw_traces = {}
     
     

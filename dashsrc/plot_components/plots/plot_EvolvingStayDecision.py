@@ -125,6 +125,10 @@ def render_plot(data, mode_span, width, height):
         for s_id in data.index.unique(level='session_id'):
             s_data = data.loc[pd.IndexSlice[:,:,s_id,:]]
             
+            sub_paradigm = ''
+            sub_paradigm += 'DR' if s_data.iloc[-1].flip_Cue1R1_Cue2R2 else ''
+            sub_paradigm += 'RF' if s_data.iloc[-1].both_R1_R2_rewarded else ''
+            
             last_id = s_data.index.get_level_values('entry_id').max()
             
             for j in range(2):
@@ -146,7 +150,7 @@ def render_plot(data, mode_span, width, height):
                 fig.add_annotation(
                     x=last_id, 
                     y=y_bounds[0] +6*i,
-                    text=f'S{s_id:02d}, {round(length/1e6 /60)}min',
+                    text=f'S{s_id:02d}, {sub_paradigm} ', #{round(length/1e6 /60)}min',
                     showarrow=False,
                     font=dict(size=10, color='rgba(128,128,128,.8)'),
                     xanchor='right',  # Align text horizontally to the right

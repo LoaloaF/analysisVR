@@ -16,6 +16,7 @@ from ..plot_components.plot_wrappers import wrapper_EvolvingStayDecision
 from ..plot_components.plot_wrappers import wrapper_RawSpikes
 from ..plot_components.plot_wrappers import wrapper_TrackFiringRate
 from ..plot_components.plot_wrappers import wrapper_SVMPredictions
+from ..plot_components.plot_wrappers import wrapper_EvolvingPCSubspace
 
 def create_sessionwise_vis_containers(app: Dash, loaded_analytics: dict, loaded_raw_traces: dict):
     viss_row_container = []
@@ -63,6 +64,9 @@ def create_multisession_vis_containers(app: Dash, loaded_analytics: dict):
                                                               vis_name=vis_name)
             case "TrackFiringRate":
                 analysis_div = wrapper_TrackFiringRate.render(app, loaded_analytics,
+                                                              vis_name=vis_name)
+            case "EvolvingPCSubspace":
+                analysis_div = wrapper_EvolvingPCSubspace.render(app, loaded_analytics,
                                                               vis_name=vis_name)
             
             case _:

@@ -595,11 +595,12 @@ def get_PCsSubspaceAngles(session_subspace_basis, all_subspace_basis):
     all_subspace_basis.index = all_subspace_basis.index.droplevel((0,1))  # Drop the first level of the index if it exists
     all_subspace_basis.set_index(["track_zone", 'predictor_name'], inplace=True, append=True)
     all_subspace_basis.index = all_subspace_basis.index.droplevel("entry_id")  # Drop the entry_id level if it exists
-    print(all_subspace_basis)
+    # print(all_subspace_basis)
     
     angle_aggr = []
     comps_aggr = []
     for zone in all_subspace_basis.index.unique(level='track_zone'):
+        print(zone, end='\r')
         for predictor in all_subspace_basis.index.unique(level='predictor_name'):
             # get the subspace basis for the session
             # track_session_subspace = session_subspace_basis.loc[(zone, predictor), :]
@@ -647,7 +648,7 @@ def get_PCsSubspaceAngles(session_subspace_basis, all_subspace_basis):
                 
 
                 canonc_angles = np.arccos(np.clip(S, -1, 1))
-                s0_c_subspace = (s0_subspace @ s0_c)
+                s0_c_subspace = (s0_subspace @ s0_c).astype(np.float16)
                 # print(s0_c_subspace)
                 # print(s0_c_subspace.shape)
                 # CC_U = (s1_PCs_U @ U_c[:, :])
@@ -666,24 +667,17 @@ def get_PCsSubspaceAngles(session_subspace_basis, all_subspace_basis):
                                                  names=['track_zone', 'predictor', 'comp_session_id', 'CC_i'],
                                              )))
                 
-                # print(base_aggr[-1])
+                
+                print(comps_aggr[-1])
     if len(angle_aggr) == 0:
         return None
     
     angle_aggr = pd.concat(angle_aggr, axis=1).T
     angle_aggr.index.names = ['track_zone', 'predictor', 'comp_session_id']
-    angle_aggr.reset_index(inplace=True, drop=False)
-    print(angle_aggr)
     
-    comps_aggr = pd.concat(comps_aggr, axis=0)
-    print(comps_aggr)    
-    comps_aggr = comps_aggr.stack(level=['track_zone', 'predictor', 'comp_session_id'])
-    
-    
-    
-    
-    exit()
-    return aggr
+    comps_aggr = pd.concat(comps_aggr, axis=1)
+    comps_aggr = comps_aggr.T
+    return comps_aggr.reset_index(), angle_aggr.reset_index()
             
 def get_SVMCueOutcomeChoicePred(PCsZonewise):
     L = Logger()

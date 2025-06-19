@@ -81,7 +81,7 @@ def get_vis_name_req_data(vis_name):
         case 'SVMPredictions':
             req_data = 'SVMCueOutcomeChoicePred', 'SessionMetadata'
         case 'EvolvingPCSubspace':
-            req_data = 'PCsSubspaceAngles', 'SessionMetadata', #'PCsZoneBases'
+            req_data = 'CCsZonewiseAngles', 'SessionMetadata', 'CCsZonewise'
         case _:
             raise ValueError(f"Unknown vis_name: {vis_name} for matching "
                             "with its data_loaded_id")

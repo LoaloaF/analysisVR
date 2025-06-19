@@ -34,8 +34,8 @@ def render_plot(data, mode_span, width, height):
     
     
     # print(data.flip_Cue1R1_Cue2R2.drop_duplicates())
-    print(data.groupby(level='session_id').apply(lambda x: x.iloc[0].flip_Cue1R1_Cue2R2))
-    print(data.groupby(level='session_id').apply(lambda x: x.iloc[0].both_R1_R2_rewarded))
+    # print(data.groupby(level='session_id').apply(lambda x: x.iloc[0].flip_Cue1R1_Cue2R2))
+    # print(data.groupby(level='session_id').apply(lambda x: x.iloc[0].both_R1_R2_rewarded))
     # print(metadata)
     print("================")
     # # do the plotting
@@ -126,8 +126,8 @@ def render_plot(data, mode_span, width, height):
             s_data = data.loc[pd.IndexSlice[:,:,s_id,:]]
             
             sub_paradigm = ''
-            sub_paradigm += 'DR' if s_data.iloc[-1].flip_Cue1R1_Cue2R2 else ''
-            sub_paradigm += 'RF' if s_data.iloc[-1].both_R1_R2_rewarded else ''
+            # sub_paradigm += 'DR' if s_data.iloc[-1].flip_Cue1R1_Cue2R2 else ''
+            # sub_paradigm += 'RF' if s_data.iloc[-1].both_R1_R2_rewarded else ''
             
             last_id = s_data.index.get_level_values('entry_id').max()
             

@@ -410,7 +410,7 @@ def zone_dropdown_component(vis_name, global_data, analytic):
     data = global_data[analytic]
     component_id = f'zone-dropdown-{vis_name}'
     return [
-        html.Label("Select track zone", style={"marginTop": 15}),
+        html.Label("Select zone", style={"marginTop": 15}),
         dcc.Dropdown(
             id=component_id,
             options=[] if data is None else [data['zone'].unique()],
@@ -606,10 +606,10 @@ def register_zone_dropdown_callback(app, vis_name, global_data, analytic):
         return []
 
 
-def PCs_slider_component(vis_name):
+def CCs_slider_component(vis_name):
     component_id = f'PCs-slider-{vis_name}'
     return [
-        html.Label("Average over PCs", style={"marginTop": 15}),
+        html.Label("Average over CCs", style={"marginTop": 15}),
         dcc.RangeSlider(
             1, 15,
             step=1,
@@ -618,19 +618,19 @@ def PCs_slider_component(vis_name):
         )
     ], component_id
     
-def register_PCs_slider_callback(app, vis_name, global_data, analytic):
+def register_CCs_slider_callback(app, vis_name, global_data, analytic):
     # html not used, just ensure that callcack is linked to correct component
     _, paradigm_dropd_comp_id = paradigm_dropdown_component(vis_name, global_data, analytic)
     _, animal_dropd_comp_id = animal_dropdown_component(vis_name, global_data, analytic)
     _, pred_dropd_comp_id = predictor_dropdown_component(vis_name, global_data, analytic)
     _, zone_dropd_comp_id = zone_dropdown_component(vis_name, global_data, analytic)
     
-    _, PCs_slider_comp_id = PCs_slider_component(vis_name)
+    _, CCs_slider_comp_id = CCs_slider_component(vis_name)
     
     @app.callback(
-        Output(PCs_slider_comp_id, 'min'),
-        Output(PCs_slider_comp_id, 'max'),
-        Output(PCs_slider_comp_id, 'value'),
+        Output(CCs_slider_comp_id, 'min'),
+        Output(CCs_slider_comp_id, 'max'),
+        Output(CCs_slider_comp_id, 'value'),
         Input(paradigm_dropd_comp_id, 'value'),
         Input(animal_dropd_comp_id, 'value'),
         Input(pred_dropd_comp_id, 'value'),
@@ -645,9 +645,10 @@ def register_PCs_slider_callback(app, vis_name, global_data, analytic):
         data_sl = data.loc[(selected_paradigm, selected_animal)]
         data_sl = data_sl[(data_sl.predictor == selected_predictor) &
                           (data_sl.track_zone == selected_zone)]
-        nPCs = data_sl.shape[1] -2 # -2 because of paradigm_id and animal_id columns
+        print(data_sl)
+        CCs = data_sl['CC_i'].unique()
     
-        return 1, nPCs, (4, nPCs)
+        return CCs.min(), CCs.max(), (CCs.min(), CCs.max())
     
 
 def register_trial_slider_callback(app, vis_name, global_data, analytic):

@@ -165,7 +165,7 @@ def _load_all_data(selected_analytics, loaded_analytics, loaded_raw_traces, sele
         dat = analytics.get_analytics(analytic, mode='set', session_ids=None,
                                       paradigm_ids=selected_paradigms,
                                       animal_ids=selected_animals,)
-                                    #   session_ids=np.arange(1,3))
+                                    #   session_ids=np.arange(1,4))
         loaded_analytics[analytic] = dat
         
         # check if also raw_traces was in the passed selected_analytics list

@@ -307,7 +307,7 @@ def get_analytics(analytic, mode="set", paradigm_ids=None, animal_ids=None,
     
     aggr = []
     for session_fullfname, identif in zip(sessionlist_fullfnames, ids):
-        L.logger.debug(f"Processing {identif} {os.path.basename(session_fullfname)}"
+        L.logger.debug(f"Processing {analytic}, {identif} {os.path.basename(session_fullfname)}"
                        f"\n{os.path.dirname(session_fullfname)}")
         analytics_fname = _get_analytics_fname(os.path.dirname(session_fullfname),
                                                analytic=analytic)

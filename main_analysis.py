@@ -32,14 +32,16 @@ def main():
                         "SpikeClusterMetadata": None, "raw_traces": None,
                         "SVMCueOutcomeChoicePred": None,
                         "PCsZoneBases": None,
-                        "PCsSubspaceAngles": None}
+                        "CCsZonewise": None,
+                        "CCsZonewiseAngles": None}
     loaded_raw_traces = {}
     
     
     # Initialize app
     app = dash.Dash(__name__, external_stylesheets=[dbc.themes.BOOTSTRAP])
     app.layout = create_layout(app, loaded_analytics, loaded_raw_traces)
-    app.run_server(host="0.0.0.0", port=8050, debug=True)
+    # app.run(host="0.0.0.0", port=8050, debug=True)
+    app.run(host="127.0.0.1", port=8000, debug=True)
 
 if __name__ == '__main__':
     main()

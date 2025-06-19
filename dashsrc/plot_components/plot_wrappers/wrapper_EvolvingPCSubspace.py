@@ -11,45 +11,51 @@ from .data_selection_components import (
     figure_width_input_component,
     figure_height_input_component,
     predictor_dropdown_component,
+    session_dropdown_component,
     zone_dropdown_component,
     digit_input_component,
-    PCs_slider_component,
+    CCs_slider_component,
     
     register_animal_dropdown_callback,
     register_session_slider_callback,
     register_paradigm_dropdown_callback,
     register_predictor_dropdown_callback,
     register_zone_dropdown_callback,
-    register_PCs_slider_callback,
+    register_CCs_slider_callback,
+    register_session_dropdown_callback,
 )
 from ..plots import plot_EvolvingPCSubspace
 
 import dashsrc.components.dashvis_constants as C
 
 def render(app: Dash, global_data: dict, vis_name: str) -> html.Div:
-    analytic = 'PCsSubspaceAngles'
+    analytic = 'CCsZonewiseAngles'
     # components with data depedency need these arguments
     comp_args = vis_name, global_data, analytic
     
     # Register the callbacks
     register_paradigm_dropdown_callback(app, *comp_args)
     register_animal_dropdown_callback(app, *comp_args)
-    register_session_slider_callback(app, *comp_args, default_select_sessions=(7, 26)) 
+    register_session_slider_callback(app, *comp_args, default_select_sessions=(1, 3)) 
     register_predictor_dropdown_callback(app, *comp_args)
     register_zone_dropdown_callback(app, *comp_args)
-    register_PCs_slider_callback(app, *comp_args)
+    register_session_dropdown_callback(app, *comp_args)
+    register_CCs_slider_callback(app, vis_name, global_data, 'CCsZonewise')
     
     # create the html components to have their IDs (needed for the callbacks)
     paradigm_dropd, PARADIGM_DROPD_ID = paradigm_dropdown_component(*comp_args)
     animal_dropd, ANIMAL_DROPD_ID = animal_dropdown_component(*comp_args)
+    sesssion_dropd, SESSION_DROPD_ID = session_dropdown_component(*comp_args)
     
     predictor_dropd, PREDICTOR_DROPD_ID = predictor_dropdown_component(*comp_args)
     zone_dropd, ZONE_DROPD_ID = zone_dropdown_component(*comp_args)
     
     # these don't need data to be initialized    
     session_slider, SESSION_SLIDER_ID = session_range_slider_component(vis_name)
-    PCs_slider, PCS_SLIDER_ID = PCs_slider_component(vis_name)
+    CCs_slider, CCS_SLIDER_ID = CCs_slider_component(vis_name)
     
+    n_CCs, N_CCS_INPUT_ID = digit_input_component(vis_name, "Avg over CCs", 
+                                                  initial_value=3, step=1,)
     max_metric, MAX_METRIC_ID = digit_input_component(vis_name, "Max angle", 
                                                       initial_value=.6, step=0.01,)
     height_input, HEIGHT_INP_ID = figure_height_input_component(vis_name)
@@ -62,16 +68,18 @@ def render(app: Dash, global_data: dict, vis_name: str) -> html.Div:
         Input(PARADIGM_DROPD_ID, 'value'),
         Input(ANIMAL_DROPD_ID, 'value'),
         Input(SESSION_SLIDER_ID, 'value'),
+        Input(SESSION_DROPD_ID, 'value'),
         Input(PREDICTOR_DROPD_ID, 'value'),
         Input(ZONE_DROPD_ID, 'value'),
-        Input(PCS_SLIDER_ID, 'value'),
+        Input(CCS_SLIDER_ID, 'value'),
         Input(MAX_METRIC_ID, 'value'),
+        Input(N_CCS_INPUT_ID, 'value'),
         Input(HEIGHT_INP_ID, 'value'),
         Input(WIDTH_INP_ID, 'value'),
         )
     def update_plot(selected_paradigm, selected_animal, session_range,
-                    selected_predictor, selected_zone, PCs_range,
-                    max_metric, height, width):
+                    selected_session_focus, selected_predictor, selected_zone, CCs_range,
+                    max_metric, n_CCs, height, width):
     
         if not all((selected_paradigm, selected_animal, selected_predictor, selected_zone)):
             return {}
@@ -90,7 +98,16 @@ def render(app: Dash, global_data: dict, vis_name: str) -> html.Div:
                                                                     animal_slice, 
                                                                     session_slice]]
         
-        # reshape the data to have a multi-index with predictor and track_zone
+        
+        CCs = global_data['CCsZonewise'].loc[pd.IndexSlice[paradigm_slice, 
+                                                           animal_slice, 
+                                                           session_slice]]
+        CCs = CCs[np.isin(CCs['comp_session_id'], session_slice)]
+        CCs.index = CCs.index.droplevel((0, 1, 3))
+        CCs.set_index(["comp_session_id", 'predictor', 'track_zone' , 'CC_i'], 
+                       inplace=True, append=True)
+        CCs = CCs.loc[pd.IndexSlice[:, :, [selected_predictor], [selected_zone]]]
+        
         
         data = data[np.isin(data['comp_session_id'], session_slice)]
         data.index = data.index.droplevel((0, 1, 3))
@@ -99,10 +116,23 @@ def render(app: Dash, global_data: dict, vis_name: str) -> html.Div:
         data = data.loc[pd.IndexSlice[:, :, [selected_predictor], [selected_zone]]]
         
         # slice the PCs
-        data = data.iloc[:, PCs_range[0]:PCs_range[1]]
+        # print(data)
+        # print(CCs)
+        # print(CCs.index)
+        # print(CCs.index.get_level_values('CC_i'))
+        # print(CCs.index.get_level_values('CC_i').unique())
+        # print(sorted(CCs.index.get_level_values('CC_i').unique()))
+        # print(np.diff(sorted(CCs.index.get_level_values('CC_i').unique())))
+        print(CCs_range[0],CCs_range[1])
+        print()
+        print(CCs.loc[pd.IndexSlice[:,:,:,:, np.arange(CCs_range[0],CCs_range[1])]])
         
-        fig = plot_EvolvingPCSubspace.render_plot(data, metadata, selected_predictor, 
-                                                  selected_zone, max_metric, height, width)
+        CCs = CCs.loc[pd.IndexSlice[:,:,:,:, np.arange(CCs_range[0],CCs_range[1])]]
+        # print(CCs.loc[pd.IndexSlice[:,:,:,:, np.arange(CCs_range[0],CCs_range[1])]].shape)
+        data = data.iloc[:, CCs_range[0]:CCs_range[1]]
+        fig = plot_EvolvingPCSubspace.render_plot(data, CCs, metadata, selected_predictor, 
+                                                  selected_session_focus,
+                                                  selected_zone, max_metric, n_CCs, height, width)
         return fig
     
     return html.Div([
@@ -122,22 +152,22 @@ def render(app: Dash, global_data: dict, vis_name: str) -> html.Div:
                 dbc.Row([
                     dbc.Col([
                         # Dropdown for paradigm selection, animal selection
-                        *paradigm_dropd, *animal_dropd,
+                        *paradigm_dropd, *animal_dropd, *sesssion_dropd,
                     ], width=4),
                     
                     # Other options in right column
                     dbc.Col([
-                        *predictor_dropd, *zone_dropd,
+                        *predictor_dropd, *zone_dropd, *n_CCs,
                     ], width=4),
 
                     # Other options in right column
                     dbc.Col([
-                        *width_input, *height_input, *max_metric,
+                        *width_input, *height_input, *max_metric, 
                     ], width=4),
                 ]),
                 # Range slider for session selection
                 *session_slider,
-                *PCs_slider
+                *CCs_slider
             ], width=2)
         ]),
         html.Hr()

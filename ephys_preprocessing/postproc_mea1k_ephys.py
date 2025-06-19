@@ -668,7 +668,7 @@ def get_PCsSubspaceAngles(session_subspace_basis, all_subspace_basis):
                                              )))
                 
                 
-                print(comps_aggr[-1])
+                print(angle_aggr[-1])
     if len(angle_aggr) == 0:
         return None
     

@@ -5,93 +5,110 @@ import plotly.graph_objects as go
 
 from dashsrc.components.dashvis_constants import *
 
-def draw_track_illustration(fig, row, col, track_details, min_track, max_track, 
-                            draw_cues=[2], choice_str='Stay', double_rewards=False):
+def draw_track_illustration(
+    fig, row, col, track_details, min_track, max_track, 
+    draw_cues=[2], choice_str='Stay', double_rewards=False,
+    track_types=(1,2), vertical=False, draw_trial_p_annotation=True,
+):
     track_details = [pd.Series(details, name=zone) for zone, details in track_details.items()]
     track_details = pd.concat(track_details, axis=1).T
     track_details.loc['cue2', 'start_pos'] = -80 # wrong metadat, update manually
-    
-    # draw the bars indicating track zones/ wall textures
-    # iterate the two different type of tracks
-    for track_type in (1, 2):
-        fig.update_yaxes(row=row, col=col, range=(2,0), ticks='', showticklabels=False,)
-        fig.update_xaxes(range=(min_track, max_track), row=row, col=col, ticks='outside', 
-                         showticklabels=False)
-        
+
+    # Helper to swap x/y if vertical
+    def xy(x, y):
+        return (y, x) if vertical else (x, y)
+
+    # Set axis ranges and ticks
+    if vertical:
+        xrange, yrange = (2, 0), (max_track, min_track)
+        fig.update_xaxes(row=row, col=col, range=xrange, ticks='', showticklabels=False)
+        fig.update_yaxes(row=row, col=col, range=yrange, ticks='outside', showticklabels=False)
+    else:
+        xrange, yrange = (min_track, max_track), (2, 0)
+        fig.update_yaxes(row=row, col=col, range=yrange, ticks='', showticklabels=False)
+        fig.update_xaxes(range=xrange, row=row, col=col, ticks='outside', showticklabels=False)
+
+    for track_type in track_types:
         # iterate early and late cues
-        for i,cue in enumerate(draw_cues):
+        for i, cue in enumerate(draw_cues):
             cuezone_width = track_details.loc[f'cue{cue}', 'end_pos'] - track_details.loc[f'cue{cue}', 'start_pos']
-            cuezone_center = track_details.loc[f'cue{cue}', 'start_pos'] +cuezone_width/2
-            
+            cuezone_center = track_details.loc[f'cue{cue}', 'start_pos'] + cuezone_width / 2
+
+            x, y = xy([cuezone_center], [1])
+
             # Cue annotation white text, once per track type
             if track_type == 1:
                 fig.add_trace(go.Scatter(
                     text=f'Cue', 
-                    x=[cuezone_center], y=[1], mode='text',
+                    x=x, y=y,
+                    mode='text',
                     textposition='middle center', textfont=dict(size=12, weight='bold', color='white'),
                     showlegend=False, zorder=30,
-                ), row=row, col=1)
+                ), row=row, col=col)
 
             # cue bars
             yloc, yloc_offset = track_type-1, .17
             color, width = CUE_COL_MAP[track_type], 10
+            cue_x = track_details.loc[f'cue{cue}', ['start_pos', 'end_pos', 'start_pos', 'start_pos', 'end_pos']]
+            cue_y = [yloc+yloc_offset, yloc+yloc_offset, None, yloc+1-yloc_offset, yloc+1-yloc_offset]
+            x, y = xy(cue_x, cue_y)
             fig.add_trace(go.Scatter(
-                x=track_details.loc[f'cue{cue}', ['start_pos', 'end_pos', 'start_pos', 'start_pos', 'end_pos']],
-                y=[yloc+yloc_offset, yloc+yloc_offset, None, yloc+1-yloc_offset, yloc+1-yloc_offset],
+                x=x,
+                y=y,
                 line=dict(color=color, width=width),
                 marker=dict(color=color, size=width, symbol='circle'),
                 showlegend=False, mode='lines+markers',
             ), row=row, col=col)
-        
+
         # iterate reward locations
         for r in (1, 2):
-            # draw the reward zones
             yloc, yloc_offset = track_type-1, .12
             color, width = REWARD_LOCATION_COL_MAP[r], 7
+            reward_x = track_details.loc[f'reward{r}', ['start_pos', 'end_pos', 'start_pos', 'start_pos', 'end_pos']]
+            reward_y = [yloc+yloc_offset, yloc+yloc_offset, None, yloc+1-yloc_offset, yloc+1-yloc_offset]
+            x, y = xy(reward_x, reward_y)
             fig.add_trace(go.Scatter(
-                x=track_details.loc[f'reward{r}', ['start_pos', 'end_pos', 'start_pos', 'start_pos', 'end_pos']],
-                y=[yloc+yloc_offset, yloc+yloc_offset, None, yloc+1-yloc_offset, yloc+1-yloc_offset],
+                x=x,
+                y=y,
                 line=dict(color=color, width=width),
                 showlegend=False, mode='lines',
             ), row=row, col=col)
-            
-            
-            if (track_type == r) or double_rewards:
 
-                # reward location annotation `Stop -> R`
+            if (track_type == r) or double_rewards:
                 r_width = track_details.loc[f'reward{r}', 'end_pos'] - track_details.loc[f'reward{r}', 'start_pos']
                 r_center = track_details.loc[f'reward{r}', 'start_pos'] + r_width/2
-                # print("---")
                 annotations = [
                     ([r_center-8], [track_type-1+.42], choice_str, {}),
                     ([r_center-8], [track_type-1+.65], '→', {'size': 20}),
                     ([r_center-8], [track_type-1+.54], '        R', {'size': 16, 'weight': 'bold', 
                                                             'color': OUTCOME_COL_MAP[1]}),
                 ]
-                # print(annotations)
-                text_args = {'mode': 'text', 'textposition': 'middle center', 'showlegend': False}
-                for x, y, text, font_dict in annotations:
+                for x_, y_, text, font_dict in annotations:
+                    x, y = xy(x_, y_)
                     fig.add_trace(go.Scatter(
-                        x=x, y=y, text=text, **text_args, textfont=font_dict,
+                        x=x, y=y, text=text, mode='text', textposition='middle center',
+                        showlegend=False, textfont=font_dict,
                     ), row=row, col=col)
-        
+
     # trial type annotation at start of track
-    fig.add_trace(go.Scatter(
-        x=[min_track], y=[.98],
-        text=f'50% of<br>trials',
-        mode='text', textposition='middle right',
-        showlegend=False,
-    ), row=row, col=col)
-    
+    if draw_trial_p_annotation:
+        x, y = xy([min_track], [.98])
+        fig.add_trace(go.Scatter(
+            x=x, y=y,
+            text=f'50% of<br>trials',
+            mode='text', textposition='middle right',
+            showlegend=False,
+        ), row=row, col=col)
+
     # draw track borders
-    x = [min_track, max_track, None, min_track, max_track, None, min_track, max_track]
-    y = [0, 0, None, 1, 1, None, 2, 2]
+    border_x = [min_track, max_track, None, min_track, max_track, None, min_track, max_track]
+    border_y = [0, 0, None, 1, 1, None, 2, 2]
+    x, y = xy(border_x, border_y)
     fig.add_trace(go.Scatter(
         x=x, y=y,
         mode='lines', line=dict(color='black', width=1),
         showlegend=False, zorder=20,
     ), row=row, col=col)
-
 
 def make_kinematics_figure(height):
     if height == -1:

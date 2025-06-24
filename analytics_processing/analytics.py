@@ -220,51 +220,63 @@ def _compute_analytic(analytic, session_fullfname, all_sess_ffnames):
         if fr_data is None:
             L.logger.warning("Missing lower level analytic")
             return None
-        track_data = get_analytics('BehaviorTrackwise', session_names=[session_name],)
+        track_behavior_data = get_analytics('BehaviorTrackwise', session_names=[session_name],)
                                         # columns=['frame_z_position', 'frame_pc_timestamp'])
-        if track_data is None:
+        if track_behavior_data is None:
             L.logger.warning("Missing lower level analytic")
             return None
-        data = ephys.get_FiringRateTrackwiseHz(fr_data, track_data)
+        data = ephys.get_FiringRateTrackwiseHz(fr_data, track_behavior_data)
         data_table = dict.fromkeys(data.columns, C.FIRING_RATE_TRACKWISE_HZ_ONE_DTYPE)
     
     elif set(analytic.split("-")) == {"PCsZonewise", "PCsZoneEmbeddings"}:
         trackfr_data = get_analytics('FiringRateTrackwiseHz', session_names=[session_name])
-        track_data = get_analytics('BehaviorTrackwise', session_names=[session_name],)
+        track_behavior_data = get_analytics('BehaviorTrackwise', session_names=[session_name],)
                                         # columns=['frame_z_position', 'frame_pc_timestamp'])
         if trackfr_data is None:
             return None
         # combo analytic TODO, do it properly, order is not guaranteed too, rename
-        data = ephys.get_PCsZonewise(trackfr_data, track_data)
+        data = ephys.get_PCsZonewise(trackfr_data, track_behavior_data)
         # data1_table, data2_table = C.PCS_ZONEWISE_TABLE, None
     
     elif set(analytic.split("-")) == {"CCsZonewise", "CCsZonewiseAngles"}:
         #  TODO rename to PCsZonewise, not bases
-        session_subspace_basis = get_analytics('PCsZoneBases', session_names=[session_name]) 
-        all_subspace_basis = get_analytics('PCsZoneBases', session_names=session_names)
+        session_subspace_basis = get_analytics('PCsZonewise', session_names=[session_name]) 
+        all_subspace_basis = get_analytics('PCsZonewise', session_names=session_names)
         if session_subspace_basis is None or all_subspace_basis is None:
             L.logger.warning("Missing lower level analytic")
             return None
         data = ephys.get_PCsSubspaceAngles(session_subspace_basis, all_subspace_basis)
     
     elif analytic == "SVMCueOutcomeChoicePred":
-        PCsZonewise = get_analytics('PCsZonewise', session_names=[session_name])
-        if PCsZonewise is None:
+        PCsZoneEmbeddings = get_analytics('PCsZoneEmbeddings', session_names=[session_name])
+        if PCsZoneEmbeddings is None:
             return None
-        data = ephys.get_SVMCueOutcomeChoicePred(PCsZonewise)
+        data = ephys.get_SVMCueOutcomeChoicePred(PCsZoneEmbeddings)
         data_table = C.SVM_CUE_OUTCOME_CHOICE_PRED_TABLE
 
         if data is None:
             L.logger.warning("Failed to compute SVM Cue Outcome Choice Prediction")
             return None
+        
+    elif analytic == "PVCueCorr":
+        trackfr_data = get_analytics('FiringRateTrackwiseHz', session_names=[session_name])
+        track_behavior_data = get_analytics('BehaviorTrackwise', session_names=[session_name],)
+        if track_behavior_data is None:
+            L.logger.warning("Missing lower level analytic")
+            return None
+        if trackfr_data is None:
+            L.logger.warning("Missing lower level analytic")
+            return None
+        
+        data = ephys.get_PVCueCorr(trackfr_data, track_behavior_data)
     
     # elif analytic == "FiringRateTrackbinsZ":
     #     fr_data = get_analytics('FiringRate40msZ', session_names=[session_name])
-    #     track_data = get_analytics('UnityTrackwise', session_names=[session_name],)
+    #     track_behavior_data = get_analytics('UnityTrackwise', session_names=[session_name],)
     #                                     # columns=['frame_z_position', 'frame_pc_timestamp'])
     #     if fr_data is None:
     #         return None
-    #     data = ephys.get_FiringRateTrackbinsHz(fr_data, track_data)
+    #     data = ephys.get_FiringRateTrackbinsHz(fr_data, track_behavior_data)
     #     print(data)
     #     data_table = dict.fromkeys(data.columns, C.FIRING_RATE_TRACKBINS_Z_ONE_DTYPE)
     

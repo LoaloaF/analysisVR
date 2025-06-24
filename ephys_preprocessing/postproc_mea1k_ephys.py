@@ -25,6 +25,9 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.decomposition import PCA
 from scipy.linalg import subspace_angles
 
+from scipy.stats import pearsonr
+import matplotlib.pyplot as plt
+
 from dashsrc.plot_components.plot_utils import make_discr_cluster_id_cmap
 
 # from ../../ephysVR.git
@@ -365,9 +368,9 @@ def get_FiringRate40msZ(fr_hz):
         return (x - x.mean()) / x.std()
     return fr_hz.apply(zscore, axis=0)
 
-# def get_FiringRateTrackbinsHz(fr_z, track_data):
+# def get_FiringRateTrackbinsHz(fr_z, track_behavior_data):
     
-#     def trackwise_averages(fr, track_data):
+#     def trackwise_averages(fr, track_behavior_data):
 #         def time_bin_avg(trial_data, ):
 #             print(f"{trial_data.from_z_position_bin.iloc[0]:04}", end='\r')
 #             trial_aggr = []
@@ -389,7 +392,7 @@ def get_FiringRate40msZ(fr_hz):
 #             return pd.Series(m, index=fr.columns)
                 
 #         print("Track bin: ")
-#         return track_data.groupby('from_z_position_bin', ).apply(time_bin_avg)
+#         return track_behavior_data.groupby('from_z_position_bin', ).apply(time_bin_avg)
     
 #     # recover index
 #     old_idx = fr_z.index
@@ -398,7 +401,7 @@ def get_FiringRate40msZ(fr_hz):
 #         np.arange(0, fr_z.shape[0]*40_000+1, 40_000, dtype='uint64'),
 #     )
 #     fr_z.index = new_idx
-#     fr_hz_averages = trackwise_averages(fr_z, track_data)
+#     fr_hz_averages = trackwise_averages(fr_z, track_behavior_data)
 #     return fr_hz_averages
 #     import matplotlib.pyplot as plt
 #     plt.imshow(fr_hz_averages.values.T, aspect='auto', interpolation='nearest')
@@ -406,7 +409,7 @@ def get_FiringRate40msZ(fr_hz):
 #     plt.show()
 #     print(fr_hz_averages)
 
-def get_FiringRateTrackwiseHz(fr, track_data):
+def get_FiringRateTrackwiseHz(fr, track_behavior_data):
     def time_bin_avg(posbin_data, ):
         # cue = posbin_data.cue.iloc[0]
         # trial_outcome = posbin_data.trial_outcome.iloc[0]
@@ -476,14 +479,14 @@ def get_FiringRateTrackwiseHz(fr, track_data):
                                             fr.pop("to_ephys_timestamp"))
 
     print("Track bin: ")
-    fr_hz_averages = track_data.groupby(['from_position_bin']).apply(time_bin_avg)
+    fr_hz_averages = track_behavior_data.groupby(['from_position_bin']).apply(time_bin_avg)
     fr_hz_averages.index = fr_hz_averages.index.rename(['from_position_bin', 'trial_id'],)
     fr_hz_averages.reset_index(inplace=True, drop=False)
     # print(fr_hz_averages)
     # exit()
     return fr_hz_averages
 
-def get_PCsZonewise(fr, track_data):
+def get_PCsZonewise(fr, track_behavior_data):
     L = Logger()
     PCs_var_explained = .8
     fr = fr.set_index(['trial_id', 'from_position_bin', 'cue', 'trial_outcome', 
@@ -494,9 +497,9 @@ def get_PCsZonewise(fr, track_data):
     fr.columns = fr.columns.astype(int)
     fr = fr.reindex(columns=sorted(fr.columns))
     
-    track_data = track_data.set_index(['trial_id', 'from_position_bin', 'cue', 'trial_outcome', 
+    track_behavior_data = track_behavior_data.set_index(['trial_id', 'from_position_bin', 'cue', 'trial_outcome', 
                                        'choice_R1', 'choice_R2'], append=True, )
-    track_data.index = track_data.index.droplevel(3) # entry_id
+    track_behavior_data.index = track_behavior_data.index.droplevel(3) # entry_id
     
     zones = {
         'beforeCueZone': (-168, -100),
@@ -524,7 +527,7 @@ def get_PCsZonewise(fr, track_data):
             predictor = fr.iloc[:, 20:]
             predictor_name = 'mPFC'
         elif i == 2:
-            predictor = track_data.loc[:, ['posbin_velocity', 'posbin_acceleration', 'lick_count',
+            predictor = track_behavior_data.loc[:, ['posbin_velocity', 'posbin_acceleration', 'lick_count',
                                            'posbin_raw', 'posbin_yaw', 'posbin_pitch']]
             predictor_name = 'behavior'
         elif i == 3:
@@ -679,8 +682,9 @@ def get_PCsSubspaceAngles(session_subspace_basis, all_subspace_basis):
     comps_aggr = comps_aggr.T
     return comps_aggr.reset_index(), angle_aggr.reset_index()
             
-def get_SVMCueOutcomeChoicePred(PCsZonewise):
+def get_SVMCueOutcomeChoicePred(PCsZoneEmbeddings):
     L = Logger()
+    print(PCsZoneEmbeddings)
 
     def fit_SVMs_with_bootstrap(X, Ys, name, n_iterations=200):
         predictions = []
@@ -776,7 +780,7 @@ def get_SVMCueOutcomeChoicePred(PCsZonewise):
                 #     print(y)
                 #     # exit()
                 
-
+ 
                 col_index = pd.MultiIndex.from_tuples([(*list(name), kernel, Y_name, n) for n in 
                                                     ('y', 'y_true', 'n_PCs', 'acc', 'acc_std', 'f1')],
                                                     names=['predictor', 'track_zone', 'model', 'predicting', 'output'])
@@ -785,7 +789,7 @@ def get_SVMCueOutcomeChoicePred(PCsZonewise):
                     np.tile(np.array([X.shape[1], np.mean(accs), np.std(accs), np.mean(f1s)]), (len(pred), 1))
                 ], axis=1)
 
-                predictions.append(pd.DataFrame(pred_output, columns=col_index, index=PCsZonewise.index))
+                predictions.append(pd.DataFrame(pred_output, columns=col_index, index=PCsZoneEmbeddings.index))
         if predictions == []:
             L.logger.warning(f"None enough trials to fit any SVM for {name}")
             return None
@@ -808,16 +812,16 @@ def get_SVMCueOutcomeChoicePred(PCsZonewise):
             return x
         return np.fromstring(x.strip("[]"), sep=", ", dtype=np.float32)
     
-    PCsZonewise = PCsZonewise.set_index(['track_zone', 'trial_id', 'trial_outcome', 
+    PCsZoneEmbeddings = PCsZoneEmbeddings.set_index(['track_zone', 'trial_id', 'trial_outcome', 
                                          'cue', 'choice_R1', 'choice_R2'], 
                                         append=False).unstack(level='track_zone')
     all_zones = []
-    for column in PCsZonewise.columns:
+    for column in PCsZoneEmbeddings.columns:
         # if column[1] != 'beforeCueZone':
         #     continue
         # if column[0] in ('HP', 'mPFC'):
         #     continue
-        X_list = PCsZonewise[column].apply(parse_string_to_array)
+        X_list = PCsZoneEmbeddings[column].apply(parse_string_to_array)
         if X_list.isna().any():
             L.logger.warning(f"Missing trials for {column}...")
             mask = X_list.isna()
@@ -830,13 +834,13 @@ def get_SVMCueOutcomeChoicePred(PCsZonewise):
                                     f"{X.shape[0]} trials found for {column}")
             continue
         Logger().logger.debug(f"Fitting SVM with {column}...")
-        # print(PCsZonewise)
-        Y_cue = PCsZonewise[mask].index.get_level_values('cue').values
-        Y_outcome = PCsZonewise[mask].index.get_level_values('trial_outcome').values
+        # print(PCsZoneEmbeddings)
+        Y_cue = PCsZoneEmbeddings[mask].index.get_level_values('cue').values
+        Y_outcome = PCsZoneEmbeddings[mask].index.get_level_values('trial_outcome').values
         Y_outcome = Y_outcome.astype(bool).astype(int)
         # TODO: add choice
-        Y_choice_R1 = PCsZonewise[mask].index.get_level_values('choice_R1').values.astype(int)
-        Y_choice_R2 = PCsZonewise[mask].index.get_level_values('choice_R2').values.astype(int)
+        Y_choice_R1 = PCsZoneEmbeddings[mask].index.get_level_values('choice_R1').values.astype(int)
+        Y_choice_R2 = PCsZoneEmbeddings[mask].index.get_level_values('choice_R2').values.astype(int)
         
         predictions = fit_SVMs_with_bootstrap(X, Ys={'cue':Y_cue, 'outcome':Y_outcome, 'choice_R1':Y_choice_R1, 'choice_R2': Y_choice_R2}, name=column)
         all_zones.append(predictions)
@@ -850,3 +854,103 @@ def get_SVMCueOutcomeChoicePred(PCsZonewise):
     # print(all_zones.columns)
     # print(all_zones)
     return all_zones
+
+def get_PVCueCorr(trackfr_data, track_behavior_data):
+    def compute_population_vector_correlation(PVs):
+        # Split the data into cue 1 and cue 2
+        pv1 = PVs.xs(1, level='cue')
+        pv2 = PVs.xs(2, level='cue')
+        unif_index = pv1.index.intersection(pv2.index)
+        pv1 = pv1.loc[unif_index]
+        pv2 = pv2.loc[unif_index]
+        
+        spatial_avg_pv1 = []
+        spatial_avg_pv2 = []
+        for i in range(0, len(unif_index), 5):
+            spatial_bins = unif_index[i:i+5]
+            spatial_avg_pv1.append(pv1.loc[spatial_bins].mean(0).rename(spatial_bins[0]))
+            # print(spatial_avg_pv1)
+            spatial_avg_pv2.append(pv2.loc[spatial_bins].mean(0).rename(spatial_bins[0]))
+            # print(spatial_avg_pv2)
+            # exit()
+            
+        spatial_avg_pv1 = pd.concat(spatial_avg_pv1, axis=1).T
+        spatial_avg_pv2 = pd.concat(spatial_avg_pv2, axis=1).T
+
+        # Calculate correlation matrix for averaged bins
+        corr_matrix = np.zeros((len(spatial_avg_pv1), len(spatial_avg_pv2)))
+        for i, cue1_spatial_bin in enumerate(spatial_avg_pv1.index):
+            x = spatial_avg_pv1.loc[cue1_spatial_bin]
+            # print(x)
+            for j, cue2_spatial_bin in enumerate(spatial_avg_pv2.index):
+                y = spatial_avg_pv2.loc[cue2_spatial_bin]
+                # corr_matrix[(cue1_spatial_bin, cue2_spatial_bin)] = np.corrcoef(x, y)[0, 1]
+                corr_matrix[i, j] = np.corrcoef(x, y)[0, 1]
+        return pd.DataFrame(corr_matrix, 
+                            index=spatial_avg_pv1.index, 
+                            columns=spatial_avg_pv2.index)
+    
+    L = Logger()
+    # TODO subset into trial_outcome group and choice and trial 1/3 2/3 3/3
+    trackfr_data = trackfr_data.set_index(['trial_id', 'from_position_bin', 'cue', 'trial_outcome', 
+                                           'choice_R1', 'choice_R2'], append=True)
+    trackfr_data.index = trackfr_data.index.droplevel((0,1,2,3))
+    trackfr_data.drop(columns=['bin_length'], inplace=True)
+    fr = trackfr_data.reindex(np.arange(1,78).astype(str), axis=1).fillna(0)
+     
+    track_behavior_data = track_behavior_data.set_index(['trial_id', 'from_position_bin', 
+                                                         'cue', 'trial_outcome', 
+                                       'choice_R1', 'choice_R2'], append=True, )
+    track_behavior_data.index = track_behavior_data.index.droplevel(3) # entry_id
+    
+    PVCueCorr_aggr = []
+    for i in range(4):
+        # which modality to use for prediction
+        if i == 0:
+            predictor = fr.iloc[:, :20]
+            predictor_name = 'HP'
+        elif i == 1:   
+            predictor = fr.iloc[:, 20:]
+            predictor_name = 'mPFC'
+        elif i == 2:
+            predictor = track_behavior_data.loc[:, ['posbin_velocity', 'posbin_acceleration', 'lick_count',
+                                                    'posbin_raw', 'posbin_yaw', 'posbin_pitch']]
+            predictor_name = 'behavior'
+        elif i == 3:
+            predictor = fr.iloc[:]
+            predictor_name = 'HP-mPFC'
+            
+        debug_msg = (f"Correlating population vector: {predictor_name}\n")
+        
+        # mean over trials
+        PVs = predictor.groupby(level=('from_position_bin', 'cue')).mean()
+        cross_corr = compute_population_vector_correlation(PVs)
+        print(cross_corr)
+        cross_corr['predictor'] = predictor_name
+        cross_corr = cross_corr.reset_index().rename(columns={'index': 'cue1_from_position_bin'})
+        PVCueCorr_aggr.append(cross_corr)
+            
+        # if i == 0:
+        #     # import matplotlib.pyplot as plt
+        #     plt.figure(figsize=(10, 8))
+        #     print(cross_corr)
+        #     print(cross_corr.cue1_from_position_bin)
+        #     idx = cross_corr.pop('cue1_from_position_bin')
+        #     cross_corr.pop('predictor')
+        #     plt.imshow(cross_corr, aspect='auto', interpolation='nearest', vmin=.5, vmax=1)
+        #     plt.colorbar(label='Correlation')
+        #     plt.title("Population Vector Correlation (5-bin averages)")
+        #     plt.xlabel("Position Bin (Cue 1)")
+        #     plt.ylabel("Position Bin (Cue 2)")
+            
+        #     # Add tick labels for averaged bins
+        #     tick_positions = np.arange(len(cross_corr))
+        #     tick_labels = [f"{x:.0f}" for x in idx]
+        #     plt.xticks(tick_positions[::2], tick_labels[::2], rotation=45)
+        #     plt.yticks(tick_positions[::2], tick_labels[::2])
+            
+        #     plt.tight_layout()
+        #     plt.savefig("population_vector_correlation.png", dpi=300, bbox_inches='tight')
+            # exit()
+    PVCueCorr_aggr = pd.concat(PVCueCorr_aggr, axis=0)
+    return PVCueCorr_aggr

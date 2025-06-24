@@ -33,7 +33,10 @@ def main():
                         "SVMCueOutcomeChoicePred": None,
                         "PCsZoneBases": None,
                         "CCsZonewise": None,
-                        "CCsZonewiseAngles": None}
+                        "CCsZonewiseAngles": None,
+                        "PVCueCorr": None,
+                        
+                        }
     loaded_raw_traces = {}
     
     

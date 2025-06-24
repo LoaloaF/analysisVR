@@ -260,27 +260,27 @@ def session_range_slider_component(vis_name):
     ], component_id
     
     
-def figure_width_input_component(vis_name):
+def figure_width_input_component(vis_name, default_width=-1):
     component_id = f'width-input-{vis_name}'
     return [
         html.Label("Width", style={"marginTop": 15}),
         dcc.Input(
             id=component_id,
             type='number',
-            value=-1,
+            value=default_width,
             style={"width": "40%", "marginLeft": "5px"},
             debounce=True,
         )
     ], component_id
 
-def figure_height_input_component(vis_name):
+def figure_height_input_component(vis_name, default_height=-1):
     component_id = f'height-input-{vis_name}'
     return [
         html.Label("Height", style={"marginTop": 15}),
         dcc.Input(
             id=component_id,
             type='number',
-            value=-1,
+            value=default_height,
             style={"width": "40%", "marginLeft": "5px"},
             debounce=True,
         )

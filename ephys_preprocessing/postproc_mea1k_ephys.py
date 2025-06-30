@@ -40,7 +40,7 @@ def _handle_session_ephys(session_fullfname, mode=False, exclude_shanks=None):
     animal_name = session_name.split("_")[2]
     
     # check if a dat file already exists
-    dat_fnames = [f for f in os.listdir(session_dir) if f.endswith(".dat")]
+    dat_fnames = [f for f in os.listdir(session_dir) if f.endswith("ephys_traces.dat")]
     dat_sizes = np.array([os.path.getsize(os.path.join(session_dir, f)) for f in dat_fnames])
 
     if any(dat_sizes>0):
@@ -51,14 +51,19 @@ def _handle_session_ephys(session_fullfname, mode=False, exclude_shanks=None):
         else:
             L.logger.debug(f"Recomputing...")
         
-    
-    if not os.path.exists(os.path.join(session_dir, "ephys_output.raw.h5")):
+    print((os.path.join(session_dir, f"{session_name}_ephys_logger.raw.h5")))
+    if os.path.exists(os.path.join(session_dir, "ephys_output.raw.h5")):
+        fname = 'ephys_output.raw.h5'
+    elif os.path.exists(os.path.join(session_dir, f"{session_name}_ephys_logger.raw.h5")):
+        fname = f"{session_name}_ephys_logger.raw.h5"
+    else:
         L.logger.warning(f"No raw ephys recordings found for {session_name}")
         return
 
     # decompress the raw output of mea1k and convert to uV int16 .dat file
     # also, save a mapping csv file for identifying the rows in the dat file
-    mea1k_raw2decompressed_dat_file(session_dir, 'ephys_output.raw.h5', 
+    mea1k_raw2decompressed_dat_file(session_dir, 
+                                    fname=fname, 
                                     session_name=session_name,
                                     animal_name=animal_name,
                                     convert2uV=True,

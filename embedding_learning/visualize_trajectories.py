@@ -39,14 +39,17 @@ train_loader = DataLoader(TensorDataset(train_x, train_y), batch_size=batch_size
 
 # Visualize how embeddings evolve through time (assumes batch_x is ordered in time)
 
-batch_x = (x[:200] - mean) / std
+start_offset = 1000
+N_seq = 2000
+
+batch_x = (x[start_offset:start_offset+N_seq] - mean) / std
 
 latent_2d = model.encoder(batch_x)
 latent_2d = latent_2d.detach().numpy()
 
 if hasattr(batch_x, "shape") and batch_x.shape[0] > 1:
     # get time index for each sample (assume sequential order)
-    time_indices = np.arange(len(batch_x))
+    time_indices = np.arange(start_offset, start_offset+N_seq)
     norm = plt.Normalize(time_indices.min(), time_indices.max())
     cmap = cm.get_cmap('viridis')
 
@@ -76,15 +79,15 @@ else:
     print("Batch size too small to visualize time evolution.")
 
 # For example, take the first N samples
-N_seq = 200
+
 # If test_loader.dataset supports slicing, otherwise collect from batches:
-sequential_x = (x[:N_seq] - mean) / std
+sequential_x = (x[start_offset:start_offset+N_seq] - mean) / std
 sequential_x_flat = sequential_x.reshape(N_seq, -1)
 pca_seq = PCA(n_components=2)
 proj_seq = pca_seq.fit_transform(sequential_x_flat)
 
 fig, ax = plt.subplots(figsize=(7, 5))
-scatter = ax.scatter(proj_seq[:, 0], proj_seq[:, 1], c=np.arange(N_seq), cmap='viridis', marker='o')
+scatter = ax.scatter(proj_seq[:, 0], proj_seq[:, 1], c=np.arange(start_offset, start_offset+N_seq), cmap='viridis', marker='o')
 for i in range(N_seq - 1):
     ax.plot([proj_seq[i, 0], proj_seq[i+1, 0]], [proj_seq[i, 1], proj_seq[i+1, 1]], color='gray', alpha=0.6)
 cbar = plt.colorbar(scatter, ax=ax)

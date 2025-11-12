@@ -10,7 +10,10 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from tqdm import tqdm
 
-from models import AutoEncoder
+from models import AutoEncoder, LinearAutoEncoder
+
+USE_LINEAR_AUTOENCODER = False
+USE_OLD_SHUFFLED_INDICES = True
 
 batch_size = 4096
 contrast_weight = 1
@@ -25,10 +28,15 @@ y = data.iloc[:, -2].values
 x = torch.from_numpy(x).float()
 y = torch.from_numpy(y).float()
 
-model = AutoEncoder(input_size=x.shape[1], hidden_size=hidden_size, output_size=2)
+if USE_LINEAR_AUTOENCODER:
+    model = LinearAutoEncoder(input_size=x.shape[1], output_size=2)
+else:
+    model = AutoEncoder(input_size=x.shape[1], hidden_size=hidden_size, output_size=2)
 
-
-shuffled_indices = torch.randperm(len(x))
+if USE_OLD_SHUFFLED_INDICES:
+    shuffled_indices = torch.load("shuffled_indices.pt")
+else:
+    shuffled_indices = torch.randperm(len(x))
 shuffled_x = x[shuffled_indices]
 shuffled_y = y[shuffled_indices]
 
@@ -88,8 +96,8 @@ def calculate_loss(batch_x, batch_y):
 with torch.no_grad():
     for batch_x, batch_y in tqdm(test_loader):
         loss = calculate_loss(batch_x, batch_y)
-        test_loss.append(loss.item())
-    print(f"Test Loss: {np.mean(test_loss)}")
+        test_loss.append(loss.item() * len(batch_x))
+    print(f"Test Loss: {np.sum(test_loss) / len(test_dataset)}")
 
 running_train_loss = []
 for epoch in range(250):
@@ -99,17 +107,23 @@ for epoch in range(250):
         loss = calculate_loss(batch_x, batch_y)
         loss.backward()
         optimizer.step()
-        running_train_loss.append(loss.item())
-    scheduler.step(np.mean(running_train_loss))
+        running_train_loss.append(loss.item() * len(batch_x))
+    scheduler.step(np.sum(running_train_loss) / len(train_dataset))
     with torch.no_grad():
+        running_test_loss = []
         for batch_x, batch_y in tqdm(test_loader):
             loss = calculate_loss(batch_x, batch_y)
-            test_loss.append(loss.item())
-    train_loss.append(np.mean(running_train_loss))
-    print(f"Epoch {epoch}, Train Loss: {np.mean(train_loss)}, Test Loss: {np.mean(loss.item())}")
+            running_test_loss.append(loss.item() * len(batch_x))
+    train_loss.append(np.sum(running_train_loss) / len(train_dataset))
+    print(f"Epoch {epoch}, Train Loss: {np.sum(running_train_loss) / len(train_dataset)}, Test Loss: {np.sum(running_test_loss) / len(test_dataset)}")
     running_train_loss = []
+    test_loss.append(np.sum(running_test_loss) / len(test_dataset))
 
-torch.save(model.state_dict(), "contrastive_model.pth")
+if USE_LINEAR_AUTOENCODER:
+    torch.save(model.state_dict(), "contrastive_linear_model.pth")
+else:
+    torch.save(model.state_dict(), "contrastive_model.pth")
+
 torch.save(shuffled_indices, "shuffled_indices.pt")
 
 plt.plot(train_loss)

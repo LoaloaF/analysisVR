@@ -1,4 +1,4 @@
-from models import AutoEncoder
+from models import AutoEncoder, LinearAutoEncoder
 import torch
 import pandas as pd
 import numpy as np
@@ -17,9 +17,11 @@ y = data.iloc[:, -2].values
 x = torch.from_numpy(x).float()
 y = torch.from_numpy(y).float()
 
-model = AutoEncoder(input_size=x.shape[1], hidden_size=hidden_size, output_size=2)
+model_nonlinear = AutoEncoder(input_size=x.shape[1], hidden_size=hidden_size, output_size=2)
 
-model.load_state_dict(torch.load("contrastive_model.pth"))
+model_nonlinear.load_state_dict(torch.load("contrastive_model.pth"))
+model_linear = LinearAutoEncoder(input_size=x.shape[1], output_size=2)
+model_linear.load_state_dict(torch.load("contrastive_linear_model.pth"))
 shuffled_indices = torch.load("shuffled_indices.pt")
 shuffled_x = x[shuffled_indices]
 shuffled_y = y[shuffled_indices]
@@ -35,10 +37,6 @@ test_loader = DataLoader(TensorDataset(test_x, test_y), batch_size=batch_size, s
 train_loader = DataLoader(TensorDataset(train_x, train_y), batch_size=batch_size, shuffle=True)
 
 
-# Take a sequential sequence of x values from the test set, apply PCA, and plot their projections
-
-from sklearn.feature_selection import mutual_info_regression
-
 # Compute embeddings and PCA projections for the whole test set
 with torch.no_grad():
     all_test_x = []
@@ -48,31 +46,70 @@ with torch.no_grad():
         all_test_y.append(batch_y)
     all_test_x = torch.cat(all_test_x, dim=0)
     all_test_y = torch.cat(all_test_y, dim=0)
-    all_embeddings = model.encoder(all_test_x).cpu().numpy()
-all_test_x_np = all_test_x.cpu().numpy()
+    all_embeddings_nonlinear = model_nonlinear.encoder(all_test_x).cpu().numpy()
+    all_embeddings_linear = model_linear.encoder(all_test_x).cpu().numpy()
 
 # Flatten the input for mutual info computation (samples, features)
+all_test_x_np = all_test_x.cpu().numpy()
 num_samples = all_test_x_np.shape[0]
 flat_test_x = all_test_x_np.reshape(num_samples, -1)
 
 # Fit PCA on test set and project
-test_pca = PCA(n_components=all_embeddings.shape[1] if all_embeddings.shape[1] < flat_test_x.shape[1] else 10)
-pca_z = test_pca.fit_transform(flat_test_x)
+test_pca = PCA(n_components=2)
+pca_2_z = test_pca.fit_transform(flat_test_x)
+
+# Fit PCA on test set and project
+test_pca = PCA(n_components=9)
+pca_9_z = test_pca.fit_transform(flat_test_x)
 
 # Compute mutual information between original data and embeddings
 # We'll compute mean MI across dimensions
 
-def mean_mutual_info(X, Y):
-    # X: [samples, features], Y: [samples, features_2]
-    # Returns: average mutual information across features in Y
-    mi_list = []
-    for i in range(Y.shape[1]):
-        mi = mutual_info_regression(X, Y[:, i])
-        mi_list.append(np.mean(mi))
-    return np.mean(mi_list)
+def evaluate_embedding(X_orig, X_emb, y_labels=None):
+    metrics = {}
+    # A. Pairwise correlation
+    from scipy.spatial.distance import pdist
+    D_orig = pdist(X_orig, metric='euclidean')
+    D_emb  = pdist(X_emb,  metric='euclidean')
+    metrics['distance_corr'] = np.corrcoef(D_orig, D_emb)[0,1]
 
-embedding_mi = mean_mutual_info(flat_test_x, all_embeddings)
-pca_mi = mean_mutual_info(flat_test_x, pca_z)
+    # B. Trustworthiness
+    from sklearn.manifold import trustworthiness
+    metrics['trustworthiness'] = trustworthiness(X_orig, X_emb, n_neighbors=10)
 
-print(f"Average Mutual Information (Original <-> Embedding): {embedding_mi:.4f}")
-print(f"Average Mutual Information (Original <-> PCA): {pca_mi:.4f}")
+    from npeet import entropy_estimators as ee
+    I = ee.mi(X_orig.tolist(), X_emb.tolist())
+    metrics['mutual_information'] = I
+
+
+    return metrics
+
+embedding_metrics_nonlinear = evaluate_embedding(flat_test_x, all_embeddings_nonlinear)
+embedding_metrics_linear = evaluate_embedding(flat_test_x, all_embeddings_linear)
+pca_metrics = evaluate_embedding(flat_test_x, pca_2_z)
+pca_9_metrics = evaluate_embedding(flat_test_x, pca_9_z)
+
+import matplotlib.pyplot as plt
+
+metric_names = ["distance_corr", "trustworthiness", "mutual_information"]
+methods = ["Embedding NL", "Embedding L", "PCA 2D", "PCA 9D"]
+all_metrics = [embedding_metrics_nonlinear, embedding_metrics_linear, pca_metrics, pca_9_metrics]
+
+# Prepare data for bar plots
+metric_values = {metric: [m[metric] for m in all_metrics] for metric in metric_names}
+
+fig, axs = plt.subplots(1, 3, figsize=(15,5))
+for i, metric in enumerate(metric_names):
+    axs[i].bar(methods, metric_values[metric], color=['#4C72B0', '#55A868', '#C44E52', '#C44E52'])
+    axs[i].set_title(metric.replace("_", " ").title())
+    axs[i].set_ylabel(metric.replace("_", " ").title())
+    axs[i].set_ylim([0, 1.05 * max(metric_values[metric])])  # give space above bars for clarity
+
+print("Embedding NL: ", embedding_metrics_nonlinear)
+print("Embedding L: ", embedding_metrics_linear)
+print("PCA 2D: ", pca_metrics)
+print("PCA 9D: ", pca_9_metrics)
+
+plt.tight_layout()
+plt.show()
+

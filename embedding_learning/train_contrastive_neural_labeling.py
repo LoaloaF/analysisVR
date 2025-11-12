@@ -16,7 +16,7 @@ USE_LINEAR_AUTOENCODER = False
 USE_OLD_SHUFFLED_INDICES = True
 EMBEDDING_DIM = 2
 
-batch_size = 4096
+batch_size = 8192
 contrast_weight = 1
 hidden_size = 20
 
@@ -113,7 +113,7 @@ def calculate_loss(batch_state_x, batch_neural_x):
     recon_loss = criterion(reconstruction, batch_state_x)
     contr_loss = contrastive_loss(embedding, batch_neural_x)
     loss = recon_loss + contrast_weight * contr_loss
-    return loss, recon_loss.item(), contr_loss.item()
+    return loss, recon_loss, contr_loss
 
 with torch.no_grad():
     running_test_loss = []
@@ -121,8 +121,8 @@ with torch.no_grad():
     running_test_contr_loss = []
     for batch_state_x, batch_neural_x in tqdm(test_loader):
         loss, recon_loss, contr_loss = calculate_loss(batch_state_x, batch_neural_x)
-        running_test_loss.append(loss.item() * len(batch_state_x))
-        running_test_recon_loss.append(recon_loss.item() * len(batch_state_x))
+        running_test_loss.append(loss.item() * len(batch_neural_x))
+        running_test_recon_loss.append(recon_loss.item() * len(batch_neural_x))
         running_test_contr_loss.append(contr_loss.item() * len(batch_neural_x))
     print(f"Test Loss: {np.sum(running_test_loss) / len(test_dataset)}")
     print(f"Test Recon Loss: {np.sum(running_test_recon_loss) / len(test_dataset)}")
@@ -145,10 +145,10 @@ for epoch in range(250):
     with torch.no_grad():
         for batch_state_x, batch_neural_x in tqdm(test_loader):
             loss, recon_loss, contr_loss = calculate_loss(batch_state_x, batch_neural_x)
-            running_test_loss.append(loss.item() * len(batch_state_x))
-            running_test_recon_loss.append(recon_loss.item() * len(batch_state_x))
+            running_test_loss.append(loss.item() * len(batch_neural_x))
+            running_test_recon_loss.append(recon_loss.item() * len(batch_neural_x))
             running_test_contr_loss.append(contr_loss.item() * len(batch_neural_x))
-    print(f"Epoch {epoch}, Train Loss: {np.mean(running_train_loss)}, Test Loss: {np.mean(running_test_loss)}, Test Recon Loss: {np.mean(running_test_recon_loss)}, Test Contrastive Loss: {np.mean(running_test_contr_loss)}")
+    print(f"Epoch {epoch}, Train Loss: {np.sum(running_train_loss) / len(train_dataset)}, Test Loss: {np.sum(running_test_loss) / len(test_dataset)}, Test Recon Loss: {np.sum(running_test_recon_loss) / len(test_dataset)}, Test Contrastive Loss: {np.sum(running_test_contr_loss) / len(test_dataset)}")
     train_loss.append(np.sum(running_train_loss) / len(train_dataset))
     test_loss.append(np.sum(running_test_loss) / len(test_dataset))
     test_recon_loss.append(np.sum(running_test_recon_loss) / len(test_dataset))

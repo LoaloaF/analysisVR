@@ -14,11 +14,12 @@ from models import AutoEncoder, LinearAutoEncoder
 
 USE_LINEAR_AUTOENCODER = False
 USE_OLD_SHUFFLED_INDICES = True
-EMBEDDING_DIM = 2
+EMBEDDING_DIM = 3
 
-batch_size = 8192
-contrast_weight = 1
-hidden_size = 20
+batch_size = 4096
+contrast_weight = 0.1
+decorrelation_weight = 0.1  # Weight for decorrelation loss to prevent dimension collapse
+hidden_size = 50
 
 
 data = pd.read_csv("merged.csv")
@@ -83,6 +84,7 @@ train_loss = []
 test_loss = []
 test_recon_loss = []
 test_contr_loss = []
+test_decorr_loss = []
 optimizer = torch.optim.Adam(list(model.parameters()), lr=0.1)
 scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, factor=0.1, patience=10)
 criterion = nn.MSELoss()
@@ -99,7 +101,7 @@ def contrastive_loss(embeddings, neural_vector, margin=1.0):
 
     # Contrastive loss: push apart pairs with large y-difference
     positive_mask = (label_diff < 0.5 * neural_vector.shape[1])  # "close" y
-    negative_mask = (label_diff > 1 * neural_vector.shape[1]) # "far" y
+    negative_mask = (label_diff > 1.5 * neural_vector.shape[1]) # "far" y
 
     positive_loss = (dists * positive_mask.float()).sum() / (positive_mask.float().sum() + 1e-8)
     negative_loss = ((margin - dists).clamp(min=0) * negative_mask.float()).sum() / (negative_mask.float().sum() + 1e-8)
@@ -107,36 +109,69 @@ def contrastive_loss(embeddings, neural_vector, margin=1.0):
 
     return total_contrastive
 
+def decorrelation_loss(embeddings):
+    """
+    Penalize correlation between embedding dimensions to prevent collapse to 1D.
+    This encourages the model to use both dimensions independently.
+    """
+    # Center the embeddings
+    emb_centered = embeddings - embeddings.mean(dim=0, keepdim=True)
+    
+    # Compute covariance matrix
+    cov = torch.mm(emb_centered.t(), emb_centered) / (embeddings.shape[0] - 1)
+    
+    # Extract off-diagonal elements (correlations between different dimensions)
+    # We want these to be close to zero
+    n_dims = embeddings.shape[1]
+    off_diag = []
+    for i in range(n_dims):
+        for j in range(i + 1, n_dims):
+            # Normalize by standard deviations to get correlation
+            std_i = torch.sqrt(cov[i, i] + 1e-8)
+            std_j = torch.sqrt(cov[j, j] + 1e-8)
+            corr = cov[i, j] / (std_i * std_j + 1e-8)
+            off_diag.append(corr ** 2)
+    
+    if len(off_diag) == 0:
+        return torch.tensor(0.0, device=embeddings.device)
+    
+    return torch.stack(off_diag).mean()
+
 def calculate_loss(batch_state_x, batch_neural_x):
     embedding = model.encoder(batch_state_x)
     reconstruction = model.decoder(embedding)
     recon_loss = criterion(reconstruction, batch_state_x)
     contr_loss = contrastive_loss(embedding, batch_neural_x)
-    loss = recon_loss + contrast_weight * contr_loss
-    return loss, recon_loss, contr_loss
+    decorr_loss = decorrelation_loss(embedding)
+    loss = recon_loss + contrast_weight * contr_loss + decorrelation_weight * decorr_loss
+    return loss, recon_loss, contr_loss, decorr_loss
 
 with torch.no_grad():
     running_test_loss = []
     running_test_recon_loss = []
     running_test_contr_loss = []
+    running_test_decorr_loss = []
     for batch_state_x, batch_neural_x in tqdm(test_loader):
-        loss, recon_loss, contr_loss = calculate_loss(batch_state_x, batch_neural_x)
+        loss, recon_loss, contr_loss, decorr_loss = calculate_loss(batch_state_x, batch_neural_x)
         running_test_loss.append(loss.item() * len(batch_neural_x))
         running_test_recon_loss.append(recon_loss.item() * len(batch_neural_x))
         running_test_contr_loss.append(contr_loss.item() * len(batch_neural_x))
+        running_test_decorr_loss.append(decorr_loss.item() * len(batch_neural_x))
     print(f"Test Loss: {np.sum(running_test_loss) / len(test_dataset)}")
     print(f"Test Recon Loss: {np.sum(running_test_recon_loss) / len(test_dataset)}")
     print(f"Test Contrastive Loss: {np.sum(running_test_contr_loss) / len(test_dataset)}")
+    print(f"Test Decorrelation Loss: {np.sum(running_test_decorr_loss) / len(test_dataset)}")
 
 for epoch in range(250):
     running_test_loss = []
     running_test_recon_loss = []
     running_test_contr_loss = []
+    running_test_decorr_loss = []
     running_train_loss = []
     for batch_state_x, batch_neural_x in tqdm(train_loader):
         optimizer.zero_grad()
         # Forward through encoder and decoder
-        loss, _, __ = calculate_loss(batch_state_x, batch_neural_x)
+        loss, _, __, ___ = calculate_loss(batch_state_x, batch_neural_x)
         loss.backward()
         optimizer.step()
         running_train_loss.append(loss.item() * len(batch_state_x))
@@ -144,15 +179,17 @@ for epoch in range(250):
     
     with torch.no_grad():
         for batch_state_x, batch_neural_x in tqdm(test_loader):
-            loss, recon_loss, contr_loss = calculate_loss(batch_state_x, batch_neural_x)
+            loss, recon_loss, contr_loss, decorr_loss = calculate_loss(batch_state_x, batch_neural_x)
             running_test_loss.append(loss.item() * len(batch_neural_x))
             running_test_recon_loss.append(recon_loss.item() * len(batch_neural_x))
             running_test_contr_loss.append(contr_loss.item() * len(batch_neural_x))
-    print(f"Epoch {epoch}, Train Loss: {np.sum(running_train_loss) / len(train_dataset)}, Test Loss: {np.sum(running_test_loss) / len(test_dataset)}, Test Recon Loss: {np.sum(running_test_recon_loss) / len(test_dataset)}, Test Contrastive Loss: {np.sum(running_test_contr_loss) / len(test_dataset)}")
+            running_test_decorr_loss.append(decorr_loss.item() * len(batch_neural_x))
+    print(f"Epoch {epoch}, Train Loss: {np.sum(running_train_loss) / len(train_dataset)}, Test Loss: {np.sum(running_test_loss) / len(test_dataset)}, Test Recon Loss: {np.sum(running_test_recon_loss) / len(test_dataset)}, Test Contrastive Loss: {np.sum(running_test_contr_loss) / len(test_dataset)}, Test Decorrelation Loss: {np.sum(running_test_decorr_loss) / len(test_dataset)}")
     train_loss.append(np.sum(running_train_loss) / len(train_dataset))
     test_loss.append(np.sum(running_test_loss) / len(test_dataset))
     test_recon_loss.append(np.sum(running_test_recon_loss) / len(test_dataset))
     test_contr_loss.append(np.sum(running_test_contr_loss) / len(test_dataset))
+    test_decorr_loss.append(np.sum(running_test_decorr_loss) / len(test_dataset))
 
 if USE_LINEAR_AUTOENCODER:
     torch.save(model.state_dict(), "contrastive_neural_labeling_linear_model.pth")

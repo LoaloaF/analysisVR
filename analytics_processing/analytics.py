@@ -302,6 +302,23 @@ def _compute_sess_analytic(analytic, session_fullfname):
             return None
         data = ephys.get_FiringRateTrackwiseHz(fr_data, track_behavior_data)
         data_table = dict.fromkeys(data.columns, C.FIRING_RATE_TRACKWISE_HZ_ONE_DTYPE)
+
+    # TODO Sam complete this and test
+    elif analytic == "FiringRateTrackwiseEnsemble":
+        # loading firing rates
+        fr_data = get_analytics('FiringRateTrackwiseHz', session_names=[session_name])
+        if fr_data is None:
+            L.logger.warning("Missing FiringRate (Trackwise)")
+            return None
+        # loading ensembles
+        ensembles = get_analytics('ConcatenatedEnsambles40ms', session_names=[session_name])
+        if ensembles is None:
+            L.logger.warning("Failed computing concatenated ensembles")
+            return None
+        
+  
+        data = pd.DataFrame((fr_data.to_numpy() @ ensembles.to_numpy()), index = fr_data.index, columns= ensembles.columns)
+        return data
         
     
     

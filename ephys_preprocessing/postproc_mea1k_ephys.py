@@ -1490,6 +1490,40 @@ def _compute_assembly_activity_numba(assembly_templates, fr_data):
     return assembly_activity
 
 def get_ConcatenatedEnsambles40ms(PCs, all_fr_hz):
+    """
+        Estimate cell assemblies and their activity from 40 ms binned firing rates.
+
+        The function:
+        1) Determines the number of assemblies from PCA eigenvalues using the
+        Marcenko-Pastur upper bound.
+        2) Computes assembly templates with FastICA in the PCA subspace.
+        3) Projects z-scored firing rates onto the templates to obtain activity.
+
+        Parameters:
+        PCs : pandas.DataFrame
+            PC loading matrix of shape (n_neurons, n_pcs). Must contain columns
+            'eigenvalues' and 'explained_variance', which are removed in place.
+            Index identifies neurons.
+        all_fr_hz : pandas.DataFrame
+            Firing rates (n_bins x n_neurons) at 40 ms. Row index is a MultiIndex
+            with level 'session_id'. Columns 'from_ephys_timestamp' and
+            'to_ephys_timestamp' are removed to build the output index.
+
+        Returns:
+        assembly_templates : pandas.DataFrame
+            Neuron x assembly weights, columns 'Assembly001', …; index matches PCs.
+        assembly_activity : pandas.DataFrame
+            Assembly activity with index on
+            ('session_id','from_ephys_timestamp','to_ephys_timestamp') and one
+            column per assembly; returned with a reset index.
+
+        Raises:
+        KeyError
+            Missing required columns or 'session_id' level.
+        ValueError
+            ICA non-convergence.
+    """
+     
     eigenvalues = PCs.pop('eigenvalues')
     explained_variance = PCs.pop('explained_variance')
     print(PCs)

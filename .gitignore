@@ -16,3 +16,5 @@ rasterm
 .DS_Store
 /scripted_plotting/experimental_poster_sfn.ipynb
 /scripted_plotting/profiling*
+/scripted_plotting/playground.ipynb
+/scripted_plotting/sandbox

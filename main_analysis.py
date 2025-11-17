@@ -17,7 +17,7 @@ from CustomLogger import CustomLogger as Logger
 def main():
     argParser = argparse.ArgumentParser("Run dash app for visualizing VR data")
     # parse the first argument as the log level
-    argParser.add_argument("loglevel", help="Log level for the logger", type=str)
+    argParser.add_argument("loglevel", nargs="?", help="Log level for the logger", default="INFO", type=str)
     args = argParser.parse_args()
     loglevel = args.loglevel
     

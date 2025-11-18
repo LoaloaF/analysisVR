@@ -30,6 +30,8 @@ DATA_LOADED_EnsembleEncoding_ID = 'EnsembleEncoding-data-loaded'
 DATA_LOADED_EnsembleChoiceEncoding_ID = 'EnsembleChoiceEncoding-data-loaded'
 
 def get_vis_name_data_loaded_id(vis_name):
+    if vis_name.endswith('_L') or vis_name.endswith('_R'):
+        vis_name = vis_name[:-2]
     match vis_name:
         case 'SessionKinematics':
             data_loaded_id = DATA_LOADED_SessionKinematics_ID

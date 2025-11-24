@@ -14,8 +14,6 @@ from .data_selection_components import (
     trial_group_filter_component,
     max_metric_input_component,
     smooth_checklist_component,
-    figure_width_input_component,
-    figure_height_input_component,
     normalize_checklist_component,
     
     register_animal_dropdown_callback,

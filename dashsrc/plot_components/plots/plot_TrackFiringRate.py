@@ -201,8 +201,8 @@ def render_plot(track_data, fr, metadata, spike_metadata, metric, n_sessions,
 
         # normalize data if ticked row wise
         if normalize_data:
-            vals = neuron_i_fr.values
-            max_abs = np.max(np.abs(vals), axis=0, keepdims=True)
+            vals = neuron_i_fr.T.values
+            max_abs = np.max(np.abs(vals), axis=1, keepdims=True)
             max_abs[max_abs == 0] = 1
             z_values = vals / max_abs
             # z_values = np.log10(neuron_i_fr.T.values) # TODO Do we want log scaling as well?

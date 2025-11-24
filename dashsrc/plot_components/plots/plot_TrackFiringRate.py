@@ -132,7 +132,18 @@ def render_plot(track_data, fr, metadata, spike_metadata, metric, n_sessions,
                 metric_max, smooth_data, normalize_data, width=-1, height=-1):
     fr = fr.set_index(['trial_id', 'from_position_bin', 'cue', 'choice_R1', 'choice_R2'], append=True, )
     fr.drop(columns=['trial_outcome','bin_length'], inplace=True)
+
+    y_label = "Unit"
+    show_shank = True
+    if any(str(col).startswith("Assembly") for col in fr.columns):
+        y_label = "Assembly"
+        show_shank = False
+    else:
+        y_label = "Neuron"
+        show_shank = True
+
     fr.columns = fr.columns.map(lambda c: int(c[4:]) if isinstance(c, str) and c.startswith("Unit") and c[4:].isdigit() else c)
+    fr.columns = fr.columns.map(lambda c: int(c[8:]) if isinstance(c, str) and c.startswith("Assembly") and c[8:].isdigit() else c)
     fr = fr.reindex(columns=sorted(fr.columns))
     
     print(fr)
@@ -190,7 +201,10 @@ def render_plot(track_data, fr, metadata, spike_metadata, metric, n_sessions,
 
         # normalize data if ticked row wise
         if normalize_data:
-            z_values = neuron_i_fr.T.values / neuron_i_fr.T.values.max(axis=1, keepdims=True)
+            vals = neuron_i_fr.values
+            max_abs = np.max(np.abs(vals), axis=0, keepdims=True)
+            max_abs[max_abs == 0] = 1
+            z_values = vals / max_abs
             # z_values = np.log10(neuron_i_fr.T.values) # TODO Do we want log scaling as well?
             # z = neuron_i_fr.T.divide(neuron_i_fr.T.max(axis=1).replace(0, np.nan), axis=0).fillna(0.0)
             # z_values = z.T
@@ -203,9 +217,9 @@ def render_plot(track_data, fr, metadata, spike_metadata, metric, n_sessions,
                 z=z_values,
                 x=neuron_i_fr.T.columns,
                 y=neuron_i_fr.T.index,
-                colorscale="Viridis",  # Color scale
-                zmin=0,
-                zmax=z_values.max(),
+                colorscale="Viridis",
+                zmin=-1 if normalize_data else z_values.min(),
+                zmax= 1 if normalize_data else z_values.max(),
                 showscale=False,
             ), row=tuning_row, col=1,
         )
@@ -238,8 +252,9 @@ def render_plot(track_data, fr, metadata, spike_metadata, metric, n_sessions,
             # )
             # fig.add_trace(mean_trace, row=tuning_row, col=1)
 
-        ann = f"Neuron {unit_metad['cluster_id']:03d}" 
-        ann += ", HP" if unit_metad['shank_id'] == 2 else ", mPFC"
+        ann = f"{y_label} {unit_metad['cluster_id']:03d}" 
+        if show_shank:
+            ann += ", HP" if unit_metad['shank_id'] == 2 else ", mPFC"
         fig.update_yaxes(
             title_text=ann, 
             tickvals=neuron_i_fr.columns,

@@ -10,10 +10,10 @@ ANIMALS = 6,9, 10,11,12,13,15
 PARADIGMS = 800, 1100, 500, 0
 
 SESSION_WISE_VISS = ('SessionKinematics', "RawSpikes", 'SVMPredictions', 'CueCorrelation', 
-                     'EnsembleEncoding', 'EnsembleChoiceEncoding',)
+                     'EnsembleEncoding', 'EnsembleChoiceEncoding')
 ANIMAL_WISE_VISS = ('Kinematics', 'StayPerformance', 'StayRatio', 'SessionsOverview', 
                     'EvolvingStayTime', 'EvolvingStayDecision', 'TrackFiringRate', 
-                    'EvolvingPCSubspace')
+                    'EvolvingPCSubspace', 'FiringRateTrackwiseEnsemble')
 DATA_LOADED_SessionKinematics_ID = 'SessionKinematics-data-loaded'
 DATA_LOADED_Kinematics_ID = 'Kinematics-data-loaded'
 DATA_LOADED_StayRatio_ID = 'Staytimes-data-loaded'
@@ -23,6 +23,7 @@ DATA_LOADED_EvolvingStayTime_ID = 'EvolvingStayTime-data-loaded'
 DATA_LOADED_EvolvingStayDecision_ID = 'EvolvingStayDecision-data-loaded'
 DATA_LOADED_RawSpikes_ID = 'RawSpikes-data-loaded'
 DATA_LOADED_TrackFiringRate_ID = 'TrackFiringRate-data-loaded'
+DATA_LOADED_TrackFiringRateEnsemble_ID = 'FiringRateTrackwiseEnsemble-data-loaded'
 DATA_LOADED_SVMPredictions_ID = 'SVMPredictions-data-loaded'
 DATA_LOADED_CueCorrelation_ID = 'CueCorrelation-data-loaded'
 DATA_LOADED_EvolvingPCSubspace_ID = 'EvolvingPCSubspace-data-loaded'
@@ -51,6 +52,8 @@ def get_vis_name_data_loaded_id(vis_name):
             data_loaded_id = DATA_LOADED_RawSpikes_ID
         case 'TrackFiringRate':
             data_loaded_id = DATA_LOADED_TrackFiringRate_ID
+        case 'FiringRateTrackwiseEnsemble':
+            data_loaded_id = DATA_LOADED_TrackFiringRateEnsemble_ID
         case 'SVMPredictions':
             data_loaded_id = DATA_LOADED_SVMPredictions_ID
         case 'CueCorrelation':
@@ -90,6 +93,9 @@ def get_vis_name_req_data(vis_name):
         case 'TrackFiringRate':
             req_data = ('FiringRateTrackwiseHz', "SpikeClusterMetadata", 
                        'BehaviorTrackwise', 'SessionMetadata')
+        case 'FiringRateTrackwiseEnsemble':
+            req_data = ('FiringRateTrackwiseHz', "SpikeClusterMetadata", 
+                       'BehaviorTrackwise', 'SessionMetadata', 'FiringRateTrackwiseEnsemble')
         case 'SVMPredictions':
             req_data = 'SVMCueOutcomeChoicePred', 'SessionMetadata'
         case 'CueCorrelation':

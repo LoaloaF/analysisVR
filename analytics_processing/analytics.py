@@ -303,22 +303,7 @@ def _compute_sess_analytic(analytic, session_fullfname):
         data = ephys.get_FiringRateTrackwiseHz(fr_data, track_behavior_data)
         data_table = dict.fromkeys(data.columns, C.FIRING_RATE_TRACKWISE_HZ_ONE_DTYPE)
 
-    # TODO Sam complete this and test
-    elif analytic == "FiringRateTrackwiseEnsemble":
-        # loading firing rates
-        fr_data = get_analytics('FiringRateTrackwiseHz', session_names=[session_name])
-        if fr_data is None:
-            L.logger.warning("Missing FiringRate (Trackwise)")
-            return None
-        # loading ensembles
-        ensembles = get_analytics('ConcatenatedEnsambles40ms', session_names=[session_name])
-        if ensembles is None:
-            L.logger.warning("Failed computing concatenated ensembles")
-            return None
-        
-  
-        data = pd.DataFrame((fr_data.to_numpy() @ ensembles.to_numpy()), index = fr_data.index, columns= ensembles.columns)
-        return data
+
         
     
     
@@ -391,9 +376,30 @@ def _compute_sess_analytic(analytic, session_fullfname):
     #     print(data)
     #     data_table = dict.fromkeys(data.columns, C.FIRING_RATE_TRACKBINS_Z_ONE_DTYPE)
     
+    elif analytic == "FiringRateTrackwiseEnsemble":
+        # loading firing rates
+        fr_data = get_analytics('FiringRateTrackwiseHz', session_names=[session_name])
+        if fr_data is None:
+            L.logger.warning("Missing FiringRate (Trackwise)")
+            return None
+        # loading ensembles
+        ensembles = get_analytics('ConcatenatedEnsambles40ms', session_names=[session_name])
+        if ensembles is None:
+            L.logger.warning("Failed computing concatenated ensembles")
+            return None
+        
+        print ("FR DATA:")
+        print (fr_data)
+        print ("ENSEMBLES:")
+        print (ensembles)
+        
+        data = ephys.get_FiringRateTrackwiseEnsemble(fr_data, ensembles)
+        # data = pd.DataFrame((fr_data.to_numpy() @ ensembles.to_numpy()), index = fr_data.index, columns= ensembles.columns)
+        return data
     
     
-    
+
+
     elif analytic == "AnalyticsOverview":
         data = _get_available_analytics(session_fullfname)
         schema = C.SESSION_ANALYTICS_OVERVIEW_TABLE
@@ -439,7 +445,7 @@ def get_analytics(analytic, mode="set", paradigm_ids=None, animal_ids=None,
                         'ConcatenatedPCs40ms', 'ConcatenatedEnsambleProj40ms',
                         'ConcatenatedEnsambles40ms',
                         'SessionPCs40msCAs', 'Ensemble40msProjEventAligned',
-                        'Ensamble40msProjEncodings')
+                        'Ensamble40msProjEncodings',)
     aggr = []
     
     if analytic in ANIMAL_ANALYTICS:

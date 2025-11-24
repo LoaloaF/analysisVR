@@ -4,6 +4,7 @@ import json
 
 import numpy as np
 import pandas as pd
+import re
 
 import h5py
 
@@ -848,7 +849,41 @@ def get_Ensemble40msProjEventAligned(ensemble_proj, behavior):
         
         
         
-        
+def get_FiringRateTrackwiseEnsemble(fr_trackwise, ensemble_proj):
+
+    def norm_unit(u):
+        s = str(u)
+        if s.startswith("Unit"):
+            # e.g. "Unit1" -> "Unit0001"
+            m = re.fullmatch(r"Unit0*(\d+)", s)
+            return f"Unit{int(m.group(1)):04d}" if m else s
+        if s.isdigit():
+            s = int(s)+1
+            return f"Unit{int(s):04d}"
+        return s
+
+    ignore_cols = ['from_position_bin','trial_id','cue','trial_outcome','choice_R1','choice_R2','bin_length']
+    ignore_cols = [c for c in fr_trackwise.columns if c in ignore_cols]
+
+    units = [c for c in fr_trackwise.columns if isinstance(c, str) and c.startswith("Unit")]
+    X = fr_trackwise[units]   
+    W = ensemble_proj.copy()
+    W.index = [norm_unit(i) for i in W.index]
+    W = W.loc[units]
+    X = X.apply(pd.to_numeric, errors="coerce")
+    W = W.apply(pd.to_numeric, errors="coerce")
+
+    Xv = np.nan_to_num(X.to_numpy(), nan=0.0)
+    Wv = np.nan_to_num(W.to_numpy(), nan=0.0)
+
+    calc = pd.DataFrame(Xv @ Wv, index=fr_trackwise.index, columns=W.columns)
+
+    ens_fr = pd.concat([calc, fr_trackwise[ignore_cols]], axis=1)
+
+    #renaming for plotting
+    ens_fr = ens_fr.rename(columns=lambda c: re.sub(r"^Assembly(\d+)$", r"Unit0\1", str(c)))
+
+    return ens_fr
         
         
         

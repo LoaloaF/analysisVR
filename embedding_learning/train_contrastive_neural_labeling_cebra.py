@@ -25,25 +25,30 @@ decorrelation_weight = 0.1  # Weight for decorrelation loss to prevent dimension
 hidden_size = 50
 
 
-data = pd.read_csv("joined.csv")
-
-data['from_ephys_timestamp'] = data['t_interval'].apply(lambda x: int(x.split(",")[0][1:]))
-
-data.set_index('from_ephys_timestamp', inplace=True)
-
-data.drop(columns=['t_interval'], inplace=True)
-
-data = data.sort_values(by="from_ephys_timestamp")
+data = np.load("fr_behavior_glm_input.npy", allow_pickle=True)
 
 
-state_xs = [data[data["session_id"] == i].iloc[:, -5:].values for i in sorted(data["session_id"].unique())]
-neural_xs = [data[data["session_id"] == i].iloc[:, 2:-5].values for i in sorted(data["session_id"].unique())]
+neural_xs = []
+state_xs = []
+for i in range(1, 33):
+    data_i = data[data[:, 0].astype(int) == i]
+    print(data[:, 0])
+    mask = ~pd.isna(data_i[:, 1:]).any(axis=1)
+    neural_x = data_i[mask, 1:-5].astype(np.float32)
+    state_x = data_i[mask, -5:].astype(np.float32)
+    neural_xs.append(neural_x)
+    state_xs.append(state_x)
+
 
 neural_x = [torch.from_numpy(neural_x).float() for neural_x in neural_xs]
 state_x = [torch.from_numpy(state_x).float() for state_x in state_xs]
 
+# for i in range(len(neural_x)):
+#     print(neural_x[i].shape)
+#     print(state_x[i].shape)
+
 failed_sessions = []
-for session_id, nx, sx in zip(sorted(data["session_id"].unique()), neural_x, state_x):
+for session_id, nx, sx in zip(range(1, 33), neural_x, state_x):
     if torch.count_nonzero(nx.isnan()) > 0:
         print(torch.count_nonzero(nx.isnan()))
         print("Neural data has NaN values")
@@ -55,21 +60,22 @@ for session_id, nx, sx in zip(sorted(data["session_id"].unique()), neural_x, sta
 if failed_sessions:
     print(f"Failed sessions: {failed_sessions}")
     exit()
+else:
+    print("No failed sessions")
 
-model = CEBRA(
-    model_architecture = "offset10-model",
-    batch_size = 1024,
-    learning_rate = 0.001,
-    max_iterations = 10,
-    time_offsets = 10,
-    output_dimension = 2,
-    device = "cuda_if_available",
-    verbose = False
-)
+
+
+multi_cebra_model_discrete = cebra.CEBRA(batch_size=512,
+                                output_dimension=3,
+                                max_iterations=10,
+                                max_adapt_iterations=10)
+
+
 
 embeddings_runs = []
 for i in range(10):
-    embeddings_runs.append(model.fit_transform(state_x, neural_x))
+    multi_cebra_model_discrete.fit(neural_x, state_x)
+    embeddings_runs.append(multi_cebra_model_discrete.embeddings)
 
 scores_runs, pairs_runs, ids_runs = cebra.sklearn.metrics.consistency_score(embeddings=embeddings_runs,
                                                                             between="runs")

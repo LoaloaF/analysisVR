@@ -30,9 +30,8 @@ data = np.load("fr_behavior_glm_input.npy", allow_pickle=True)
 
 neural_xs = []
 state_xs = []
-for i in range(1, 33):
-    data_i = data[data[:, 0].astype(int) == i]
-    print(data[:, 0])
+for i in range(1, 34):
+    data_i = data[data[:, 0] == i]
     mask = ~pd.isna(data_i[:, 1:]).any(axis=1)
     neural_x = data_i[mask, 1:-5].astype(np.float32)
     state_x = data_i[mask, -5:].astype(np.float32)
@@ -48,7 +47,7 @@ state_x = [torch.from_numpy(state_x).float() for state_x in state_xs]
 #     print(state_x[i].shape)
 
 failed_sessions = []
-for session_id, nx, sx in zip(range(1, 33), neural_x, state_x):
+for session_id, nx, sx in zip(range(1, 34), neural_x, state_x):
     if torch.count_nonzero(nx.isnan()) > 0:
         print(torch.count_nonzero(nx.isnan()))
         print("Neural data has NaN values")
@@ -63,6 +62,9 @@ if failed_sessions:
 else:
     print("No failed sessions")
 
+session_ids = [i for i in range(len(neural_x)) if neural_x[i].shape[0] > 0 and state_x[i].shape[0] > 0]
+neural_x = [nx for nx in neural_x if nx.shape[0] > 0]
+state_x = [sx for sx in state_x if sx.shape[0] > 0]
 
 
 multi_cebra_model_discrete = cebra.CEBRA(batch_size=512,
@@ -72,14 +74,20 @@ multi_cebra_model_discrete = cebra.CEBRA(batch_size=512,
 
 
 
-embeddings_runs = []
-for i in range(10):
-    multi_cebra_model_discrete.fit(neural_x, state_x)
-    embeddings_runs.append(multi_cebra_model_discrete.embeddings)
+multi_cebra_model_discrete.fit(state_x, neural_x)
+curr_embeddings = []
+labels = []
+for session_id in range(len(neural_x)):
+    curr_embeddings.append(multi_cebra_model_discrete.transform(state_x[session_id], session_id = session_id))
+    labels.append(neural_x[session_id][:, 0])
+# import pdb; pdb.set_trace()
 
-scores_runs, pairs_runs, ids_runs = cebra.sklearn.metrics.consistency_score(embeddings=embeddings_runs,
-                                                                            between="runs")
+scores_runs, pairs_runs, ids_runs = cebra.sklearn.metrics.consistency_score(embeddings=curr_embeddings,
+                                                                            between="datasets",
+                                                                            dataset_ids= range(len(neural_x)),
+                                                                            labels=labels,
+                                                                            )
 
-cebra.plot_consistency(scores_runs, pairs_runs, ids_runs, vmin=0, vmax=100, title="Between-runs consistencies")
+cebra.plot_consistency(scores_runs, pairs_runs, ids_runs, vmin=0, vmax=100, title="Between-datasets consistencies")
 plt.show()
 

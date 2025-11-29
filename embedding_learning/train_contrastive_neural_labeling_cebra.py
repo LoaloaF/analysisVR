@@ -25,15 +25,36 @@ decorrelation_weight = 0.1  # Weight for decorrelation loss to prevent dimension
 hidden_size = 50
 
 
-data = pd.read_csv("merged.csv")
+data = pd.read_csv("joined.csv")
+
+data['from_ephys_timestamp'] = data['t_interval'].apply(lambda x: int(x.split(",")[0][1:]))
+
+data.set_index('from_ephys_timestamp', inplace=True)
+
+data.drop(columns=['t_interval'], inplace=True)
 
 data = data.sort_values(by="from_ephys_timestamp")
 
-neural_x = data.iloc[:, 12:].values
-state_x = data.iloc[:, 1:10].values
 
-neural_x = torch.from_numpy(neural_x).float()
-state_x = torch.from_numpy(state_x).float()
+state_xs = [data[data["session_id"] == i].iloc[:, -5:].values for i in sorted(data["session_id"].unique())]
+neural_xs = [data[data["session_id"] == i].iloc[:, 2:-5].values for i in sorted(data["session_id"].unique())]
+
+neural_x = [torch.from_numpy(neural_x).float() for neural_x in neural_xs]
+state_x = [torch.from_numpy(state_x).float() for state_x in state_xs]
+
+failed_sessions = []
+for session_id, nx, sx in zip(sorted(data["session_id"].unique()), neural_x, state_x):
+    if torch.count_nonzero(nx.isnan()) > 0:
+        print(torch.count_nonzero(nx.isnan()))
+        print("Neural data has NaN values")
+        failed_sessions.append(session_id)
+    if torch.count_nonzero(sx.isnan()) > 0:
+        print(torch.count_nonzero(sx.isnan()))
+        print("State data has NaN values")
+        failed_sessions.append(session_id)
+if failed_sessions:
+    print(f"Failed sessions: {failed_sessions}")
+    exit()
 
 model = CEBRA(
     model_architecture = "offset10-model",

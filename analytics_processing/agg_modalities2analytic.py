@@ -137,13 +137,15 @@ def get_BehaviorPose(session_fullfname, track_kinematics):
     dlc_csv_files = [file for file in all_files if "DLC" in file and file.endswith(".csv")]
 
     if not dlc_csv_files:
+        import deeplabcut # only done here to avoid unnecessary import
+        
         # check if there is already facecam mp4 for analysis
         if "facecam.mp4" not in all_files:
+            print("Generating facecam mp4 for DLC analysis...")
             aU.hdf5_frames2mp4(session_dir, file_name)
         
         video_path = os.path.join(session_dir, "facecam.mp4")
         
-        import deeplabcut # only done here to avoid unnecessary import
         deeplabcut.analyze_videos(
             config=f"{project_path}/config.yaml",
             videos=video_path,
@@ -164,6 +166,73 @@ def get_BehaviorPose(session_fullfname, track_kinematics):
     df_pose = df_pose.iloc[2:]
     df_pose.reset_index(drop=True, inplace=True)
     df_pose = df_pose.add_prefix("facecam_pose_")
+    df_pose['facecam_pose_ephys_timestamp'] = data['facecam_image_ephys_timestamp']
+    df_pose['facecam_pose_pc_timestamp'] = data['facecam_image_pc_timestamp']
+
+    # Add vector lengths and angles
+    def calculate_vector_length(row, point1, point2):
+        return np.hypot(
+            row[f'facecam_pose_{point1}_x'] - row[f'facecam_pose_{point2}_x'],
+            row[f'facecam_pose_{point1}_y'] - row[f'facecam_pose_{point2}_y']
+        )
+
+    def calculate_angle(row, point1, point2, point3):
+        """Calculate angle at point2 between vectors point2->point1 and point2->point3"""
+        v1 = np.array([
+            float(row[f'facecam_pose_{point1}_x']) - float(row[f'facecam_pose_{point2}_x']),
+            float(row[f'facecam_pose_{point1}_y']) - float(row[f'facecam_pose_{point2}_y'])
+        ])
+        v2 = np.array([
+            float(row[f'facecam_pose_{point3}_x']) - float(row[f'facecam_pose_{point2}_x']),
+            float(row[f'facecam_pose_{point3}_y']) - float(row[f'facecam_pose_{point2}_y'])
+        ])
+        
+        v1_norm = np.linalg.norm(v1)
+        v2_norm = np.linalg.norm(v2)
+        
+        if v1_norm == 0 or v2_norm == 0:
+            return np.nan
+        
+        dot_product = np.clip(np.dot(v1, v2) / (v1_norm * v2_norm), -1.0, 1.0)
+        angle_rad = np.arccos(dot_product)
+        return np.degrees(angle_rad)
+
+    # Convert numeric columns to float
+    numeric_cols = [col for col in df_pose.columns if col.endswith(('_x', '_y', '_likelihood'))]
+    df_pose[numeric_cols] = df_pose[numeric_cols].astype(float)
+
+    # Calculate vector lengths
+    df_pose['facecam_pose_nose_neck_length'] = df_pose.apply(
+        calculate_vector_length, args=('nose', 'neck'), axis=1)
+    df_pose['facecam_pose_neck_body1_length'] = df_pose.apply(
+        calculate_vector_length, args=('neck', 'body_1'), axis=1)
+
+    # Calculate angles at joints
+    df_pose['facecam_pose_nose_neck_body1_angle'] = df_pose.apply(
+        calculate_angle, args=('nose', 'neck', 'body_1'), axis=1)
+    # TODO model needs finetuning...
+    valid_angle_mask = df_pose['facecam_pose_nose_neck_body1_angle'].between(55, 235)
+    df_pose.loc[~valid_angle_mask, 'facecam_pose_nose_neck_body1_angle'] = np.nan
+    df_pose['facecam_pose_body1_body2_body3_angle'] = df_pose.apply(
+        calculate_angle, args=('body_1', 'body_2', 'body_3'), axis=1)
+    
+
+    # add angular velocity columns
+    timestamp_col = 'facecam_pose_ephys_timestamp'
+    if df_pose.loc[:,timestamp_col].isna().iloc[0]:
+        timestamp_col = 'facecam_pose_pc_timestamp'
+
+    timestamps = df_pose[timestamp_col].astype(float).values
+
+    for angle_col in ['facecam_pose_nose_neck_body1_angle',
+                      'facecam_pose_body1_body2_body3_angle']:
+        pose_angle_diff = np.diff(df_pose[angle_col].astype(float).values)
+        timediff_s = np.diff(timestamps) / 1_000_000  # convert us to s
+        pose_angle_vel = pose_angle_diff / timediff_s
+
+        df_pose[angle_col + '_velocity'] = np.concatenate(([pose_angle_vel[0]], pose_angle_vel))
+        in_range = df_pose[angle_col + '_velocity'].abs() < 450
+        df_pose[angle_col + '_likelihood'] = in_range.astype(float)
 
     df_pose["facecam_image_pc_timestamp"] = data["facecam_image_pc_timestamp"]
     df_pose["facecam_image_ephys_timestamp"] = data["facecam_image_ephys_timestamp"]

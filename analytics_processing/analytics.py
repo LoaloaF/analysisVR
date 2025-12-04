@@ -53,7 +53,7 @@ def _get_available_analytics(session_fullfname):
 
         # read parquet file metadata
         schema = pq.read_schema(fp)
-        col_names = schema.names
+        col_names = sorted(schema.names)
         # get total rows from file metadata (fast)
         pf = pq.ParquetFile(fp)
         n_rows = pf.metadata.num_rows
@@ -204,7 +204,7 @@ def _compute_sess_analytic(analytic, session_fullfname):
             return None
         
         data = m2a.get_BehaviorPose(session_fullfname, trialwise)
-        schema = C.SCHEMA_BehaviorPose
+        # schema = C.SCHEMA_BehaviorPose
     
     elif analytic == "BehaviorFramewise":
         # 1. track kinematics
@@ -229,13 +229,11 @@ def _compute_sess_analytic(analytic, session_fullfname):
             L.logger.warning("Missing lower level analytic")
             return None
         
-        # TODO: poses
-        # # 4. facecam poses
-        # pose_data = get_analytics(analytic="BehaviorPoses",
-        #                           session_names=[session_name],)
+        pose_data = get_analytics(analytic="BehaviorPose",
+                                  session_names=[session_name],)
     
         data = integr_analytics.get_BehaviorFramewise(track_kinematics, trialwise, 
-                                                      events, ) # pose_data)
+                                                      events, pose_data)
         schema = C.SCHEMA_BehaviorFramewise
     
     elif analytic == "BehaviorTrackwise":
@@ -249,6 +247,14 @@ def _compute_sess_analytic(analytic, session_fullfname):
         schema = None
     
     
+    elif analytic == "TrialWiseT0Events40ms":
+        behavior = get_analytics(analytic="Behavior40msAligned",
+                                 session_names=[session_name],)
+        if behavior is None:
+            L.logger.warning("Missing lower level analytic")
+            return None
+        data = integr_analytics.get_TrialWiseT0Events40ms(behavior)
+        # schema = C.SCHEMA_T0EVENTS
     
     
     
@@ -342,11 +348,18 @@ def _compute_sess_analytic(analytic, session_fullfname):
         fr_z = get_analytics('FiringRate40msZ', session_names=[session_name])
         if fr_z is None:
             return None
-        beh = get_analytics('BehaviorFramewise', session_names=[session_name])
+        cols = ['trial_id', 'cue', 'trial_outcome', 'choice_R1', 'choice_R2',
+                 'to_ephys_timestamp', 'frame_position',
+                 'frame_raw', 'frame_yaw', 'frame_pitch']
+        beh = get_analytics('Behavior40msAligned', session_names=[session_name],
+                            columns=cols)
         if beh is None:
             return None
-        data = ephys.get_SVMCueOutcomeChoicePred(fr_z, beh)
-        data_table = C.SVM_CUE_OUTCOME_CHOICE_PRED_TABLE
+        
+        t0_events = get_analytics('TrialWiseT0Events40ms', session_names=[session_name],)
+
+        data = ephys.get_SVMCueOutcomeChoicePred(fr_z, beh, t0_events)
+        # data_table = C.SVM_CUE_OUTCOME_CHOICE_PRED_TABLE
 
         if data is None:
             L.logger.warning("Failed to compute SVM Cue Outcome Choice Prediction")
@@ -374,9 +387,50 @@ def _compute_sess_analytic(analytic, session_fullfname):
     #     print(data)
     #     data_table = dict.fromkeys(data.columns, C.FIRING_RATE_TRACKBINS_Z_ONE_DTYPE)
     
-    
-    
-    
+    elif analytic == "Behavior40msAligned":
+        fr_raw = get_analytics('FiringRate40msHz', session_names=[session_name])
+        if fr_raw is None:
+            L.logger.warning("Missing lower level analytic")
+            return None
+        
+        cols = ["frame_ephys_timestamp",
+            "frame_pc_timestamp",
+            "trial_start_pc_timestamp",
+            # generally useful
+            "trial_id",
+            "cue",
+            "trial_outcome",
+            "choice_R1",
+            "choice_R2",
+            # action based
+            "frame_velocity",
+            "frame_acceleration",
+            "frame_raw",
+            "frame_yaw",
+            "frame_pitch",
+            "lick_count",
+            # action from camera pose
+            "facecam_pose_nose_neck_body1_angle",
+            "facecam_pose_nose_neck_body1_angle_likelihood",
+            "facecam_pose_nose_neck_body1_angle_velocity",
+            
+            # state based
+            "frame_position",
+            "track_zone",
+            # "reward-removed_count",
+            "reward-sound_count",
+            "reward-valve-open_count",
+        ]
+        behavior = get_analytics('BehaviorFramewise', session_names=[session_name], 
+                                 columns=cols)
+        if behavior is None:
+            L.logger.warning("Missing lower level analytic")
+            return None
+        
+        data = integr_analytics.get_Behavior40msAligned(fr_raw, behavior)
+        # schema = C.SCHEMA_BEHAVIOR_FR_40MS
+        
+        
     elif analytic == "AnalyticsOverview":
         data = _get_available_analytics(session_fullfname)
         schema = C.SESSION_ANALYTICS_OVERVIEW_TABLE
@@ -512,6 +566,15 @@ def get_analytics(analytic, mode="set", paradigm_ids=None, animal_ids=None,
             midx = [(*identif, i) for i in range(data.shape[0])]
             names = ["paradigm_id", "animal_id", "session_id", "entry_id"]
             data.index = pd.MultiIndex.from_tuples(midx, names=names)
+            
+            # recover datatypes not preserved by parquet, like interval
+            # if analytic == 'TrialWiseT0Events40ms':
+            #     print(data.loc[:, 'pre_cue_interval'])
+            #     print(data.loc[:, 'nextto_cue_interval'])
+            #     exit()
+            # for col in data.select_dtypes(include=['interval']).columns:
+            #     data[col] = data[col].apply(lambda x: pd.Interval(x.left, x.right, closed=x.closed))
+            
             aggr.append(data)
             
         elif mode == "available":

@@ -866,7 +866,9 @@ def get_FiringRateTrackwiseEnsemble(fr_trackwise, ensemble_proj):
     ignore_cols = [c for c in fr_trackwise.columns if c in ignore_cols]
 
     units = [c for c in fr_trackwise.columns if isinstance(c, str) and c.startswith("Unit")]
-    X = fr_trackwise[units]   
+    X = fr_trackwise[units]
+    # z-scoring firing rates
+    X = (X - X.mean()) / X.std()
     W = ensemble_proj.copy()
     W.index = [norm_unit(i) for i in W.index]
     W = W.loc[units]
@@ -875,13 +877,15 @@ def get_FiringRateTrackwiseEnsemble(fr_trackwise, ensemble_proj):
 
     Xv = np.nan_to_num(X.to_numpy(), nan=0.0)
     Wv = np.nan_to_num(W.to_numpy(), nan=0.0)
-
-    calc = pd.DataFrame(Xv @ Wv, index=fr_trackwise.index, columns=W.columns)
+    Y = Xv @ Wv
+    diag = (Xv**2) @ (Wv**2)
+    quad_coact = Y**2 - diag
+    calc = pd.DataFrame(quad_coact, index=fr_trackwise.index, columns=W.columns)
 
     ens_fr = pd.concat([calc, fr_trackwise[ignore_cols]], axis=1)
 
     #renaming for plotting
-    ens_fr = ens_fr.rename(columns=lambda c: re.sub(r"^Assembly(\d+)$", r"Unit0\1", str(c)))
+    # ens_fr = ens_fr.rename(columns=lambda c: re.sub(r"^Assembly(\d+)$", r"Unit0\1", str(c)))
 
     return ens_fr
         
@@ -1682,7 +1686,7 @@ def get_FiringRateTrackwiseHz(fr, track_behavior_data):
         # add a column indicating the 
         trial_fr['posbin_t_edges'] = assigned_bin[assigned_bin.notna()]
         posbin_trial_wise_fr = trial_fr.groupby('posbin_t_edges', observed=True).mean()
-        posbin_trial_wise_fr /= interval.length.values[trials_exist_mask, None] /1e6 # us to s
+        # posbin_trial_wise_fr /= interval.length.values[trials_exist_mask, None] /1e6 # Values are already in Hz as we use the 40ms Hz as input data for the function
 
         # add meta data, cue outcome, position bin, trial id        
         posbin_trial_wise_fr['cue'] = posbin_data[trials_exist_mask].cue.values

@@ -133,13 +133,16 @@ def render_plot(track_data, fr, metadata, spike_metadata, metric, n_sessions,
     fr = fr.set_index(['trial_id', 'from_position_bin', 'cue', 'choice_R1', 'choice_R2'], append=True, )
     fr.drop(columns=['trial_outcome','bin_length'], inplace=True)
 
+    # y axis labelling
     y_label = "Unit"
     show_shank = True
     if any(str(col).startswith("Assembly") for col in fr.columns):
         y_label = "Assembly"
+        color = 'oxy'
         show_shank = False
     else:
         y_label = "Neuron"
+        color = 'Viridis'
         show_shank = True
 
     fr.columns = fr.columns.map(lambda c: int(c[4:]) if isinstance(c, str) and c.startswith("Unit") and c[4:].isdigit() else c)
@@ -169,6 +172,9 @@ def render_plot(track_data, fr, metadata, spike_metadata, metric, n_sessions,
     fig.update_layout(
         height=height,
     )
+
+    unit_ids = fr.columns
+    n_units = len(unit_ids)
     
     session_ids = fr.index.unique('session_id')
     for i, cluster_id in enumerate(unit_ids):
@@ -212,17 +218,24 @@ def render_plot(track_data, fr, metadata, spike_metadata, metric, n_sessions,
             z_values = neuron_i_fr.T.values
                     
         # do a heatmap instead
+        # frac = i / max(n_units - 1, 1)
+        # y_cb = 0.15 + 0.8 * frac
+
         fig.add_trace(
             go.Heatmap(
                 z=z_values,
                 x=neuron_i_fr.T.columns,
                 y=neuron_i_fr.T.index,
-                colorscale="Viridis",
-                zmin=-1 if normalize_data else z_values.min(),
-                zmax= 1 if normalize_data else z_values.max(),
+                colorscale=color,
+                # coloraxis='coloraxis',
+                zmin=z_values.min(),
+                zmax=1 if normalize_data else z_values.max(),
                 showscale=False,
-            ), row=tuning_row, col=1,
+            ),
+            row=tuning_row,
+            col=1,
         )
+
         unit_metad = spike_metadata[spike_metadata['cluster_id'] == int(cluster_id)].iloc[0]
         
         # for j, session_id in enumerate(session_ids):
@@ -286,6 +299,8 @@ def render_plot(track_data, fr, metadata, spike_metadata, metric, n_sessions,
                 showscale=False,
             ), row=event_row, col=1,
         )
+        # if normalize_data:
+        #     fig.update_layout(coloraxis = {'colorscale':color, 'colorbar': {"orientation": "h"},})
         
     
     return fig

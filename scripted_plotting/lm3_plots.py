@@ -2,6 +2,9 @@
 # executable - set up paths for import
 import os
 import sys
+import glob
+from PIL import Image
+import re
 # to setup import paths add project root dir to sys.path (with baseVR dir in it)
 sys.path.append(os.path.join(os.getcwd(), ".."))
 from baseVR.base_functionality import init_import_paths
@@ -210,12 +213,6 @@ for ens in ens_selection:
               # exit()
 
 
-# below glues the plots above together in one panel
-
-import os
-import glob
-from PIL import Image
-import re
 
 output_dir = "./outputs/lm3"
 png_files = sorted(glob.glob(f'{output_dir}/sankeys/curated_session_choices_*.png'))

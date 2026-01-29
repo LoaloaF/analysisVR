@@ -107,7 +107,23 @@ def _compute_animal_analytic(analytic, all_sessions_ffnames):
             L.logger.warning("Missing lower level analytic `SessionPCs40ms`")
         
         data = ephys.get_SessionPCs40msCAs(PCs)
-        
+
+    # elif analytic == 'TrackwiseEnsembleProj':
+    #     ens_proj = get_analytics('ConcatenatedEnsambleProj40ms', session_names=sp.fullfnames2snames(all_sessions_ffnames))
+    #     if ens_proj is None:
+    #         L.logger.warning("Missing lower level analytic")
+    #         return None
+
+    #     track_behavior_data = get_analytics('BehaviorTrackwise', session_names=sp.fullfnames2snames(all_sessions_ffnames))
+    #     if track_behavior_data is None:
+    #         L.logger.warning("Missing lower level analytic")
+    #         return None
+    #     # sess_id = track_behavior_data.index.get_level_values('session_id').unique()
+    #     # if len(sess_id) == 1 and 'session_id' in ens_proj.columns:
+    #     #     ens_proj = ens_proj[ens_proj['session_id'] == int(sess_id[0])]
+    #     data = ephys.get_TrackwiseEnsembleProj(ens_proj, track_behavior_data)
+    
+    
     # TODO should be sesssion analytic...    
     elif analytic ==  "Ensemble40msProjEventAligned":
         ensemble_proj = get_analytics('ConcatenatedEnsambleProj40ms',
@@ -376,7 +392,7 @@ def _compute_sess_analytic(analytic, session_fullfname):
     #     print(data)
     #     data_table = dict.fromkeys(data.columns, C.FIRING_RATE_TRACKBINS_Z_ONE_DTYPE)
     
-    elif analytic == "FiringRateTrackwiseEnsemble":
+    elif analytic == "TrackwiseEnsembles":
         # loading firing rates
         fr_data = get_analytics('FiringRateTrackwiseHz', session_names=[session_name])
         if fr_data is None:
@@ -388,17 +404,10 @@ def _compute_sess_analytic(analytic, session_fullfname):
             L.logger.warning("Failed computing concatenated ensembles")
             return None
         
-        print ("FR DATA:")
-        print (fr_data)
-        print ("ENSEMBLES:")
-        print (ensembles)
-        
         data = ephys.get_FiringRateTrackwiseEnsemble(fr_data, ensembles)
         # data = pd.DataFrame((fr_data.to_numpy() @ ensembles.to_numpy()), index = fr_data.index, columns= ensembles.columns)
         return data
     
-    
-
 
     elif analytic == "AnalyticsOverview":
         data = _get_available_analytics(session_fullfname)
@@ -445,7 +454,7 @@ def get_analytics(analytic, mode="set", paradigm_ids=None, animal_ids=None,
                         'ConcatenatedPCs40ms', 'ConcatenatedEnsambleProj40ms',
                         'ConcatenatedEnsambles40ms',
                         'SessionPCs40msCAs', 'Ensemble40msProjEventAligned',
-                        'Ensamble40msProjEncodings',)
+                        'Ensamble40msProjEncodings', 'TrackwiseEnsembleProj')
     aggr = []
     
     if analytic in ANIMAL_ANALYTICS:

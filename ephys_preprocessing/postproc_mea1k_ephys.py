@@ -846,15 +846,105 @@ def get_Ensemble40msProjEventAligned(ensemble_proj, behavior):
     print(all_sess_aggr)
     return all_sess_aggr
         
-        
-        
-        
-def get_FiringRateTrackwiseEnsemble(fr_trackwise, ensemble_proj):
+
+
+def get_TrackwiseEnsembleProj(ens_proj: pd.DataFrame,
+                             track_behavior_data: pd.DataFrame) -> pd.DataFrame:
+    """
+    Trackwise (binned) ensemble projection, aligned to BehaviorTrackwise bins.
+    Animal-level safe: processes each session separately to avoid cross-session mixing.
+    """
+
+    # --- split by session to avoid mixing bins across sessions ---
+    if "session_id" not in ens_proj.columns:
+        raise ValueError("ens_proj must contain a 'session_id' column for animal-level processing.")
+
+    sess_ids_beh = track_behavior_data.index.get_level_values("session_id").unique()
+    sess_ids_ens = pd.Index(ens_proj["session_id"].unique())
+    sess_ids = [s for s in sess_ids_beh if s in set(sess_ids_ens)]
+
+    all_sessions = []
+
+    for s_id in sess_ids:
+        beh_s = track_behavior_data.xs(s_id, level="session_id").copy()
+        ens_s = ens_proj.loc[ens_proj["session_id"] == s_id].copy()
+
+        # recover interval index for this session only
+        ens_s.index = pd.IntervalIndex.from_arrays(
+            ens_s.pop("from_ephys_timestamp"),
+            ens_s.pop("to_ephys_timestamp"),
+        )
+        ens_s = ens_s.drop(columns=["session_id"], errors="ignore")
+
+        def time_bin_avg(posbin_data: pd.DataFrame) -> pd.DataFrame:
+            # remove rows that cannot define intervals
+            posbin_data = posbin_data.dropna(
+                subset=["posbin_from_ephys_timestamp", "posbin_to_ephys_timestamp"]
+            )
+            if posbin_data.empty:
+                return pd.DataFrame()
+
+            # convert to real NumPy ints (avoids nullable Int64 masked arrays)
+            from_posbin_t = posbin_data["posbin_from_ephys_timestamp"].to_numpy(dtype="int64")
+            to_posbin_t   = posbin_data["posbin_to_ephys_timestamp"].to_numpy(dtype="int64")
+
+            interval = pd.IntervalIndex.from_arrays(
+                from_posbin_t - 40_000,
+                to_posbin_t + 40_000,
+                closed="both",
+            )
+
+            # assign each 40ms ensemble bin midpoint to a trial in this position bin
+            assigned_bin = pd.cut(
+                ens_s.index.mid,
+                bins=interval,
+                labels=posbin_data.trial_id[:-1],
+            )
+            trials_exist_mask = (assigned_bin.value_counts() != 0).values
+
+            # if nothing overlaps, return empty
+            if assigned_bin.notna().sum() == 0:
+                return pd.DataFrame()
+
+            # keep only overlapping bins
+            trial_proj = ens_s.loc[assigned_bin.notna()].copy().astype(np.float32)
+            trial_proj["posbin_t_edges"] = assigned_bin[assigned_bin.notna()]
+
+            posbin_trial_wise = trial_proj.groupby("posbin_t_edges", observed=True).mean()
+
+            # align metadata to the set of trials that actually exist
+            # vc = assigned_bin.value_counts()
+            # trials_exist = vc.index.to_numpy()
+            # trials_exist_mask = posbin_data["trial_id"].isin(trials_exist).to_numpy()
+
+            posbin_trial_wise["cue"] = posbin_data.loc[trials_exist_mask, "cue"].to_numpy()
+            posbin_trial_wise["trial_outcome"] = posbin_data.loc[trials_exist_mask, "trial_outcome"].to_numpy()
+            posbin_trial_wise["choice_R1"] = posbin_data.loc[trials_exist_mask, "choice_R1"].to_numpy()
+            posbin_trial_wise["choice_R2"] = posbin_data.loc[trials_exist_mask, "choice_R2"].to_numpy()
+            posbin_trial_wise["bin_length"] = interval.length[trials_exist_mask] / 1e6
+
+            posbin_trial_wise.index = posbin_data.loc[trials_exist_mask, "trial_id"].to_numpy()
+            return posbin_trial_wise
+
+        # group within session only
+        sess_out = beh_s.groupby("from_position_bin").apply(time_bin_avg)
+        if isinstance(sess_out, pd.DataFrame) and len(sess_out) > 0:
+            sess_out.index = sess_out.index.rename(["from_position_bin", "trial_id"])
+            sess_out = sess_out.reset_index(drop=False)
+            sess_out["session_id"] = s_id
+            all_sessions.append(sess_out)
+
+    if len(all_sessions) == 0:
+        return pd.DataFrame()
+
+    return pd.concat(all_sessions, axis=0, ignore_index=True)
+
+
+def get_FiringRateTrackwiseEnsemble(fr_trackwise, ens_weights):
 
     def norm_unit(u):
         s = str(u)
         if s.startswith("Unit"):
-            # e.g. "Unit1" -> "Unit0001"
             m = re.fullmatch(r"Unit0*(\d+)", s)
             return f"Unit{int(m.group(1)):04d}" if m else s
         if s.isdigit():
@@ -869,7 +959,7 @@ def get_FiringRateTrackwiseEnsemble(fr_trackwise, ensemble_proj):
     X = fr_trackwise[units]
     # z-scoring firing rates
     X = (X - X.mean()) / X.std()
-    W = ensemble_proj.copy()
+    W = ens_weights.copy()
     W.index = [norm_unit(i) for i in W.index]
     W = W.loc[units]
     X = X.apply(pd.to_numeric, errors="coerce")
@@ -1530,7 +1620,7 @@ def _compute_assembly_activity_numba(assembly_templates, fr_data):
 
 def get_ConcatenatedEnsambles40ms(PCs, all_fr_hz):
     """
-        Estimate cell assemblies and their activity from 40 ms binned firing rates.
+        Estimate assemblies and their activity from 40 ms binned firing rates.
 
         The function:
         1) Determines the number of assemblies from PCA eigenvalues using the
@@ -1686,7 +1776,7 @@ def get_FiringRateTrackwiseHz(fr, track_behavior_data):
         # add a column indicating the 
         trial_fr['posbin_t_edges'] = assigned_bin[assigned_bin.notna()]
         posbin_trial_wise_fr = trial_fr.groupby('posbin_t_edges', observed=True).mean()
-        # posbin_trial_wise_fr /= interval.length.values[trials_exist_mask, None] /1e6 # Values are already in Hz as we use the 40ms Hz as input data for the function
+        # posbin_trial_wise_fr /= interval.length.values[trials_exist_mask, None] /1e6 # Values are already in Hz as we use the 40ms Hz as input data for the function 
 
         # add meta data, cue outcome, position bin, trial id        
         posbin_trial_wise_fr['cue'] = posbin_data[trials_exist_mask].cue.values

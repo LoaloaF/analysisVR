@@ -51,7 +51,7 @@ def render(app: Dash, global_data: dict, vis_name: str) -> html.Div:
         
         animal_slice = slice(None)
         if plot_type == 'Modalities' or plot_type == 'Analytics':
-            animal_slice = slice(selected_animal, selected_animal)
+            animal_slice = [selected_animal]
         session_metadata = global_data[analytic].loc[pd.IndexSlice[:, animal_slice, :, :]]
         analytics_overview = global_data["AnalyticsOverview"].loc[pd.IndexSlice[:, animal_slice, :, :]]
 

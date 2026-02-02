@@ -271,7 +271,7 @@ def decode_cue(fr, metadata):
             # outcome_res.append((cue_predicted_outcomes, cue_notpredicted_outcomes))
             
             # print(f"Accuracy per fold: {scores}")
-            print(f"S{s_id:02d} - Mean accuracy: {scores.mean():.3f} ± {scores.std():.3f}, ")
+            print(f"S{s_id} - Mean accuracy: {scores.mean():.3f} ± {scores.std():.3f}, ")
             
             m_vals.append(scores.mean())
             std_vals.append(scores.std())

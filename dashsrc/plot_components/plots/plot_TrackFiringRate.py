@@ -272,7 +272,7 @@ def render_plot(track_data, fr, metadata, spike_metadata, metric, n_sessions,
             title_text=ann, 
             tickvals=neuron_i_fr.columns,
             autorange='reversed',
-            ticktext=[f"S{s_id:02d}" for s_id in neuron_i_fr.columns],
+            ticktext=[f"S{s_id}" for s_id in neuron_i_fr.columns],
             row=tuning_row, col=1)
         fig.update_xaxes(
             range=(min_track, max_track),

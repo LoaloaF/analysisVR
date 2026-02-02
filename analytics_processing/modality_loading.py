@@ -1,5 +1,5 @@
 import os
-# import cv2
+import cv2
 
 import h5py
 import pandas as pd
@@ -9,12 +9,21 @@ from CustomLogger import CustomLogger as Logger
 import analytics_processing.modality_transformations as mT
 from analytics_processing import metadata_loading
 import analytics_processing.analytics_constants as C
+
+try:
+    from mea1k_modules.mea1k_post_processing import read_raw_data
+except ImportError:
+    Logger().logger.error("Could not import mea1k_modules.mea1k_post_processing."
+                          " Make sure ephysVR repository is available.")
         
 def session_modality_from_nas(session_fullfname, key, where=None, start=None, 
                                stop=None, columns=None):
     # special key for MEA1K h5 file
     if key == 'ephys_traces':
         data = _handle_ephys_from_nas(session_fullfname, start, stop, columns)
+    
+    elif key == 'raw_ephys_traces':
+        data = _handle_ephys_from_nas(session_fullfname, start, stop, columns, raw=True)
         
     # special key for camera frames
     elif key.endswith("cam_frames"):
@@ -48,23 +57,40 @@ def session_modality_from_nas(session_fullfname, key, where=None, start=None,
             data["frame_ephys_patched"] = pd.NA
     return data
 
-def _handle_ephys_from_nas(session_fullfname, start, stop, columns):
+def _handle_ephys_from_nas(session_fullfname, start, stop, columns, raw=False):
     L = Logger()
     session_name = os.path.basename(session_fullfname).replace(".hdf5", "")
     session_dir = os.path.dirname(session_fullfname)
     
+    substring = 'ephys_traces.dat' if not raw else '.raw.h5'
     ephys_fname = [f for f in os.listdir(session_dir) 
-                        if f.startswith(session_name) and f.endswith("ephys_traces.dat")]
+                        # if f.startswith(session_name) and f.endswith(substring)]
+                        if f.endswith(substring)]
     if len(ephys_fname) == 1:
-        ephys_map_fname = ephys_fname[0].replace(".dat", "_mapping.csv")
-        mapping = pd.read_csv(os.path.join(session_dir,ephys_map_fname), )#index_col=0) amplifier id will be a column, not the index
-        data = np.memmap(os.path.join(session_dir,ephys_fname[0]), dtype=np.int16, 
-                         mode='r').reshape(len(mapping), -1, order='F')
-        data = data[slice(start, stop)]
-        if columns is not None:
-            # load to memory if columns are specified (timeslice)
-            data = np.array(data[:, slice(*columns)])
-        return data, mapping.iloc[slice(start, stop), :]
+        
+        if not raw:
+            ephys_map_fname = ephys_fname[0].replace(".dat", "_mapping.csv")
+            mapping = pd.read_csv(os.path.join(session_dir,ephys_map_fname), )#index_col=0) amplifier id will be a column, not the index
+            data = np.memmap(os.path.join(session_dir,ephys_fname[0]), dtype=np.int16, 
+                            mode='r').reshape(len(mapping), -1, order='F')
+            data = data[slice(start, stop)]
+            if columns is not None:
+                # load to memory if columns are specified (timeslice)
+                data = np.array(data[:, slice(*columns)])
+            L.logger.info(f"Loaded de-compressed ephys traces from {ephys_fname[0]} "
+                          f"with shape ({data.shape[0]:,}, {data.shape[1]:,})")
+            return data, mapping.iloc[slice(start, stop), :]
+        
+        else:
+            # load raw h5 file
+            columns = slice(None) if columns is None else columns
+            data = read_raw_data(session_dir, ephys_fname[0],
+                                 convert2uV=True, subtract_dc_offset=False,
+                                 row_slice=slice(start, stop), col_slice=columns)
+            L.logger.info(f"Loaded compressed ephys traces from {ephys_fname[0]} "
+                          f"with shape ({data.shape[0]:,}, {data.shape[1]:,})")
+            return data
+        
     L.logger.info(f"No de-compressed ephys traces found")
     return None, None
             

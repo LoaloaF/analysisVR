@@ -14,6 +14,7 @@ from .data_selection_components import (
     metric_radioitems_component,
     groupby_radioitems_component,
     variance_radioitems_component,
+    events_checklist_component,
     outcome_group_filter_component,
     cue_group_filter_component,
     trial_group_filter_component,
@@ -47,7 +48,8 @@ def render(app: Dash, global_data: dict, vis_name: str) -> html.Div:
     metrics_radioi, METRICS_RADIOI_ID = metric_radioitems_component(vis_name)
     maxmetric_inp, MAXMETRIC_INP_ID = max_metric_input_component(vis_name, initial_value=80)
     smooth_checkl, SMOOTH_CHECKL_ID = smooth_checklist_component(vis_name)
-    varianve_radioi, VARIANCE_RADIOI_ID = variance_radioitems_component(vis_name)
+    variance_radioi, VARIANCE_RADIOI_ID = variance_radioitems_component(vis_name)
+    events_checklist, EVENTS_CHECKLIST_ID = events_checklist_component(vis_name)
     outcome_filter, OUTCOME_FILTER_ID = outcome_group_filter_component(vis_name)
     cue_filter, CUE_FILTER_ID = cue_group_filter_component(vis_name)
     trial_filter, TRIAL_FILTER_ID = trial_group_filter_component(vis_name)
@@ -63,12 +65,13 @@ def render(app: Dash, global_data: dict, vis_name: str) -> html.Div:
         Input(MAXMETRIC_INP_ID, 'value'),
         Input(SMOOTH_CHECKL_ID, 'value'),
         Input(VARIANCE_RADIOI_ID, 'value'),
+        Input(EVENTS_CHECKLIST_ID, 'value'),
         Input(OUTCOME_FILTER_ID, 'value'),
         Input(CUE_FILTER_ID, 'value'),
         Input(TRIAL_FILTER_ID, 'value'),
     )
     def update_plot(selected_animal, selected_session, group_by, 
-                    metric, metric_max, smooth_data, var_viz,
+                    metric, metric_max, smooth_data, var_viz, events,
                     outcome_filter, cue_filter, trial_filter):
         
         # only render the plot if all the necessary data selections are made   
@@ -109,7 +112,7 @@ def render(app: Dash, global_data: dict, vis_name: str) -> html.Div:
         fig = plot_SessionKinematics.render_plot(data, global_data['SessionMetadata'],
                                                  n_trials, group_by, group_by_values,
                                                  metric, metric_max, 
-                                                 smooth_data, var_viz)
+                                                 smooth_data, var_viz, events)
         return fig
     
     return html.Div([
@@ -135,7 +138,7 @@ def render(app: Dash, global_data: dict, vis_name: str) -> html.Div:
                     # Other options in middle column
                     dbc.Col([
                         # Radioitems for group by selection and variance visualization
-                        *groupby_radioi, *varianve_radioi,
+                        *groupby_radioi, *variance_radioi, *events_checklist,
                     ], width=4),
                     
                     # Other options in right column

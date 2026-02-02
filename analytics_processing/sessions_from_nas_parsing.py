@@ -54,8 +54,10 @@ def get_sessionlist_fullfnames(paradigm_ids, animal_ids, session_ids=None,
             # get all the session dirs in the animal+paradigm subdir, should end with min
             parad_animal_session_dirs = [sd for sd in os.listdir(parad_animal_subdir) 
                                          if sd.endswith("min") and not sd.startswith('._')]
-            for s_id, session_dir in enumerate(sorted(parad_animal_session_dirs)):
-                date = datetime.strptime(session_dir[:10], "%Y-%m-%d")
+            for session_dir in sorted(parad_animal_session_dirs):
+                date, daytime = session_dir.split("_")[:2]
+                s_id = f"{date}_{daytime}"
+                date = datetime.strptime(date, "%Y-%m-%d")
                 if from_date is not None and date < from_date:
                     continue
                 if to_date is not None and date > to_date:
@@ -84,25 +86,34 @@ def get_sessionlist_fullfnames(paradigm_ids, animal_ids, session_ids=None,
     unique_animals = np.unique([i[1] for i in identifier])            
     L.logger.debug(f"For paradigms {paradigm_ids}, animals {unique_animals}, "
                    f"found {len(sessionlist_fullfnames)} sessions.")
+    
+    # # Sort by session_id (primary), paradigm_id (secondary), animal_id (tertiary)
+    # identifier_array = np.array(identifier, dtype=object)
+    # sort_indices = np.lexsort((identifier_array[:, 1], identifier_array[:, 0], identifier_array[:, 2]))
+    # sessionlist_fullfnames = [sessionlist_fullfnames[i] for i in sort_indices]
+    # identifier = [identifier[i] for i in sort_indices]
+    
     return sessionlist_fullfnames, identifier
 
 def extract_id_from_sessionname(session_name):
     session_name_split = session_name.split("_")
+    date, daytime = session_name_split[0], session_name_split[1]
     anim_name, parad_name = session_name_split[2], session_name_split[3]
-    return int(anim_name[-3:]), int(parad_name[1:])
+    s_id = f"{date}_{daytime}"
+    return int(anim_name[-3:]), int(parad_name[1:]), s_id
 
 def sessionnames2fullfnames(session_names):
     Logger().logger.debug(f"Inferring NAS paths for list of session names...")
     sessionlist_fullfnames, s_ids = [], []
-    for s_id, session_name in enumerate(session_names):
-        animal_id, paradigm_id = extract_id_from_sessionname(session_name)
+    for session_name in session_names:
+        animal_id, paradigm_id, s_id = extract_id_from_sessionname(session_name)
         session_dir = f"RUN_rYL{animal_id:03}", f"rYL{animal_id:03}_P{paradigm_id:04d}"
         fullfname = os.path.join(device_paths()[0], *session_dir, session_name, f"{session_name}.hdf5")
         if not os.path.exists(fullfname):
             Logger().logger.warning(f"Session {session_name} not found in NAS")
             continue
         sessionlist_fullfnames.append(fullfname)
-        s_ids.append((animal_id, paradigm_id, s_id))
+        s_ids.append((paradigm_id, animal_id, s_id))
     return sessionlist_fullfnames, s_ids
 
 def sessionlist_fullfnames_from_args(paradigm_ids=None, animal_ids=None, session_ids=None, 

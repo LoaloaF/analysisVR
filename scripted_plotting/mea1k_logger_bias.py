@@ -9,7 +9,7 @@ import pandas as pd
 
 from analytics_processing.modality_loading import session_modality_from_nas
 from analytics_processing.sessions_from_nas_parsing import sessionlist_fullfnames_from_args
-from ephysVR.mea1k_modules.mea1k_raw_preproc import read_raw_data
+# from ephysVR.mea1k_modules.mea1k_raw_preproc import read_raw_data
 
 from analytics_processing import analytics
 import analytics_processing.analytics_constants as C
@@ -134,9 +134,9 @@ Logger().init_logger(None, None, logging_level="INFO")
 
 
 # ephys rat 10 3 minute initial logger on ball session
-session_dir = sessionlist_fullfnames_from_args(paradigm_ids=[1100], animal_ids=[10], session_ids=[8])[0][0]
-raw_data_mmap, _ = session_modality_from_nas(session_dir, 'ephys_traces')
-calc_bias(raw_data_mmap)
+# session_dir = sessionlist_fullfnames_from_args(paradigm_ids=[1100], animal_ids=[10], session_ids=['2025-05-09_14-58'])[0][0]
+# raw_data_mmap, _ = session_modality_from_nas(session_dir, 'ephys_traces')
+# calc_bias(raw_data_mmap)
 vis_bias('bias_logger_on_ball.npy')
 vis_bias_clipped_prop('bias_logger_on_ball_clipped_prop.npy')
 

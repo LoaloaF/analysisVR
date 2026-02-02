@@ -22,9 +22,30 @@ def _parse_args(n_trials, group_by, metric, metric_max):
         y_axis_label = 'Acceleration [cm/s^2]'
         y_axis_range = -metric_max, metric_max
     elif metric == 'Lick':
-        metric_col = 'L_count'
+        metric_col = 'lick_count'
         y_axis_label = 'Lick count'
         y_axis_range = 0, metric_max
+        
+    elif metric == 'RawYawPitch Sum Velocity':
+        metric_col = 'posbin_RawYawPitch_abs_velocity_sum'
+        y_axis_label = 'RawYawPitch Sum Velocity [cm/s]'
+        y_axis_range = 0, metric_max
+    
+    elif metric == 'BallForward Velocity':
+        metric_col = 'posbin_raw'
+        y_axis_label = 'BallForward Velocity [cm/s]'
+        y_axis_range = 0, metric_max
+    
+    elif metric == 'BallSide Velocity':
+        metric_col = 'posbin_pitch'
+        y_axis_label = 'BallSide Velocity [cm/s]'
+        y_axis_range = -metric_max/2, metric_max/2
+    
+    elif metric == 'BallRotation Velocity':
+        metric_col = 'posbin_yaw'
+        y_axis_label = 'BallRotation Velocity [cm/s]'
+        y_axis_range = -metric_max/2, metric_max/2
+        
     
     # Determine the color column and color mapping
     if group_by == 'Outcome':
@@ -104,7 +125,8 @@ def _configure_axis(fig, height, width, y_axis_range, y_axis_label):
     )
     return fig
 
-def _draw_all_single_trials(fig, data, metric_col, cmap_transparent, group_col):
+def _draw_all_single_trials(fig, data, metric_col, cmap_transparent, group_col,
+                            events):
     # Create the main plot with line grouping by trial_id and color based on group_by
     for trial_id, trial_data in data.groupby('trial_id'):
         trace = go.Scatter(x=trial_data['from_position_bin'], 
@@ -112,6 +134,49 @@ def _draw_all_single_trials(fig, data, metric_col, cmap_transparent, group_col):
                         line=dict(color=cmap_transparent[trial_data[group_col].iloc[0]]),
                         name=f'Tr. {trial_id}')
         fig.add_trace(trace, row=2, col=1)
+        
+        # draw event markers if selected
+        for event in events:
+            event_data = trial_data[trial_data[event] >= 1]
+            r1_thr = trial_data['velocity_threshold_at_R1'].iloc[0] *60
+            r2_thr = trial_data['velocity_threshold_at_R2'].iloc[0] *60
+            
+            labels = {'reward-sound_count': {
+                        'label': f'Sound, R1,R2 thr. {r1_thr:.1f},{r2_thr:.1f}',
+                        'color': 'green',
+                        'size': 8,
+                        'marker': 'triangle-right'},
+                      'reward-valve-open_count': {
+                          'label': f'Reward, R1,R2 thr. {r1_thr:.1f},{r2_thr:.1f}',
+                            'color': 'green',
+                            'size': 8,
+                            'marker': 'circle'},
+                      'lick_count': {
+                          'label': 'Lick',
+                          'color': 'black',
+                          'size': 8,
+                          'marker': 'line-ns'},
+                      'reward-removed_count': {
+                          'label': 'Reward removed',
+                          'color': 'red',
+                          'size': 8,
+                          'marker': 'x'} }
+            
+            
+            print(event_data[metric_col])
+            fig.add_trace(go.Scatter(
+                x=event_data['from_position_bin'],
+                y=event_data[metric_col],
+                mode='markers',
+                marker=dict(
+                    color=labels[event]['color'],
+                    size=labels[event]['size'],
+                    symbol=labels[event]['marker'],
+                ),
+                name=f'Tr.{trial_id}, {labels[event]["label"]}',
+            ), row=2, col=1)
+            
+            
 
 def _draw_percentile_area_plot(fig, upper_perc, lower_perc, metric_col, transp_color):
     # draw an area plot for the 80th percentile
@@ -128,9 +193,7 @@ def _draw_percentile_area_plot(fig, upper_perc, lower_perc, metric_col, transp_c
     ), row=2, col=1)
     
 def render_plot(all_data, metadata, n_trials, group_by, group_by_values, metric, 
-                metric_max, smooth_data, var_viz, width=-1, height=-1):
-    print(all_data)
-    print(all_data.iloc[0:2].T)
+                metric_max, smooth_data, var_viz, events, width=-1, height=-1):
     print("================")
         
     fig = make_kinematics_figure(height=height)
@@ -160,9 +223,9 @@ def render_plot(all_data, metadata, n_trials, group_by, group_by_values, metric,
         # print(outcome_r1)
         
         #TODO if P1100: choice_str='Stop', if DR == 1 draw_cues=[]
-        print()
+        # print()
         # print(metadata.iloc[0].values)
-        print(data.columns)
+        # print(data.columns)
         
         draw_cues = [2]
         flipped = False
@@ -181,7 +244,8 @@ def render_plot(all_data, metadata, n_trials, group_by, group_by_values, metric,
 
 
         if var_viz == 'Single trials':
-            _draw_all_single_trials(fig, data, metric_col, cmap_transparent, group_col)
+            _draw_all_single_trials(fig, data, metric_col, cmap_transparent, 
+                                    group_col, events)
             
         if group_by == "None":
             med_values = data.groupby('from_position_bin')[metric_col].mean().reset_index()

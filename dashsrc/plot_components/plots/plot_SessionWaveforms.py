@@ -9,15 +9,22 @@ from dash import dcc, html
 from plotly.subplots import make_subplots
 import plotly.express as px
 
-def render_plot(spike_metadata, session_metadata, width, height):
-    session_metadata = session_metadata.droplevel((0,1,3))
-    start_stop = session_metadata.loc[:, ['start_time', 'stop_time']]
-    # convert to datetime (let pandas infer the format)
-    start_stop['start_time'] = pd.to_datetime(start_stop['start_time'], format="%Y-%m-%d_%H-%M")
-    start_stop['stop_time'] = pd.to_datetime(start_stop['stop_time'], format="%Y-%m-%d_%H-%M")
+from analytics_processing.analytics_constants import PARADIGM_NAMES
 
+def render_plot(spike_metadata, width, height):
     clusters = spike_metadata.cluster_id.unique()
     session_ids = spike_metadata.index.unique('session_id').unique()
+    
+    # Parse session_ids (format: "YYYY-MM-DD_HH-MM") to datetime and calculate session durations
+    session_start_times = {s_id: pd.to_datetime(s_id, format="%Y-%m-%d_%H-%M") for s_id in session_ids}
+    
+    # Calculate session end times using session_nsamples / 20_000 Hz
+    session_end_times = {}
+    for s_id in session_ids:
+        session_data = spike_metadata.xs(s_id, level='session_id')
+        session_nsamples = session_data['session_nsamples'].iloc[0]
+        session_duration_seconds = session_nsamples / 20_000
+        session_end_times[s_id] = session_start_times[s_id] + pd.Timedelta(seconds=session_duration_seconds)
     
     tile_height = 70
     tile_width = 40
@@ -31,6 +38,22 @@ def render_plot(spike_metadata, session_metadata, width, height):
     
     x0s = np.arange(len(session_ids)) * tile_width
     y0s = np.arange(len(clusters)) * tile_height
+
+    # Add gray background for paradigm_id 0 sessions
+    for i, s_id in enumerate(session_ids):
+        paradigm_id = spike_metadata.xs(s_id, level='session_id').index.get_level_values('paradigm_id')[0]
+        if paradigm_id == 0:
+            fig.add_shape(
+                type="rect",
+                x0=x0s[i],
+                y0=0,
+                x1=x0s[i] + tile_width,
+                y1=len(clusters) * tile_height,
+                fillcolor="lightgray",
+                opacity=0.25,
+                layer="below",
+                line_width=0,
+            )
 
     # draw grid of tiles
     for i in range(len(clusters)+1):
@@ -101,28 +124,24 @@ def render_plot(spike_metadata, session_metadata, width, height):
             return f"{minutes}min"
         
     # add annotations for session_ids and clusters
-    prv_s_end_time = None
+    prv_session_end_time = None
     for i, s_id in enumerate(session_ids):
-        fig.add_annotation(
-            x=x0s[i] + tile_width / 2,
-            y=-15,
-            text=f"S{s_id:02d}",
-            showarrow=False,
-            font=dict(size=12),
-            xanchor="center",
-            yanchor="bottom",
-        )
+        # Get paradigm_id from spike_metadata for this session
+        paradigm_id = spike_metadata.xs(s_id, level='session_id').index.get_level_values('paradigm_id')[0]
+        paradigm_name = PARADIGM_NAMES.get(paradigm_id, f"P{paradigm_id}")
+        
         fig.add_annotation(
             x=x0s[i] + tile_width / 2,
             y=-4,
-            text=f"P{session_metadata.loc[s_id].paradigm_id:02d}",
+            text=paradigm_name,
             showarrow=False,
-            font=dict(size=9),
+            font=dict(size=7.5),
             xanchor="center",
             yanchor="bottom",
         )
-        if prv_s_end_time is not None:
-            timedelta = start_stop.loc[s_id, 'start_time'] - prv_s_end_time
+        if prv_session_end_time is not None:
+            # Calculate time delta between end of previous session and start of current session
+            timedelta = session_start_times[s_id] - prv_session_end_time
             fig.add_annotation(
                 x=x0s[i],
                 y=-30,
@@ -132,7 +151,7 @@ def render_plot(spike_metadata, session_metadata, width, height):
                 xanchor="center",
                 yanchor="bottom",
             )
-        prv_s_end_time = start_stop.loc[s_id, 'stop_time']
+        prv_session_end_time = session_end_times[s_id]
         
         
         
@@ -393,6 +412,7 @@ def render_plot(spike_metadata, session_metadata, width, height):
     n_channels = 3
     
     min_spikes_perc = 10 # minimum percentage of spikes for a channel to be drawn
+    min_firing_rate = 0.1  # Hz - minimum firing rate to draw waveforms
     markersize = 10
     
     waveform_width_scaler = .4
@@ -425,7 +445,19 @@ def render_plot(spike_metadata, session_metadata, width, height):
         # draw the waveforms for each session
         if draw_waveforms:
             sessionw_wfs, sessionw_wfs_annots = extract_sessionwise_wfs()
+            has_any_waveform = False  # Track if cluster has any waveforms drawn
+            
             for j, s_id in enumerate(session_ids):
+                # Check firing rate threshold
+                if s_id not in normed_avg_frate.index:
+                    x_offset += tile_width
+                    continue
+                    
+                firing_rate = normed_avg_frate.loc[s_id, 'avg_frate']
+                if firing_rate < min_firing_rate:
+                    x_offset += tile_width
+                    continue
+                
                 if i == 5 and j == 0:
                     # draw the scale bars only once
                     draw_scalebars(fig, origin=(tile_width*(1/4), tile_height*i +intial_y_offset))
@@ -445,6 +477,7 @@ def render_plot(spike_metadata, session_metadata, width, height):
                     if not isinstance(mean_wf, np.ndarray): # is NA
                         continue
                     
+                    has_any_waveform = True  # Found at least one waveform to draw
                     # print(base_annot)
                     annot = highlight_channel_row(base_annot, f"C{chnl}:", color=wf_colors[k])
                     # print(normed_avg_frate)
@@ -455,6 +488,13 @@ def render_plot(spike_metadata, session_metadata, width, height):
                 
                 # shift to next box 
                 x_offset += tile_width
+            
+            # If no waveforms were drawn for this cluster, skip the y_offset increment
+            if not has_any_waveform:
+                print(f"  Cluster {cluster_id} has no waveforms above {min_firing_rate}Hz threshold")
+                # Still reset x_offset but don't increment y_offset
+                x_offset = intial_x_offset
+                continue
             
         # reset x_offset for next cluster    
         x_offset = intial_x_offset

@@ -28,7 +28,22 @@ def get_TrackKinematics(session_fullfname):
     metad = session_modality_from_nas(session_fullfname, "metadata")
     
     if metad['paradigm_id'] in (800, 1100):
-        track_details = json.loads(metad['track_details'])
+        # track_details = json.loads(metad['track_details'])
+        # don't trust the zone definitions from metadata, use hardcoded ones
+        track_details = {
+            'startZone': (-169,-120),
+            'visibleCue': (-120,-80),
+            'nextToCue': (-80,10),
+            'afterCue': (10, 50),
+            'reward1Zone': (50,110),
+            'bewteenRewardZones': (110,170),
+            'reward2Zone': (170,230),
+            'endZone': (230,260),
+            'ITI': (260,265),
+        }
+        
+        # add the fps column, shifted so that it indicates the length 
+        framedata['fps'] = 1 / (framedata['frame_pc_timestamp'].diff()/ 1e6) # in seconds
         
         # insert z position bin (1cm)
         from_z_position, to_z_position = mT.unity_modality_track_spatial_bins(framedata)
@@ -49,15 +64,39 @@ def get_TrackKinematics(session_fullfname):
                                              columns=cols)
         raw_yaw_pitch = mT.frame_wise_ball_velocity(framedata, balldata)
         
+        # convert from cm/frame length to cm/s
+        raw_yaw_pitch *= framedata.loc[raw_yaw_pitch.index,'fps'].values.reshape(-1,1)
+        
+        # calculcate raw_yaw_pitch acceleration
+        raw_yaw_pitch_acc = pd.DataFrame(index=raw_yaw_pitch.index)
+        for col in raw_yaw_pitch.columns:
+            vel_values = raw_yaw_pitch[col].values
+            tstamps = framedata.loc[raw_yaw_pitch.index,'frame_pc_timestamp'].values
+            accel_values = np.gradient(vel_values, tstamps) * 1e6  # convert us to s
+            # append '_acceleration' since col is 'frame_raw', 'frame_yaw', 'frame_pitch'
+            raw_yaw_pitch_acc[col + '_acceleration'] = accel_values
+
         # merge all data        
-        framedata = pd.concat([framedata, vel, acc, raw_yaw_pitch], axis=1)
+        framedata = pd.concat([framedata, vel, acc, raw_yaw_pitch, raw_yaw_pitch_acc], axis=1)
+        
+        # very very rarely sensors gave outlier values (0.0001 quantile), mask these out
+        unreliable_frames = framedata.index[framedata[['frame_raw', 'frame_yaw', 'frame_pitch']].isna().any(axis=1)]
+        framedata.loc[unreliable_frames, ['frame_z_velocity', 'frame_z_acceleration']] = np.nan
+        
+        # sum over all 
+        framedata['frame_RawYawPitch_abs_velocity_sum'] = raw_yaw_pitch.abs().sum(axis=1)
+        framedata['frame_RawYawPitch_abs_acceleration_sum'] = raw_yaw_pitch_acc.abs().sum(axis=1)
+        
         # track has only z changes, renmae the column
         framedata.rename(columns={"frame_z_position": "frame_position",
                                   "frame_z_velocity": "frame_velocity",
                                   "frame_z_acceleration": "frame_acceleration"}, 
                          inplace=True)
+        
         # angle data is not needed for track, blinker is not used anywhere
-        framedata.drop(columns=['frame_angle', 'frame_blinker', 'frame_x_position'], 
+        framedata.drop(columns=['frame_angle', 'frame_blinker', 'frame_x_position',
+                                'frame_state','ballvelocity_first_package',
+                                'ballvelocity_last_package'], 
                        inplace=True)
     return framedata
 
@@ -137,13 +176,15 @@ def get_BehaviorPose(session_fullfname, track_kinematics):
     dlc_csv_files = [file for file in all_files if "DLC" in file and file.endswith(".csv")]
 
     if not dlc_csv_files:
+        import deeplabcut # only done here to avoid unnecessary import
+        
         # check if there is already facecam mp4 for analysis
         if "facecam.mp4" not in all_files:
+            print("Generating facecam mp4 for DLC analysis...")
             aU.hdf5_frames2mp4(session_dir, file_name)
         
         video_path = os.path.join(session_dir, "facecam.mp4")
         
-        import deeplabcut # only done here to avoid unnecessary import
         deeplabcut.analyze_videos(
             config=f"{project_path}/config.yaml",
             videos=video_path,
@@ -164,6 +205,73 @@ def get_BehaviorPose(session_fullfname, track_kinematics):
     df_pose = df_pose.iloc[2:]
     df_pose.reset_index(drop=True, inplace=True)
     df_pose = df_pose.add_prefix("facecam_pose_")
+    df_pose['facecam_pose_ephys_timestamp'] = data['facecam_image_ephys_timestamp']
+    df_pose['facecam_pose_pc_timestamp'] = data['facecam_image_pc_timestamp']
+
+    # Add vector lengths and angles
+    def calculate_vector_length(row, point1, point2):
+        return np.hypot(
+            row[f'facecam_pose_{point1}_x'] - row[f'facecam_pose_{point2}_x'],
+            row[f'facecam_pose_{point1}_y'] - row[f'facecam_pose_{point2}_y']
+        )
+
+    def calculate_angle(row, point1, point2, point3):
+        """Calculate angle at point2 between vectors point2->point1 and point2->point3"""
+        v1 = np.array([
+            float(row[f'facecam_pose_{point1}_x']) - float(row[f'facecam_pose_{point2}_x']),
+            float(row[f'facecam_pose_{point1}_y']) - float(row[f'facecam_pose_{point2}_y'])
+        ])
+        v2 = np.array([
+            float(row[f'facecam_pose_{point3}_x']) - float(row[f'facecam_pose_{point2}_x']),
+            float(row[f'facecam_pose_{point3}_y']) - float(row[f'facecam_pose_{point2}_y'])
+        ])
+        
+        v1_norm = np.linalg.norm(v1)
+        v2_norm = np.linalg.norm(v2)
+        
+        if v1_norm == 0 or v2_norm == 0:
+            return np.nan
+        
+        dot_product = np.clip(np.dot(v1, v2) / (v1_norm * v2_norm), -1.0, 1.0)
+        angle_rad = np.arccos(dot_product)
+        return np.degrees(angle_rad)
+
+    # Convert numeric columns to float
+    numeric_cols = [col for col in df_pose.columns if col.endswith(('_x', '_y', '_likelihood'))]
+    df_pose[numeric_cols] = df_pose[numeric_cols].astype(float)
+
+    # Calculate vector lengths
+    df_pose['facecam_pose_nose_neck_length'] = df_pose.apply(
+        calculate_vector_length, args=('nose', 'neck'), axis=1)
+    df_pose['facecam_pose_neck_body1_length'] = df_pose.apply(
+        calculate_vector_length, args=('neck', 'body_1'), axis=1)
+
+    # Calculate angles at joints
+    df_pose['facecam_pose_nose_neck_body1_angle'] = df_pose.apply(
+        calculate_angle, args=('nose', 'neck', 'body_1'), axis=1)
+    # TODO model needs finetuning...
+    valid_angle_mask = df_pose['facecam_pose_nose_neck_body1_angle'].between(55, 235)
+    df_pose.loc[~valid_angle_mask, 'facecam_pose_nose_neck_body1_angle'] = np.nan
+    df_pose['facecam_pose_body1_body2_body3_angle'] = df_pose.apply(
+        calculate_angle, args=('body_1', 'body_2', 'body_3'), axis=1)
+    
+
+    # add angular velocity columns
+    timestamp_col = 'facecam_pose_ephys_timestamp'
+    if df_pose.loc[:,timestamp_col].isna().iloc[0]:
+        timestamp_col = 'facecam_pose_pc_timestamp'
+
+    timestamps = df_pose[timestamp_col].astype(float).values
+
+    for angle_col in ['facecam_pose_nose_neck_body1_angle',
+                      'facecam_pose_body1_body2_body3_angle']:
+        pose_angle_diff = np.diff(df_pose[angle_col].astype(float).values)
+        timediff_s = np.diff(timestamps) / 1_000_000  # convert us to s
+        pose_angle_vel = pose_angle_diff / timediff_s
+
+        df_pose[angle_col + '_velocity'] = np.concatenate(([pose_angle_vel[0]], pose_angle_vel))
+        in_range = df_pose[angle_col + '_velocity'].abs() < 450
+        df_pose[angle_col + '_likelihood'] = in_range.astype(float)
 
     df_pose["facecam_image_pc_timestamp"] = data["facecam_image_pc_timestamp"]
     df_pose["facecam_image_ephys_timestamp"] = data["facecam_image_ephys_timestamp"]

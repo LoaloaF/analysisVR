@@ -1,11 +1,12 @@
 # !/usr/bin/env python3 
+
 # executable - set up paths for import
 import os
 import sys
-# to setup import paths add project root dir to sys.path (with baseVR dir in it) TODO Are the following 3 lines still relevant?
-# sys.path.append(os.path.join(os.getcwd(), ".."))
-# from baseVR.base_functionality import init_import_paths
-# init_import_paths()
+# to setup import paths add project root dir to sys.path (with baseVR dir in it)
+sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
+from baseVR.base_functionality import init_import_paths
+init_import_paths()
 
 import dash
 import dash_bootstrap_components as dbc

@@ -178,6 +178,7 @@ def _load_all_data(selected_analytics, loaded_analytics, loaded_raw_traces, sele
                                                                          animal_ids=selected_animals)
             for session_ffname, identf in zip(session_ffnames, identifs):
                 raw_data_mmap, mapping = session_modality_from_nas(session_ffname, 'ephys_traces')
+                print("Saving as loaded_raw_traces for identf:", str(identf))
                 loaded_raw_traces[str(identf)] = (raw_data_mmap, mapping)
                 
     # raw traces

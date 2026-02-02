@@ -139,9 +139,9 @@ def render_plot(data, mode_span, width, height):
                     x1=last_id+.001,
                     y1=y_bounds[1] +6*i if not j else y_bounds[1] +13,
                     line=dict(color='rgba(128,128,128,.8)', width=2, dash='dash'),
-                    # label=dict(text=f'S{s_id:02d} end',
+                    # label=dict(text=f'S{s_id} end',
                     #             font=dict(size=12, color='rgba(128,128,128,.8)')),
-                    # legendgroup=f'Session {s_id:02d}',
+                    # legendgroup=f'Session {s_id}',
                     # showlegend=False,
                 )
             # with annotation aligned to the right
@@ -150,7 +150,7 @@ def render_plot(data, mode_span, width, height):
                 fig.add_annotation(
                     x=last_id, 
                     y=y_bounds[0] +6*i,
-                    text=f'S{s_id:02d}, {sub_paradigm} ', #{round(length/1e6 /60)}min',
+                    text=f'S{s_id}, {sub_paradigm} ', #{round(length/1e6 /60)}min',
                     showarrow=False,
                     font=dict(size=10, color='rgba(128,128,128,.8)'),
                     xanchor='right',  # Align text horizontally to the right

@@ -12,8 +12,8 @@ from CustomLogger import CustomLogger as Logger
 import analytics_processing.sessions_from_nas_parsing as sp
 import analytics_processing.modality_loading as ml
 from analytics_processing.analytics_constants import device_paths
-from sklearn.linear_model import LinearRegression
-from scipy.stats import ttest_ind
+# from sklearn.linear_model import LinearRegression
+# from scipy.stats import ttest_ind
 
 from scipy.signal import butter
 from scipy.signal import filtfilt
@@ -27,16 +27,14 @@ from sklearn.pipeline import Pipeline
 from sklearn.metrics import classification_report, balanced_accuracy_score
 
 
-from sklearn.preprocessing import StandardScaler
-from sklearn.decomposition import PCA
-from scipy.linalg import subspace_angles
+from sklearn.preprocessing import StandardScaler, Normalizer
+# from sklearn.decomposition import PCA
+# from scipy.linalg import subspace_angles
 
-from scipy.stats import pearsonr
+# from scipy.stats import pearsonr
 import matplotlib.pyplot as plt
 
 from dashsrc.plot_components.plot_utils import make_discr_cluster_id_cmap
-
-# from ../../ephysVR.git
 
 try:
     from mea1k_modules.mea1k_post_processing import mea1k_raw2decompressed_dat_file
@@ -147,6 +145,8 @@ def extract_jrc_spikes(session_fullfname): #, get_spikes=False,
         return cluster_table
 
     def aggr_spike_cluster_metadata(cluster_aggr_over_ss_batches):
+        from dashsrc.plot_components.plot_utils import make_discr_cluster_id_cmap
+        
         # first process the spike metadata, merge them and create unique cluster ids, crucial
         # TODO add in session_wise spike count from spikes below? add average waveforms?
         # TODO add brain region to schema
@@ -426,6 +426,10 @@ def extract_jrc_spikes(session_fullfname): #, get_spikes=False,
                                                      session_to_smple)
         spike_aggr_over_ss_batches.append(spike_table)
         L.spacer("debug")
+        
+    if len(spike_aggr_over_ss_batches) == 0:
+        L.logger.warning("No spike sorting found for this session.")
+        return None, None
     
     # agggregate over batches and handle unique cluster ids
     sp_clust_metadata = aggr_spike_cluster_metadata(cluster_aggr_over_ss_batches)
@@ -454,13 +458,17 @@ def extract_jrc_spikes(session_fullfname): #, get_spikes=False,
 
 
 
+# 2025-06-13_13-53
 
 
 
 
 
-
-
+# 2026-01-24 16:29:26,804|DEBUG|142452|postproc_mea1k_ephys|extract_jrc_spikes
+#         Processing spikes from /mnt/SpatialSequenceLearning/RUN_rYL010/concatenated_ss/2025-07-09_17-14_rYL010_738_concat_ss_loggerTetheredMerged for 2025-05-14_16-28_rYL010_P1100_LinearTrackStop_43min
+# 2026-01-24 16:29:26,808|DEBUG|142452|postproc_mea1k_ephys|extract_jrc_spikes
+#         Containes spike sorted sessions:
+# ['2025-04-04_18-15_rYL010_P1100_LinearTrackStop_5min'
 
 
 
@@ -624,7 +632,7 @@ def get_Ensemble40msProjEventAligned(ensemble_proj, behavior):
     ensemble_proj.index = pd.IntervalIndex.from_arrays(ensemble_proj.pop("from_ephys_timestamp"),
                                                        ensemble_proj.pop("to_ephys_timestamp"))
 
-    bin_size_us = ensemble_proj.index[0].right - ensemble_proj.index[0].left
+    # bin_size_us = ensemble_proj.index[0].right - ensemble_proj.index[0].left
     
     all_sess_aggr = []
     for s_id in ensemble_proj.session_id.unique():
@@ -685,20 +693,6 @@ def get_Ensemble40msProjEventAligned(ensemble_proj, behavior):
 
 
         
-        
-        # kinematics
-        # TODO find t points of specific acceleration events, and deceleration events
-        # acc = sess_behavior['frame_acceleration']
-        # acc.loc[:] = np.clip(acc, -15, 15)
-
-        # TODO find t points of specific acceleration events, and deceleration events also here
-        # # shift down the ephys index by one second, predict future acceleration
-        # forward_acc_in1sec = acc.copy()
-        # nbins_1sec = int(1 * 1_000_000 / bin_size_us)
-        # idx = forward_acc_in1sec.index.values[:-nbins_1sec]
-        # forward_acc_in1sec = forward_acc_in1sec.iloc[nbins_1sec:]
-        # forward_acc_in1sec.index = idx
-        
         def select_t0_events(trial_beh):
             # print(trial_beh)
             base_info = trial_beh[['cue', 'trial_outcome', 'choice_R1', 'choice_R2']].iloc[0].to_dict()
@@ -724,8 +718,9 @@ def get_Ensemble40msProjEventAligned(ensemble_proj, behavior):
         t0_events = sess_behavior.groupby('trial_id').apply(select_t0_events, 
                                                     include_groups=False).reset_index().drop(columns='level_1')
 
-
-
+        print(t0_events)
+        print(t0_events.iloc[0])
+        exit()
 
 
 
@@ -1992,10 +1987,12 @@ def get_FiringRateTrackwiseHz(fr, track_behavior_data):
 #     comps_aggr = pd.concat(comps_aggr, axis=1)
 #     comps_aggr = comps_aggr.T
 #     return comps_aggr.reset_index(), angle_aggr.reset_index()
-            
-def get_SVMCueOutcomeChoicePred(fr_z, beh):
-    def fit_SVMs_with_bootstrap(X, Y, name, kernel, t, n_iterations=200):
-        print("---")
+
+
+def get_SVMCueOutcomeChoicePred(fr_z, behavior, t0_event_intervals):
+    
+    
+    def fit_SVMs_with_bootstrap(X, Y, n_iterations=200):
         # if lbl_counts.min() < 5:
         #     print(f"Not enough samples for {name}: ({lbl_counts})")
         #     return None
@@ -2003,13 +2000,14 @@ def get_SVMCueOutcomeChoicePred(fr_z, beh):
         predictions = []
         rng = np.random.default_rng(42)
 
-        # if kernel != 'linear':
-        #     continue
         Cs = [0.1, .5, 1, 5, 10,]
         accs, f1s = [], []
 
         aggr_predictions = np.ones((n_iterations, len(X)), dtype=int) * -1
         print(aggr_predictions.shape)
+        
+        # model params
+        ws, bs = [], []
         for i in range(n_iterations):
             indices = rng.choice(len(X), size=len(X), replace=True)
             X_boot, y_boot = X[indices], Y[indices]
@@ -2021,21 +2019,20 @@ def get_SVMCueOutcomeChoicePred(fr_z, beh):
             oob_mask[indices] = False
             X_oob, y_oob = X[oob_mask], Y[oob_mask]
 
-            if len(y_oob) < 5 or len(np.unique(y_oob)) < 2:
+            if len(y_oob) < 4 or len(np.unique(y_oob)) < 2:
                 print("Skipping SVM fit due to insufficient or single class in OOB sample")
                 continue
             
             lbl_counts = pd.Series(Y).value_counts()
             if lbl_counts.min() < 3:
-                print(f"Not enough samples for {name}: ({lbl_counts})")
+                print(f"Not enough samples ({lbl_counts})")
                 continue
             
              # Define a pipeline combining a scaler with the SVC
-            
-
             pipeline = Pipeline([
-                ('scaler', StandardScaler()),
-                ('svc', SVC(kernel=kernel, gamma='scale'))
+                # ('scaler', StandardScaler()),
+                ('norm', Normalizer(norm='l2')), # cosine distance
+                ('svc', SVC(kernel='linear', gamma='scale'))
             ])
             grid_search = GridSearchCV(
                 estimator=pipeline,
@@ -2049,171 +2046,186 @@ def get_SVMCueOutcomeChoicePred(fr_z, beh):
             y_pred = grid_search.predict(X_oob)
             report = classification_report(y_oob, y_pred, output_dict=True, zero_division=0)
 
+            ws.append(grid_search.best_estimator_.named_steps['svc'].coef_)
+            bs.append(grid_search.best_estimator_.named_steps['svc'].intercept_)
+
             accs.append(balanced_accuracy_score(y_oob, y_pred))
             f1s.append(report['macro avg']['f1-score'])
             
             # every row is one bootstrap iteration
             aggr_predictions[i, oob_mask] = y_pred
         
+        if len(ws) > 0:
+            W = np.vstack(ws)  # shape: (n_iterations, n_features)
+            w_mean = W.mean(axis=0)
+            # w_mean_unit = w_mean / np.linalg.norm(w_mean)
+            print("Average |w| =", np.linalg.norm(w_mean))
+
+        else:
+            w_mean = None
         
         # # get the "average" prediction across bootstrap iterations
-        # aggr_predictions = pd.DataFrame(aggr_predictions)
-        # aggr_predictions[aggr_predictions == -1] = np.nan
-        # pred = aggr_predictions.mode(axis=0).iloc[0].values
+        aggr_predictions = pd.DataFrame(aggr_predictions)
+        aggr_predictions[aggr_predictions == -1] = np.nan
+        pred = aggr_predictions.mode(axis=0).iloc[0].values
         
         # difference
-        # f1_aggr = classification_report(Y, pred, output_dict=True, zero_division=0)['macro avg']['f1-score']
+        f1_aggr = classification_report(Y, pred, output_dict=True, zero_division=0)['macro avg']['f1-score']
+        aggr_err = (np.mean(f1s) - f1_aggr)
         
-        # print(f"{kernel}: mean: {np.mean(f1s):.3f}")
-        
-        ci = np.percentile(f1s, [2.5, 97.5])
-        print(f"mean F1 {np.mean(f1s):.3f}, 95% CI [{ci[0]:.3f}, {ci[1]:.3f}], len: {len(f1s)}")
+        ci = np.percentile(f1s, [10, 90])
+        print(f"mean F1 {f1_aggr:.3f} (±{aggr_err:.2f}), 80% CI [{ci[0]:.3f}, {ci[1]:.3f}], len: {len(f1s)}\n")
         return {
-            'name': name,
-            't': t,
-            'n': len(f1s),
+            'aggr_error': aggr_err,
+            'n_iterations': n_iterations,
+            'n_success_iterations': len(f1s),
+            'w': w_mean,
+            'predictions': pred,
+            'y_true': Y.tolist(),
+            # 'b': np.mean(bs) if len(bs) > 0 else None,
+            
             'n_positives': int(np.sum(Y)),
             'n_negatives': int(len(Y) - np.sum(Y)),
-            'kernel': kernel,
+            
+            'f1_aggr': float(f1_aggr),
             'f1_mean': float(np.mean(f1s)),
             'f1_ci_lower': float(ci[0]),
             'f1_ci_upper': float(ci[1]),
+            
             'acc_mean': float(np.mean(accs)),
-            'acc_ci_lower': float(np.percentile(accs, 2.5)),
-            'acc_ci_upper': float(np.percentile(accs, 97.5)),
+            'acc_ci_lower': float(np.percentile(accs, 10)),
+            'acc_ci_upper': float(np.percentile(accs, 90)),
         }
-
         
+        
+    def pre_vs_inside_cue_decoding(results):
+        # first do seperate fits for pre vs inside cue
+        for cue in [1,2]:
+            svm_setup_dat = t0_event_intervals[t0_event_intervals.cue == cue]
+            # we drop na here corresbonding to rows that are there for other intervals (sparse)
+            pre_cue_x_intervals = svm_setup_dat['pre_cue_interval'].dropna().values
+            in_cue_x_intervals = svm_setup_dat['nextto_cue_interval'].dropna().values
+
+            # for each trial, get the mask of X data that overlaps with the pre-cue and in-cue intervals
+            # these are used for all kind of X regressers
+            X_pre_cue_data_masks = [X_index.overlaps(pre_cue_x_intervals[i]) 
+                                    for i in range(len(pre_cue_x_intervals))]
+            X_in_cue_data_masks = [X_index.overlaps(in_cue_x_intervals[i]) 
+                                    for i in range(len(in_cue_x_intervals))]
+
+            # different X modalities
+            for X_name, X_data in X_full.items():
+                print(f"Fitting SVM for cue {cue} with {X_name} data")
+                # get the X data: slice to the intervals and average over entire interval
+                X_pre_cue = np.stack([X_data[m].mean() for m in X_pre_cue_data_masks])
+                X_in_cue = np.stack([X_data[m].mean() for m in X_in_cue_data_masks])
+                Y = np.concatenate((np.zeros(len(X_pre_cue)), np.ones(len(X_in_cue))))
+                X = np.concatenate((X_pre_cue, X_in_cue), axis=0)
+                print(X_name, X.shape, Y.shape, len(np.unique(Y)))
+                
+                if len(Y) < 10 or len(np.unique(Y)) < 2:
+                    print(f"Not enough samples for cue {cue} with {X_name} data, skipping SVM fit")
+                    continue
+
+                result = fit_SVMs_with_bootstrap(X, Y)
+                result['X_modality'] = X_name
+                result['predict_y_name'] = f'pre_vs_in_cue{cue}'
+
+                results.append(result)
+        return results
+    
+    def timeline_decoding(results, interval_col_name):
+        svm_setup_dat = t0_event_intervals[t0_event_intervals[interval_col_name].notna()]
+        svm_fit_intvl = [pd.Interval(left=intvl.left,
+                                     right=intvl.left +timebins_per_fit*bin_length_us -bin_length_us/2, ) # - needed for overlap indexing
+                         for intvl in svm_setup_dat[interval_col_name].values]
+
+        # iterate over timepoints: pre-cue and in-cue, seperating cue1 vs cue2 trials
+        ith_t = 0
+        while True:
+            print(f"Fitting SVM in {interval_col_name} at timebin {ith_t}")
+            X_data_masks = [X_index.overlaps(trial_intvl) for trial_intvl in svm_fit_intvl]
+            # make sure each mask has the correct number of timebins
+            assert (np.array([m.sum() for m in X_data_masks]) == timebins_per_fit).all()
+            
+            # different X modalities 
+            for X_name, X_data in X_full.items():
+                print(f"Fitting SVM with {X_name} data")
+                # get the X data: slice to the intervals and average over 3 bin interval
+                X = np.stack([X_data[m].mean() for m in X_data_masks])
+                
+                # different Ys to predict
+                for y_name in ['cue', 'trial_outcome', 'choice_R1', 'choice_R2']:
+                    print(f"  with Y = {y_name}")
+                    Y = svm_setup_dat[y_name].values
+                    if y_name == 'cue':
+                        Y = Y - 1  # cue1=0, cue2=1
+                        Y = Y.clip(0,1) # single trial out of thousands where cue was 0, not 1 or 2 ...
+                    elif y_name == 'trial_outcome':
+                        Y = Y.clip(0,1)  # one R=1, more R 2,3,4..., no R=0
+                    
+                    if len(Y) < 10 or len(np.unique(Y)) < 2:
+                        print(f"Not enough samples for cue1 vs cue2 with {X_name} data, skipping SVM fit")
+                        continue
+                    
+                    # only first 27 trials
+                    result = fit_SVMs_with_bootstrap(X, Y)
+                    # result = fit_SVMs_with_bootstrap(X[:27], Y[:27])
+                    result['interval_name'] = interval_col_name
+                    result['predict_y_name'] = y_name
+                    result['X_modality'] = X_name
+                    result['timebin'] = ith_t +1 # center of fit interval
+                    results.append(result)
+                
+            ith_t += 1
+            # shift the fit interval by one timebin
+            svm_fit_intvl = [pd.Interval(left=trial_intvl.left + bin_length_us,
+                                         right=trial_intvl.right + bin_length_us, )
+                                for trial_intvl in svm_fit_intvl]
+
+            # check if we are still within the full interval, use only first trial as reference
+            if svm_fit_intvl[0].right > svm_setup_dat[interval_col_name].values[0].right:
+                print("Reached end of full interval, stopping SVM fits")
+                break   
+        return results
+
+
+
     print("---")
-        
-                
-                
-                
     L = Logger()
+                
+    fr_z.index = pd.IntervalIndex.from_arrays(
+        fr_z.pop('from_ephys_timestamp'), fr_z.pop('to_ephys_timestamp'), closed='right'
+    )
+    X_index = fr_z.index
+    behavior.index = X_index # joined earlier on ephys timestamps, safe
+
+    # silent_neurons_mask = (fr_z.isna().all())
+    # print(silent_neurons_mask.sum())
+    X_full = {
+        'HP+mPFC': fr_z.fillna(0),
+        # 'HP': fr_z.iloc[:, :20].fillna(0),
+        'mPFC': fr_z.iloc[:, 20:].fillna(0),
+        # 'behavior': behavior.loc[:, ['abs_frame_raw', 'frame_yaw', 'frame_yaw']],
+    }
+
+    # standardize behavior data
+    # scaler = StandardScaler()
+    # X_full['behavior'].loc[:, :] = scaler.fit_transform(X_full['behavior'])
+    # X_index = fr_z.index
     
-    fr_z = fr_z.set_index(["from_ephys_timestamp","to_ephys_timestamp"], append=True)
-    fr_z.reset_index(level=(0,1,2,3,), inplace=True, drop=True)
-    print(fr_z)
+    timebins_per_fit = 3
+    # bin_length_us = t0_event_intervals.bin_length_us.values[0]
+    bin_length_us = 40_000
     
-    enter_R1_t = beh.loc[:, ['trackzone_reward2_enter_ephys_t', 'choice_R2', 'trial_id']]
-    enter_R1_t = enter_R1_t[~enter_R1_t.duplicated() & (enter_R1_t.trial_id != -1)]
-    enter_R1_t = enter_R1_t.reset_index(drop=True).set_index('trial_id')
-    Y = enter_R1_t.choice_R2.values
-    print(enter_R1_t)
-    print(Y)
-    
-    ball_vel = beh.loc[:, ['frame_raw', 'frame_yaw', 'frame_pitch', 'frame_ephys_timestamp']]
-    print(ball_vel)
-    max_t = 10_000_001  # 10s
-    t_step = 1_000_000  # 1s
-    n_frames = 58 # 1 s of frames at 59.5 Hz
-    n_fr_bins = 24 # 1 s of 40ms bins at 25 Hz
-    
-    X_beh = []
-    X_fr = []
-    for R1_t in enter_R1_t.trackzone_reward2_enter_ephys_t:
-        to_t = R1_t
-        prv_R1_t = 0
-        
-        all_intervals_beh_X = {}
-        all_intervals_fr_X = {}
-        print("-.... ", R1_t)
-        for i, from_t in enumerate(np.arange(R1_t - t_step, R1_t - max_t, -t_step)):
-            if from_t < prv_R1_t:
-                print("overlapping with previous trial")
-                all_intervals_beh_X[i] = None
-                all_intervals_fr_X[i] = None
-                continue
-            
-            interv_beh = ball_vel[(ball_vel.frame_ephys_timestamp >= from_t) &
-                             (ball_vel.frame_ephys_timestamp < to_t)].iloc[-n_frames:, :].dropna()
-            if interv_beh.shape[0] < n_frames: # partial data, skip
-                print(f"Not enough behavior data around R1 entry at {R1_t} ({interv_beh.shape[0]} samples), skipping interval ", i)
-                all_intervals_beh_X[i] = None
-                all_intervals_fr_X[i] = None
-                continue
-            
-            if interv_beh.shape != (n_frames, 4):
-                print(f"Behavior shape mismatch: {interv_beh.shape}")
-                all_intervals_beh_X[i] = None
-                all_intervals_fr_X[i] = None
-                continue
-
-            interv_fr = fr_z[(fr_z.index.get_level_values('from_ephys_timestamp') >= from_t)
-                        & (fr_z.index.get_level_values('to_ephys_timestamp') < to_t)
-                       ].iloc[-n_fr_bins:, :]
-            
-            if interv_fr.shape != (n_fr_bins, fr_z.shape[1]):
-                print(f"Firing rate shape mismatch: {interv_fr.shape}")
-                all_intervals_beh_X[i] = None
-                all_intervals_fr_X[i] = None
-                continue
-            
-
-            all_intervals_beh_X[i] = interv_beh[['frame_raw', 'frame_yaw', 'frame_pitch']].values.flatten()
-            all_intervals_fr_X[i] = interv_fr.values.flatten()
-            # print(all_intervals_beh_X[i])
-            # print(all_intervals_fr_X[i])
-
-            to_t = from_t
-    
-        print(all_intervals_beh_X.keys())
-        X_beh.append(all_intervals_beh_X)
-        X_fr.append(all_intervals_fr_X)
-    # print(X_beh)
-    # print(X_fr)
-
-
-
     results = []
-    for t in range(0, 10):
-        print("\n\nTime before R1: ", t+1)
-        
-        invalid_trial_mask = []
-        X_beh_t = []
-        X_fr_t = []
-        for trial_beh, trial_fr in zip(X_beh, X_fr):
-            # [print(v, end=' ') if v is None else print("Ok", end=' ') for k,v in trial_beh.items()]
-            if trial_beh[t] is None or trial_fr[t] is None:
-                print("Skipping trial due to missing data")
-                invalid_trial_mask.append(True)
-            else:
-                invalid_trial_mask.append(False)
-                X_beh_t.append(trial_beh[t])
-                X_fr_t.append(trial_fr[t])
-        
-        
-        
-        X_beh_t = np.stack(X_beh_t)
-        X_fr_t = np.stack(X_fr_t)
-        Y_t = Y[~np.array(invalid_trial_mask)]
-        
-        print(f"Using {X_beh_t.shape[0]} trials for SVM fitting")
-        print(X_beh_t.shape, X_fr_t.shape, Y_t.shape)
-
-
-        # pca on behavior
-        pca = PCA(n_components=0.95, svd_solver='full', random_state=42)
-        X_beh_t_pca = pca.fit_transform(X_beh_t)
-        print(f"Behavior PCA reduced to {X_beh_t_pca.shape[1]} dimensions from {X_beh_t.shape[1]} dimensions")
-        
-        X_fr_t = np.nan_to_num(X_fr_t, nan=0.0, posinf=0.0, neginf=0.0).astype(np.float32)
-        # pca on firing rates
-        pca = PCA(n_components=0.95, svd_solver='auto', random_state=42)
-        X_fr_t_pca = pca.fit_transform(X_fr_t)
-        print(f"Firing rate PCA reduced to {X_fr_t_pca.shape[1]} dimensions from {X_fr_t.shape[1]} dimensions")
-        
-        res1 = fit_SVMs_with_bootstrap(X_beh_t_pca, Y_t, f"RawYawPitch", kernel='linear', t=t+1)
-        res2 = fit_SVMs_with_bootstrap(X_fr_t_pca, Y_t, f"FiringRate", kernel='linear', t=t+1)
-        res3 = fit_SVMs_with_bootstrap(X_beh_t_pca, Y_t, f"RawYawPitch", kernel='rbf', t=t+1)
-        res4 = fit_SVMs_with_bootstrap(X_fr_t_pca, Y_t, f"FiringRate", kernel='rbf', t=t+1)
-
-        results.extend([res1, res2, res3, res4])
-
-        print(results)
+    # results = pre_vs_inside_cue_decoding(results)
+    results = timeline_decoding(results, interval_col_name='cue_entry_interval')
+    # results = timeline_decoding(results, interval_col_name='cue_exit_interval')
+    results = timeline_decoding(results, interval_col_name='R1_entry_interval')
+    results = timeline_decoding(results, interval_col_name='R2_entry_interval')
+    
     return pd.DataFrame(results)
-
-
 
 def get_PVCueCorr(trackfr_data, track_behavior_data):
     def compute_population_vector_correlation(PVs):

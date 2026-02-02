@@ -85,7 +85,7 @@ def render(app: Dash, global_data: dict, loaded_raw_traces: dict, vis_name: str)
                     um_per_px, uV_per_um):
         
         # only render the plot if all the necessary data selections are made   
-        if not all((selected_paradigm, selected_animal, (selected_session is not None))):
+        if not all(((selected_paradigm is not None), selected_animal, (selected_session is not None))):
             return {}
         
         paradigm_slice = slice(selected_paradigm)

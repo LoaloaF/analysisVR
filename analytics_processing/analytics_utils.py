@@ -1,11 +1,11 @@
 import numpy as np
-# import cv2
 import h5py
 import os
 import pandas as pd
 
 
-def hdf5_frames2mp4(session_dir, merged_fname):    
+def hdf5_frames2mp4(session_dir, merged_fname):
+    import cv2
     def _calc_fps(packages, cam_name):
         timestamps = packages[f'{cam_name}_image_pc_timestamp']
         return np.round(1 / np.mean(np.diff(timestamps)) * 1e6, 0)
@@ -54,7 +54,7 @@ def hdf5_frames2mp4(session_dir, merged_fname):
                 print(f"Sucessfully rendered {cam_name} video!")
             # keys in hdf5 file may very well not exist
             except Exception as e:
-                # L.logger.error(f"Failed to render {cam_name} video: {e}")
+                print(f"Failed to render {cam_name} video: {e}")
                 print("Failed to render video")
                 return
     render_video("facecam")

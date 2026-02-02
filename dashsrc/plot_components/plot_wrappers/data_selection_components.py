@@ -85,7 +85,9 @@ def metric_radioitems_component(vis_name):
     return [
         html.Label("Metric", style={"marginTop": 15}),
         dcc.RadioItems(
-            ['Velocity', 'Acceleration', 'Lick'],
+            ['Velocity', 'Acceleration', 'Lick', 'RawYawPitch Sum Velocity', 
+             'BallForward Velocity', 'BallSide Velocity', 'BallRotation Velocity'],
+            
             inputStyle={"margin-right": "5px"},
             style={"marginLeft": 5},
             value='Velocity',
@@ -130,6 +132,24 @@ def variance_radioitems_component(vis_name):
             inputStyle={"margin-right": "5px"},
             style={"marginLeft": 5},
             value='Single trials',
+            id=component_id
+        )
+    ], component_id
+    
+def events_checklist_component(vis_name):
+    component_id = f'events-checklist-{vis_name}'
+    return [
+        html.Label("Events", style={"marginTop": 15}),
+        dcc.Checklist(
+            options=[
+                {'label': 'Sound', 'value': 'reward-sound_count'},
+                {'label': 'Reward', 'value': 'reward-valve-open_count'},
+                {'label': 'Lick', 'value': 'lick_count'},
+                {'label': 'removeReward', 'value': 'reward-removed_count'}
+            ],
+            inputStyle={"margin-right": "7px", "margin-left": "3px"},
+            style={"marginLeft": 5, "marginTop": 5},
+            value=[],
             id=component_id
         )
     ], component_id

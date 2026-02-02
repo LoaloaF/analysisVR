@@ -42,12 +42,12 @@ width = 700
 height = 700
 group_by = None
 
-data['Spikes'] = analytics.get_analytics('Spikes', mode='set',
-                                                      #  columns = ['amplitude_uV', 'cluster_id'],
-                                                       paradigm_ids=paradigm_ids,
-                                                       animal_ids=animal_ids,
-                                                       excl_session_names=excl_session_names,
-                                                       session_ids=session_ids)
+# data['Spikes'] = analytics.get_analytics('Spikes', mode='set',
+#                                                       #  columns = ['amplitude_uV', 'cluster_id'],
+#                                                        paradigm_ids=paradigm_ids,
+#                                                        animal_ids=animal_ids,
+#                                                        excl_session_names=excl_session_names,
+#                                                        session_ids=session_ids)
 
 data['SpikeClusterMetadata'] = analytics.get_analytics('SpikeClusterMetadata', mode='set',
                                                       #  columns = cols,
@@ -57,9 +57,9 @@ data['SpikeClusterMetadata'] = analytics.get_analytics('SpikeClusterMetadata', m
                                                        session_ids=session_ids)
 
 # HPC
-data['SpikeClusterMetadata'] = data['SpikeClusterMetadata'][data['SpikeClusterMetadata'].cluster_id<=20]
+# data['SpikeClusterMetadata'] = data['SpikeClusterMetadata'][data['SpikeClusterMetadata'].cluster_id<=20]
 # mPFC
-data['SpikeClusterMetadata'] = data['SpikeClusterMetadata'][data['SpikeClusterMetadata'].cluster_id<20]
+# data['SpikeClusterMetadata'] = data['SpikeClusterMetadata'][data['SpikeClusterMetadata'].cluster_id<20]
 fig = plot_unit_fr_stability.render_plot_heatmap(data['SpikeClusterMetadata'])
 # fullfname = f'{output_dir}/unit_fr_stability.svg'
 fullfname = f'{output_dir}/unit_fr_stability_greater1Hz.svg'

@@ -10,6 +10,7 @@ from dashsrc.components.dashvis_constants import *
 def render_plot(ephys_traces, implant_mapping, spikes, from_smpl=0, to_smpl=10_000, 
                 shanks=[1,2], um_per_px=0.15, um_per_uV=1,
                 trace_groups=("non_curated", "curated", "spike_traces")):
+    print(" Rendering RawSpikes plot...")
     print(spikes)
     print(implant_mapping)
     print(ephys_traces.shape)

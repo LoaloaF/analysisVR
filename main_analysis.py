@@ -44,7 +44,7 @@ def main():
                         "SessionPCs40msCAs": None,
                         "SessionPCs40ms": None,
                         "Ensemble40msProjEventAligned": None,
-                        "TrackFiringRateEnsemble": None,
+                        "TrackwiseEnsembleProj": None,
                         }
     loaded_raw_traces = {}
     

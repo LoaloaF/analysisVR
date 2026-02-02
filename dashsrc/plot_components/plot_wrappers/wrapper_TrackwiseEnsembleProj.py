@@ -3,7 +3,7 @@ import dash_bootstrap_components as dbc
 import pandas as pd
 import numpy as np
 
-from .. .components.dcc_graphs import get_general_graph_component
+from ...components.dcc_graphs import get_general_graph_component
 from .data_selection_components import (
     paradigm_dropdown_component,
     animal_dropdown_component,
@@ -34,18 +34,27 @@ def calculate_figure(selected_paradigm, selected_animal, session_range,
     
     paradigm_slice = slice(selected_paradigm, selected_paradigm)
     animal_slice = slice(selected_animal, selected_animal)
-    
+
+    # try:
+    #     global_data[sec_analytic]['paradigm_id'] = selected_paradigm
+    #     global_data[sec_analytic]['animal_id'] = selected_animal
+    #     global_data[sec_analytic] = global_data[sec_analytic].set_index(['paradigm_id', 'animal_id','session_id']).sort_index()  
+    # except KeyError:
+    #     pass
     # Safety check for session_range
     if not session_range: 
         return {}
         
     session_slice = [sid for sid in np.arange(session_range[0], session_range[1] + 1)
                         if sid in global_data[sec_analytic].index.unique('session_id')]
+
+    # session_slice = [sid for sid in np.arange(session_range[0], session_range[1] + 1)
+    #                     if sid in global_data[sec_analytic].index.unique('session_id')]
     
     # paradigm, animal and session filtering
     prim_data = global_data[prim_analytic].loc[pd.IndexSlice[paradigm_slice, animal_slice, 
                                                     session_slice, :]]
-    sec_data = global_data[sec_analytic].loc[pd.IndexSlice[paradigm_slice, animal_slice,
+    sec_data = global_data[sec_analytic].loc[pd.IndexSlice[#paradigm_slice, animal_slice,
                                                     session_slice, :]]
     n_sessions = len(session_slice)
     
@@ -149,7 +158,7 @@ def create_view_instance(app, global_data, base_vis_name, suffix_id, prim_analyt
 # main render function
 def render(app: Dash, global_data: dict, vis_name: str) -> html.Div:
     prim_analytic = 'BehaviorTrackwise'
-    sec_analytic = 'FiringRateTrackwiseEnsemble'
+    sec_analytic = 'TrackwiseEnsembleProj'
     
     # IDs for the container and button
     CONTAINER_ID = f"{vis_name}-main-container"

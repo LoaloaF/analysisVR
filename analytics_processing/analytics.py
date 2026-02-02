@@ -108,20 +108,21 @@ def _compute_animal_analytic(analytic, all_sessions_ffnames):
         
         data = ephys.get_SessionPCs40msCAs(PCs)
 
-    # elif analytic == 'TrackwiseEnsembleProj':
-    #     ens_proj = get_analytics('ConcatenatedEnsambleProj40ms', session_names=sp.fullfnames2snames(all_sessions_ffnames))
-    #     if ens_proj is None:
-    #         L.logger.warning("Missing lower level analytic")
-    #         return None
+    elif analytic == 'TrackwiseEnsembleProj':
+        ens_proj = get_analytics('ConcatenatedEnsambleProj40ms', session_names=sp.fullfnames2snames(all_sessions_ffnames))
+        if ens_proj is None:
+            L.logger.warning("Missing lower level analytic")
+            return None
 
-    #     track_behavior_data = get_analytics('BehaviorTrackwise', session_names=sp.fullfnames2snames(all_sessions_ffnames))
-    #     if track_behavior_data is None:
-    #         L.logger.warning("Missing lower level analytic")
-    #         return None
-    #     # sess_id = track_behavior_data.index.get_level_values('session_id').unique()
-    #     # if len(sess_id) == 1 and 'session_id' in ens_proj.columns:
-    #     #     ens_proj = ens_proj[ens_proj['session_id'] == int(sess_id[0])]
-    #     data = ephys.get_TrackwiseEnsembleProj(ens_proj, track_behavior_data)
+        track_behavior_data = get_analytics('BehaviorTrackwise', session_names=sp.fullfnames2snames(all_sessions_ffnames))
+        if track_behavior_data is None:
+            L.logger.warning("Missing lower level analytic")
+            return None
+        # sess_id = track_behavior_data.index.get_level_values('session_id').unique()
+        # if len(sess_id) == 1 and 'session_id' in ens_proj.columns:
+        #     ens_proj = ens_proj[ens_proj['session_id'] == int(sess_id[0])]
+        data = ephys.get_TrackwiseEnsembleProj(ens_proj, track_behavior_data)
+        #data = data.set_index(['session_id', 'trial_id']).sort_index()
     
     
     # TODO should be sesssion analytic...    
@@ -392,21 +393,21 @@ def _compute_sess_analytic(analytic, session_fullfname):
     #     print(data)
     #     data_table = dict.fromkeys(data.columns, C.FIRING_RATE_TRACKBINS_Z_ONE_DTYPE)
     
-    elif analytic == "TrackwiseEnsembles":
-        # loading firing rates
-        fr_data = get_analytics('FiringRateTrackwiseHz', session_names=[session_name])
-        if fr_data is None:
-            L.logger.warning("Missing FiringRate (Trackwise)")
-            return None
-        # loading ensembles
-        ensembles = get_analytics('ConcatenatedEnsambles40ms', session_names=[session_name])
-        if ensembles is None:
-            L.logger.warning("Failed computing concatenated ensembles")
-            return None
+    # elif analytic == "TrackwiseEnsembles":
+    #     # loading firing rates
+    #     fr_data = get_analytics('FiringRateTrackwiseHz', session_names=[session_name])
+    #     if fr_data is None:
+    #         L.logger.warning("Missing FiringRate (Trackwise)")
+    #         return None
+    #     # loading ensembles
+    #     ensembles = get_analytics('ConcatenatedEnsambles40ms', session_names=[session_name])
+    #     if ensembles is None:
+    #         L.logger.warning("Failed computing concatenated ensembles")
+    #         return None
         
-        data = ephys.get_FiringRateTrackwiseEnsemble(fr_data, ensembles)
-        # data = pd.DataFrame((fr_data.to_numpy() @ ensembles.to_numpy()), index = fr_data.index, columns= ensembles.columns)
-        return data
+    #     data = ephys.get_FiringRateTrackwiseEnsemble(fr_data, ensembles)
+    #     # data = pd.DataFrame((fr_data.to_numpy() @ ensembles.to_numpy()), index = fr_data.index, columns= ensembles.columns)
+    #     return data
     
 
     elif analytic == "AnalyticsOverview":
@@ -537,7 +538,7 @@ def get_analytics(analytic, mode="set", paradigm_ids=None, animal_ids=None,
         
         elif mode == "set":
             if not os.path.exists(analytic_fname):
-                L.logger.info(f"Analytic `{analytic}` not does not exist for"
+                L.logger.info(f"Analytic `{analytic}` does not exist for"
                               f" {identif}, compute first, or check for typo")
                 continue
             data = pd.read_parquet(analytic_fname, columns=columns)

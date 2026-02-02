@@ -15,7 +15,7 @@ from ..plot_components.plot_wrappers import wrapper_EvolvingStayTime
 from ..plot_components.plot_wrappers import wrapper_EvolvingStayDecision
 from ..plot_components.plot_wrappers import wrapper_RawSpikes
 from ..plot_components.plot_wrappers import wrapper_TrackFiringRate
-from ..plot_components.plot_wrappers import wrapper_EnsembleFiringRate
+from ..plot_components.plot_wrappers import wrapper_TrackwiseEnsembleProj
 from ..plot_components.plot_wrappers import wrapper_SVMPredictions
 from ..plot_components.plot_wrappers import wrapper_EvolvingPCSubspace
 from ..plot_components.plot_wrappers import wrapper_CueCorrelation
@@ -78,8 +78,8 @@ def create_multisession_vis_containers(app: Dash, loaded_analytics: dict):
             case "TrackFiringRate":
                 analysis_div = wrapper_TrackFiringRate.render(app, loaded_analytics,
                                                               vis_name=vis_name)
-            case "FiringRateTrackwiseEnsemble":
-                analysis_div = wrapper_EnsembleFiringRate.render(app, loaded_analytics,
+            case "TrackwiseEnsembleProj":
+                analysis_div = wrapper_TrackwiseEnsembleProj.render(app, loaded_analytics,
                                                               vis_name=vis_name)
             case "EvolvingPCSubspace":
                 analysis_div = wrapper_EvolvingPCSubspace.render(app, loaded_analytics,

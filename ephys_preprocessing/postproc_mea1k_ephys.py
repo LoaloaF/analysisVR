@@ -852,10 +852,8 @@ def get_TrackwiseEnsembleProj(ens_proj: pd.DataFrame,
                              track_behavior_data: pd.DataFrame) -> pd.DataFrame:
     """
     Trackwise (binned) ensemble projection, aligned to BehaviorTrackwise bins.
-    Animal-level safe: processes each session separately to avoid cross-session mixing.
     """
 
-    # --- split by session to avoid mixing bins across sessions ---
     if "session_id" not in ens_proj.columns:
         raise ValueError("ens_proj must contain a 'session_id' column for animal-level processing.")
 
@@ -940,44 +938,46 @@ def get_TrackwiseEnsembleProj(ens_proj: pd.DataFrame,
     return pd.concat(all_sessions, axis=0, ignore_index=True)
 
 
-def get_FiringRateTrackwiseEnsemble(fr_trackwise, ens_weights):
 
-    def norm_unit(u):
-        s = str(u)
-        if s.startswith("Unit"):
-            m = re.fullmatch(r"Unit0*(\d+)", s)
-            return f"Unit{int(m.group(1)):04d}" if m else s
-        if s.isdigit():
-            s = int(s)+1
-            return f"Unit{int(s):04d}"
-        return s
+# currently not used -> could be used to compute ensembles based on trackwise firing rates
+# def get_FiringRateTrackwiseEnsemble(fr_trackwise, ens_weights):
 
-    ignore_cols = ['from_position_bin','trial_id','cue','trial_outcome','choice_R1','choice_R2','bin_length']
-    ignore_cols = [c for c in fr_trackwise.columns if c in ignore_cols]
+#     def norm_unit(u):
+#         s = str(u)
+#         if s.startswith("Unit"):
+#             m = re.fullmatch(r"Unit0*(\d+)", s)
+#             return f"Unit{int(m.group(1)):04d}" if m else s
+#         if s.isdigit():
+#             s = int(s)+1
+#             return f"Unit{int(s):04d}"
+#         return s
 
-    units = [c for c in fr_trackwise.columns if isinstance(c, str) and c.startswith("Unit")]
-    X = fr_trackwise[units]
-    # z-scoring firing rates
-    X = (X - X.mean()) / X.std()
-    W = ens_weights.copy()
-    W.index = [norm_unit(i) for i in W.index]
-    W = W.loc[units]
-    X = X.apply(pd.to_numeric, errors="coerce")
-    W = W.apply(pd.to_numeric, errors="coerce")
+#     ignore_cols = ['from_position_bin','trial_id','cue','trial_outcome','choice_R1','choice_R2','bin_length']
+#     ignore_cols = [c for c in fr_trackwise.columns if c in ignore_cols]
 
-    Xv = np.nan_to_num(X.to_numpy(), nan=0.0)
-    Wv = np.nan_to_num(W.to_numpy(), nan=0.0)
-    Y = Xv @ Wv
-    diag = (Xv**2) @ (Wv**2)
-    quad_coact = Y**2 - diag
-    calc = pd.DataFrame(quad_coact, index=fr_trackwise.index, columns=W.columns)
+#     units = [c for c in fr_trackwise.columns if isinstance(c, str) and c.startswith("Unit")]
+#     X = fr_trackwise[units]
+#     # z-scoring firing rates
+#     X = (X - X.mean()) / X.std()
+#     W = ens_weights.copy()
+#     W.index = [norm_unit(i) for i in W.index]
+#     W = W.loc[units]
+#     X = X.apply(pd.to_numeric, errors="coerce")
+#     W = W.apply(pd.to_numeric, errors="coerce")
 
-    ens_fr = pd.concat([calc, fr_trackwise[ignore_cols]], axis=1)
+#     Xv = np.nan_to_num(X.to_numpy(), nan=0.0)
+#     Wv = np.nan_to_num(W.to_numpy(), nan=0.0)
+#     Y = Xv @ Wv
+#     diag = (Xv**2) @ (Wv**2)
+#     quad_coact = Y**2 - diag
+#     calc = pd.DataFrame(quad_coact, index=fr_trackwise.index, columns=W.columns)
 
-    #renaming for plotting
-    # ens_fr = ens_fr.rename(columns=lambda c: re.sub(r"^Assembly(\d+)$", r"Unit0\1", str(c)))
+#     ens_fr = pd.concat([calc, fr_trackwise[ignore_cols]], axis=1)
 
-    return ens_fr
+#     #renaming for plotting
+#     # ens_fr = ens_fr.rename(columns=lambda c: re.sub(r"^Assembly(\d+)$", r"Unit0\1", str(c)))
+
+#     return ens_fr
         
         
         

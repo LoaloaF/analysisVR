@@ -484,7 +484,7 @@ def _compute_sess_analytic(analytic, session_fullfname):
     #     data = data.astype(data_table)
     
  
-    if not isinstance(data, tuple):   
+    if not isinstance(data, tuple):
     
         try:
             data = data.astype(schema)

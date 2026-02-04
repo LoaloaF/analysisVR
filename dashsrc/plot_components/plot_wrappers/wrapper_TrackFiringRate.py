@@ -41,8 +41,32 @@ def calculate_figure(selected_paradigm, selected_animal, session_range,
     if not session_range: 
         return {}
         
-    session_slice = [sid for sid in np.arange(session_range[0], session_range[1] + 1)
-                        if sid in global_data[sec_analytic].index.unique('session_id')]
+    # Build the available sessions for the selected paradigm+animal
+    idx = global_data[sec_analytic].index
+    available_sessions = (
+        idx[
+            (idx.get_level_values("paradigm_id") == selected_paradigm) &
+            (idx.get_level_values("animal_id") == selected_animal)
+        ]
+        .get_level_values("session_id")
+        .unique()
+        .tolist()
+    )
+    available_sessions = sorted(available_sessions)
+
+    if len(available_sessions) == 0:
+        return {}
+
+    # session_range is positional indices
+    i0, i1 = session_range
+    i0 = max(0, int(i0))
+    i1 = min(len(available_sessions) - 1, int(i1))
+
+    if i0 > i1:
+        i0, i1 = i1, i0
+
+    session_slice = available_sessions[i0:i1 + 1]
+
     
     # paradigm, animal and session filtering
     prim_data = global_data[prim_analytic].loc[pd.IndexSlice[paradigm_slice, animal_slice, 

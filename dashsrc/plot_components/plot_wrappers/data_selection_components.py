@@ -571,23 +571,49 @@ def register_session_slider_callback(app, vis_name, global_data, analytic,
         Output(session_slider_comp_id, 'min'),
         Output(session_slider_comp_id, 'max'),
         Output(session_slider_comp_id, 'value'),
+        Output(session_slider_comp_id, 'marks'),
         Input(animal_dropd_comp_id, 'value'),
     )
     def update_session_slider(selected_animal):
         data = global_data[analytic]
         if selected_animal is None or data is None:
-            return 0, 10, (0,10), 
+            return 0, 0, (0, 0), {0: "no sessions"}
 
-        if 'session_id' in data.index.names:
-            last_session_id = data.index.unique("session_id").max()
-        else:
-            last_session_id = data["session_id"].max()
-            
+        # sessions for the selected animal (keep your paradigm filtering if desired)
+        sessions = (
+            data.loc[pd.IndexSlice[:, selected_animal, :, :]]
+               .index.unique("session_id")
+               .tolist()
+        )
+
+        # Sort chronologically (string format YYYY-MM-DD_HH-mm is lexicographically sortable)
+        sessions = sorted(sessions)
+
+        n = len(sessions)
+        if n == 0:
+            return 0, 0, (0, 0), {0: "no sessions"}
+
+        # Slider is positional: 0..n-1
+        min_v, max_v = 0, n - 1
+
         if default_select_sessions is not None:
-            from_sel, to_sel = default_select_sessions
+            # default_select_sessions must be positional indices now
+            i0, i1 = default_select_sessions
+            i0 = max(min_v, min(int(i0), max_v))
+            i1 = max(min_v, min(int(i1), max_v))
         else:
-            from_sel, to_sel = 0, last_session_id
-        return 0, last_session_id, (from_sel, to_sel)
+            i0, i1 = min_v, max_v
+
+        # Marks: show a readable subset to avoid clutter
+        if n <= 12:
+            marks = {i: sessions[i] for i in range(n)}
+        else:
+            step = max(1, n // 10)
+            marks = {0: sessions[0], max_v: sessions[-1]}
+            for i in range(0, n, step):
+                marks[i] = sessions[i]
+
+        return min_v, max_v, (i0, i1), marks
 
 def register_session_time_slider_callback(app, vis_name, global_data, analytic, loaded_raw_traces):
     # html not used, just ensure that callcack is linked to correct component

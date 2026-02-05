@@ -84,7 +84,23 @@ def _compute_animal_analytic(analytic, all_sessions_ffnames):
         # TODO
         # schema = C.SCHEMA_ConcatenatedPCs40ms
         
-    # elif analytic == "ConcatenatedEnsambles40ms":
+    # TODO: Delete if not needed
+    # elif analytic == "ConcatenatedEnsambleProj40ms":
+    #     all_fr_hz = get_analytics(analytic="FiringRate40msHz",
+    #                             session_names=sp.fullfnames2snames(all_sessions_ffnames))
+    #     if all_fr_hz is None:
+    #         L.logger.warning("Missing lower level analytic")
+    #         return None
+        
+    #     ens_weights = get_analytics(analytic="ConcatenatedEnsambles40ms",
+    #                             session_names=sp.fullfnames2snames(all_sessions_ffnames))
+    #     if ens_weights is None:
+    #         L.logger.warning("Missing lower level analytic `ConcatenatedEnsambles40ms`")
+    #         return None
+        
+    #     # assembly_templates, assembly_activity
+    #     data = ephys.get_ConcatenatedEnsambleProj40ms(ens_weights, all_fr_hz)
+
     elif set(analytic.split("-")) == {"ConcatenatedEnsambles40ms", "ConcatenatedEnsambleProj40ms"}:
         
         all_fr_hz = get_analytics(analytic="FiringRate40msHz",

@@ -1694,7 +1694,7 @@ def get_ConcatenatedEnsambles40ms(PCs, all_fr_hz):
     session_stop_t = np.cumsum(assembly_activity.groupby('session_id').apply(lambda x: x.iloc[-1].name[1]))
     print(session_stop_t)
     
-    for i in range(n_assemblies):
+    for i in range(n_assemblies): # TODO: remoove plotting?
         plt.plot(np.cumsum(assembly_activity[f"Assembly{i+1:03d}"].index.get_level_values('from_ephys_timestamp')),
                  assembly_activity[f"Assembly{i+1:03d}"].values, 
                  label=f"Assembly {i+1:03d}")
@@ -2326,3 +2326,29 @@ def get_PVCueCorr(trackfr_data, track_behavior_data):
             # exit()
     PVCueCorr_aggr = pd.concat(PVCueCorr_aggr, axis=0)
     return PVCueCorr_aggr
+
+
+# TODO: Delete if not useful (always compute projection with weights or not?):
+def get_ConcatenatedEnsambleProj40ms(ens_weights, all_fr_hz):
+    from_ephys_timestamp = all_fr_hz.pop('from_ephys_timestamp',)
+    to_ephys_timestamp = all_fr_hz.pop('to_ephys_timestamp',)
+    session_id = all_fr_hz.index.get_level_values('session_id')
+    all_fr_z = all_fr_hz.apply(lambda unit_fr: ((unit_fr - unit_fr.mean()) / unit_fr.std()))
+
+    weights_np = np.ascontiguousarray(np.asarray(ens_weights, dtype=np.float64))
+    fr_np = np.ascontiguousarray(all_fr_z.tonumpy(dtype=np.float64, copy=True))
+    
+    assembly_activity = _compute_assembly_activity_numba(weights_np, all_fr_z.values)
+
+    # setting index for proj
+    idx = pd.MultiIndex.from_arrays([session_id,from_ephys_timestamp, to_ephys_timestamp],
+                                names=['session_id', 'from_ephys_timestamp', 'to_ephys_timestamp'])
+    
+    # cols of weights to create df
+    n_assemblies = ens_weights.shape[1]
+    assembly_activity = pd.DataFrame(assembly_activity.T,
+                                     columns=[f"Assembly{i+1:03d}" for i in range(n_assemblies)],
+                                     index=idx)
+    
+    return assembly_activity
+

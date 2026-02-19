@@ -402,6 +402,20 @@ def _compute_sess_analytic(analytic, session_fullfname):
         if data is None:
             L.logger.warning("Failed to compute SVM Cue Outcome Choice Prediction")
             return None
+
+
+    elif analytic == "EnsembleT0Projection":
+        ensemble_proj = get_analytics('ConcatenatedEnsambleProj40ms', session_names=[session_name])
+        if ensemble_proj is None:
+            L.logger.warning("Missing lower level analytic")
+            return None
+
+        t0_events = get_analytics('TrialWiseT0Events40ms', session_names=[session_name],)
+        if t0_events is None:
+            L.logger.warning("Missing lower level analytic")
+            return None
+
+        data = ephys.get_ensembles_t0_events(t0_events=t0_events, ensamble_proj=ensemble_proj)
         
     elif analytic == "PVCueCorr":
         trackfr_data = get_analytics('FiringRateTrackwiseHz', session_names=[session_name])

@@ -6,6 +6,27 @@ import dash_bootstrap_components as dbc
 
 import dashsrc.components.dashvis_constants as C
 import pandas as pd
+
+
+def _get_sessions_for_animal(data, selected_animal):
+    """Return sorted unique session ids for an animal, robust to type mismatches."""
+    if data is None or selected_animal is None:
+        return []
+
+    idx = data.index
+    if not isinstance(idx, pd.MultiIndex):
+        return []
+    if "animal_id" not in idx.names or "session_id" not in idx.names:
+        return []
+
+    animal_vals = idx.get_level_values("animal_id")
+    mask = animal_vals == selected_animal
+    if not mask.any():
+        # Fallback when UI value type differs from index type (e.g. 6 vs "6")
+        mask = animal_vals.astype(str) == str(selected_animal)
+
+    sessions = idx[mask].get_level_values("session_id").unique().tolist()
+    return sorted(sessions)
     
 def paradigm_dropdown_component(vis_name, global_data, analytic, multi=False):
     data = global_data[analytic]
@@ -556,9 +577,9 @@ def register_session_dropdown_callback(app, vis_name, global_data, analytic):
     )
     def update_session_dropdown(selected_animal):
         data = global_data[analytic]
-        if not selected_animal or data is None:
+        if selected_animal is None or data is None:
             return []
-        sessions = data.loc[pd.IndexSlice[:,selected_animal,:,:]].index.unique('session_id')
+        sessions = _get_sessions_for_animal(data, selected_animal)
         session_ids = [{'label': f'Session {i}', 'value': i} for i in sessions]
         return session_ids
 
@@ -579,12 +600,8 @@ def register_session_slider_callback(app, vis_name, global_data, analytic,
         if selected_animal is None or data is None:
             return 0, 0, (0, 0), {0: "no sessions"}
 
-        # sessions for the selected animal (keep your paradigm filtering if desired)
-        sessions = (
-            data.loc[pd.IndexSlice[:, selected_animal, :, :]]
-               .index.unique("session_id")
-               .tolist()
-        )
+        # sessions for the selected animal
+        sessions = _get_sessions_for_animal(data, selected_animal)
 
         # Sort chronologically (string format YYYY-MM-DD_HH-mm is lexicographically sortable)
         sessions = sorted(sessions)

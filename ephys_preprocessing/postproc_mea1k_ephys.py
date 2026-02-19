@@ -1989,6 +1989,96 @@ def get_FiringRateTrackwiseHz(fr, track_behavior_data):
 #     return comps_aggr.reset_index(), angle_aggr.reset_index()
 
 
+def get_ensembles_t0_events(
+    t0_events: pd.DataFrame,
+    ensamble_proj: pd.DataFrame,
+    interval_substr: str = "interval",
+    meta_cols=None,
+    use_midpoint: bool = True,
+) -> pd.DataFrame:
+    if meta_cols is None:
+        meta_cols = [
+            "trial_id", "cue", "trial_outcome", "choice_R1", "choice_R2",
+            "t0_event_name", "t0", "x_position", "x_alignment"
+        ]
+
+
+    if 'session_id' in ensamble_proj.index.names:
+       pass
+    else:
+        ensamble_proj.set_index(['session_id'], inplace = True)
+
+
+    interval_cols = [c for c in t0_events.columns if interval_substr in c]
+    t0_idx_names = list(t0_events.index.names)
+
+    parts = []
+
+    # Process per session_id to keep search space small and preserve indexing
+    for s_id, ep_s in ensamble_proj.groupby(level="session_id", sort=False):
+
+        try:
+            t0_s = t0_events.xs(s_id, level="session_id", drop_level=False)
+        except KeyError:
+            print(f"No data for session: {s_id}")
+            continue
+        
+        # Long table of intervals for this session
+        t0_s_reset = t0_s.reset_index()
+        iv_long = (
+            t0_s_reset[t0_idx_names + meta_cols + interval_cols]
+            .melt(
+                id_vars=t0_idx_names + meta_cols,
+                value_vars=interval_cols,
+                var_name="interval_name",
+                value_name="interval",
+            )
+            .dropna(subset=["interval"])
+        )
+
+        # Sort ensamble_proj bins by time once
+        ep_s = ep_s.sort_values(["from_ephys_timestamp", "to_ephys_timestamp"])
+
+        frm = ep_s["from_ephys_timestamp"].to_numpy()
+        to  = ep_s["to_ephys_timestamp"].to_numpy()
+
+        # Monotonic coordinate for searchsorted
+        if use_midpoint:
+            x = (frm + to) / 2.0
+        else:
+            # alternative, still monotonic if bins are well-formed
+            x = frm
+
+        # For each interval row, slice using searchsorted (O(log n) per interval)
+        for row in iv_long.itertuples(index=False):
+            intvl = row.interval
+            left  = float(intvl.left)
+            right = float(intvl.right)
+
+            # Find candidate bin range
+            lo = np.searchsorted(x, left, side="left")
+            hi = np.searchsorted(x, right, side="right")
+            if hi <= lo:
+                continue
+
+            chunk = ep_s.iloc[lo:hi].copy()
+
+            for mc in meta_cols:
+                chunk[mc] = getattr(row, mc)
+            chunk["interval_name"] = row.interval_name
+
+            idx_to_append = [nm for nm in t0_idx_names if nm not in chunk.index.names]
+            for nm in idx_to_append:
+                chunk[nm] = getattr(row, nm)
+            if idx_to_append:
+                chunk = chunk.set_index(idx_to_append, append=True)
+
+            parts.append(chunk)
+
+    result = pd.concat(parts, axis=0)
+
+    return result
+
 def get_SVMCueOutcomeChoicePred(fr_z, behavior, t0_event_intervals):
     
     

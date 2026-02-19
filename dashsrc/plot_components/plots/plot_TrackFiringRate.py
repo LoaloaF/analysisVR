@@ -198,9 +198,9 @@ def render_plot(track_data, fr, metadata, spike_metadata, metric, n_sessions,
         print()
         print()
         neuron_i_fr = fr.iloc[:, i].unstack(level='session_id').fillna(0).copy()
+        neuron_i_fr = neuron_i_fr.sort_index()
         print(neuron_i_fr)
         # neuron_i_fr.drop(columns=[10,24,25], inplace=True)
-        neuron_i_fr.index = np.sort(track_data['from_position_bin'].unique())
         # if cluster_id == 24:
         #     print(neuron_i_fr)
         # neuron_i_fr = neuron_i_fr.drop(columns=[10, 25])

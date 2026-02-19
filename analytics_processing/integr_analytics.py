@@ -2,6 +2,7 @@ import pandas as pd
 import numpy as np
 from CustomLogger import CustomLogger as Logger
 
+import analytics_processing.modality_transformations as mT
 import analytics_processing.analytics_transformations as aT
 
 def get_BehaviorFramewise(track_kinematics, trialwise, events, pose_data):
@@ -10,17 +11,31 @@ def get_BehaviorFramewise(track_kinematics, trialwise, events, pose_data):
         Logger().logger.warning("No ephys timestamps in track kinematics, using "
                                 "PC timestamps for merging behavior events.")
         which_t_col = '_pc_timestamp'
+        
+    # below threshold column
+    vel_kin = track_kinematics[['frame_RawYawPitch_abs_vel_sum', 'fps', 'track_zone', 'trial_id']]
+    thresholds = trialwise[['velocity_threshold_at_R1', 'velocity_threshold_at_R2', 'trial_id']]
+    
+    below_vel_thr = mT.calculate_below_vel_thr(vel_kin, thresholds)
+    track_kinematics['frame_below_velocity_thr'] = below_vel_thr
     
     # transform the async events to framewise data, needed for merging
     fr_wise_events = aT.async_events_to_framewise(events, which_t_col=which_t_col,
                                                   track_kinematics=track_kinematics)
-    
     # merge events in
     framedata = pd.merge(track_kinematics, fr_wise_events, on='frame_id', how='left')
     
     # fill NaNs with 0 for *event*_count columns, mean value stays NaN if 0 events
     cnt_cols = framedata.columns.str.endswith('_count')
     framedata.loc[:, cnt_cols] = framedata.loc[:, cnt_cols].fillna(0)
+    
+    # create boolean columns for whether an event was detected in that frame
+    event_detected = (framedata.loc[:, cnt_cols].copy() > 0).astype(bool).astype(int)
+    event_detected.columns= [col.replace('_count', '_detected') for col in event_detected.columns]
+    # licks are often flipping (0,1,1,0,1,1), messing up hmm fits, dilate 5 frames (200 ms at 60fps) into future
+    event_detected['lick_detected'] = mT.dilate_post_events(event_detected['lick_detected'], n_bins_after=5)
+    
+    framedata = pd.concat([framedata, event_detected], axis=1)
     
     # TODO merge facecam poses with frames
     timestamp_col = 'frame_ephys_timestamp'
@@ -48,243 +63,63 @@ def get_BehaviorFramewise(track_kinematics, trialwise, events, pose_data):
     framedata = pd.merge(framedata, trialwise, on='trial_id', how='left')
     return framedata
 
-def get_BehaviorTrackwise(tramewise):
-    return aT.transform_to_position_bin_index(tramewise)
+def get_BehaviorTrackwise(framewise):
+    groupby_cols = ['trial_id', 'from_cm_position_bin', 'to_cm_position_bin']
+    # aggregate the data for unque combinations of trial_id and position bin
+    posbin_data = framewise.groupby(groupby_cols, observed=True).agg(aT.column2agg_map(framewise.columns))
+    
+    # by default in agg, we take the last timestamp of ephys_ and pc_timestamp, clarify here by renaming
+    posbin_data.rename({'frame_ephys_timestamp': 'posbin_to_ephys_timestamp',
+                        'frame_pc_timestamp': 'posbin_to_pc_timestamp'}, inplace=True, axis=1)
+    # also add the first timestamp
+    first_tstamps = framewise.groupby(groupby_cols, observed=True).agg({
+        "frame_ephys_timestamp": 'first',
+        "frame_pc_timestamp": 'first',
+    }).rename({
+        "frame_ephys_timestamp": "posbin_from_ephys_timestamp",
+        "frame_pc_timestamp": "posbin_from_pc_timestamp",
+    }, axis=1)
+    posbin_data = pd.concat([posbin_data, first_tstamps], axis=1)
+    # print(posbin_data)
+    # print(posbin_data[['posbin_from_ephys_timestamp','posbin_from_pc_timestamp']])
+    
+    # add a column with the number of frames in each position bin
+    posbin_data['nframes_in_posbin'] = framewise.groupby(groupby_cols, observed=False).size()
+    # replace frame_ with posbin_ in the column names
+    renamer = {col: col.replace('frame_', 'posbin_') for col in posbin_data.columns}
+    posbin_data.rename(columns=renamer, inplace=True)
+    
+    posbin_data = posbin_data.groupby(level='trial_id').apply(aT.interp_missing_pos_bins)
+    posbin_data.reset_index(level=[0,1], drop=True, inplace=True) # drop trial_id, already have it
+    # from_cm_position_bin, to_cm_position_bin, trial_id back into df
+    posbin_data.reset_index(inplace=True)
+    return posbin_data
 
 def get_Behavior40msAligned(fr, behavior):
-    def align_frame_to_ephys_bins(session_ephys, session_behavior):
-        # Create interval index for ephys bins
-        ephys_intervals = pd.IntervalIndex.from_arrays(
-            session_ephys['from_ephys_timestamp'],
-            session_ephys['to_ephys_timestamp'],
-            closed='right'
-        )
-        
-        # Assign each frame to an ephys bin
-        frame_bin_assignment = pd.cut(
-            session_behavior['frame_ephys_timestamp'],
-            bins=ephys_intervals,
-            labels=np.arange(len(ephys_intervals))
-        )
-        
-        # Add bin assignment back to frame data
-        session_behavior = session_behavior.copy()
-        session_behavior['ephys_bin_id'] = frame_bin_assignment
-        
-        # Group frames by ephys bins and aggregate
-        grouped_data = session_behavior.groupby('ephys_bin_id').agg({
-            "frame_velocity": 'mean',
-            "frame_acceleration": 'mean',
-            "frame_raw": 'mean',
-            "frame_yaw": 'mean',
-            "frame_pitch": 'mean',
-            "lick_count": 'sum',
-
-            "trial_id": 'first',
-            "cue": 'first',
-            "trial_outcome": 'first',
-            "choice_R1": 'first',
-            "choice_R2": 'first',
-            "trial_start_pc_timestamp": 'first',
-
-            "facecam_pose_nose_neck_body1_angle": 'mean',
-            "facecam_pose_nose_neck_body1_angle_likelihood": 'mean',
-            "facecam_pose_nose_neck_body1_angle_velocity": 'mean',
-            
-            "zone_before_reward1": 'mean',
-            "zone_before_reward2": 'mean',
-            "zone_between_cues": 'mean',
-            "zone_cue2": 'mean',
-            "zone_cue2_passed": 'mean',
-            "zone_cue2_visible": 'mean',
-            "zone_post_reward": 'mean',
-            "zone_reward1": 'mean',
-            "zone_reward2": 'mean',
-            
-            # state based
-            "track_zone": 'first',
-            "frame_position": 'mean',
-            
-            # "reward-removed_count": 'sum',
-            "reward-sound_count": 'sum',
-            "reward-valve-open_count": 'sum',
-        })
-        
-        # Add ephys bin timestamps
-        grouped_data['from_ephys_timestamp'] = session_ephys['from_ephys_timestamp'].values
-        grouped_data['to_ephys_timestamp'] = session_ephys['to_ephys_timestamp'].values
-
-        # zone columns back to bool type
-        zone_cols = [col for col in grouped_data.columns if col.startswith('zone_')]
-        for col in zone_cols:
-            grouped_data[col] = grouped_data[col] > 0.5
-        
-        return grouped_data
-
-    def dilate_post_events(event_timeseries, n_bins_after=4):
-        dilated = event_timeseries.copy()
-        # Find indices where events occur
-        event_indices = np.where(event_timeseries == 1)[0]
-        # For each event, set the next n_bins to 1
-        for idx in event_indices:
-            dilated[idx:min(idx + n_bins_after + 1, len(event_timeseries))] = 1
-        return dilated
+    # Create interval index for ephys bins
+    ephys_intervals = pd.IntervalIndex.from_arrays(
+        fr['from_ephys_timestamp'],
+        fr['to_ephys_timestamp'],
+        closed='right'
+    )
     
-    # Clean up behavior variables with proper pandas operations
-    def preprocess_behavior(behavior_aligned):
-        """Clean and preprocess behavior variables."""
-        df = behavior_aligned.copy()
-        
-        # seeing which cue
-        frame_visible = (behavior_aligned['frame_position'] > -120) & (behavior_aligned['frame_position'] < 25)
-        # 0: no cue visible, 1: cue1 visible, 2: cue2 visible
-        df['visible_cue'] = frame_visible.astype(float)
-        df['visible_cue'][(df['visible_cue'] == 1) & (behavior_aligned['cue'] == 2)] = 2
-        
-        # Velocity and raw movement
-        df['frame_velocity'] = df['frame_velocity'].clip(0, 200)
-        # 4 abs_frame_raw quantile binning
-        df['frame_raw_quantile'] = pd.qcut(df['frame_raw'], q=4, labels=False, duplicates='drop')
-
-        # Acceleration components
-        df['frame_acceleration'] = df['frame_acceleration'].clip(-100, 100)
-        df['abs_frame_acceleration'] = df['frame_acceleration'].abs()
-        df['frame_positive_acceleration'] = df['frame_acceleration'].clip(0,100)
-        df['frame_negative_acceleration'] = df['frame_acceleration'].clip(-100,0)
-
-        # Yaw components
-        df['abs_frame_yaw'] = df['frame_yaw'].abs()
-        df['frame_yaw_left'] = df['frame_yaw'].clip(-1e6, 0)
-        df['frame_yaw_right'] = df['frame_yaw'].clip(0, 1e6)
-
-        # Pitch components
-        df['abs_frame_pitch'] = df['frame_pitch'].abs()
-        df['frame_pitch_left'] = df['frame_pitch'].clip(-1e6, 0)
-        df['frame_pitch_right'] = df['frame_pitch'].clip(0, 1e6)
-        
-        # Position clipping
-        iti_mask = (df['frame_position'] > 260) | (df['frame_position'] < -165)
-        df.loc[iti_mask, 'frame_position'] = np.nan
-        df['track_zone'] = behavior_aligned['track_zone']
-
-        df['lick_count'] = df['lick_count'].clip(0, 1)
-        df['post_lick'] = dilate_post_events(df['lick_count'].values, n_bins_after=2)
-        df['post_reward_sound'] = dilate_post_events(df['reward-sound_count'].values, n_bins_after=6)
-        df['post_reward'] = dilate_post_events(df['reward-valve-open_count'].values, n_bins_after=6)
-        
-        
-        # apply likelihood thresholding to angle and angle velocity
-        thr = .5
-        angle_mask = behavior_aligned[f"facecam_pose_nose_neck_body1_angle_likelihood"] > thr
-        df['head_angle'] = behavior_aligned['facecam_pose_nose_neck_body1_angle']
-        df.loc[~angle_mask, 'head_angle'] = np.nan
-
-        # left right split
-        head_angle_left_mask = df['facecam_pose_nose_neck_body1_angle'] < df['facecam_pose_nose_neck_body1_angle'].median()
-        df['head_angle_left'] = behavior_aligned['facecam_pose_nose_neck_body1_angle']
-        df.loc[~head_angle_left_mask, 'head_angle_left'] = np.nan
-        df['head_angle_right'] = behavior_aligned['facecam_pose_nose_neck_body1_angle']
-        df.loc[head_angle_left_mask, 'head_angle_right'] = np.nan
-
-        df['head_angle_velocity'] = behavior_aligned['facecam_pose_nose_neck_body1_angle_velocity']
-        df.loc[~angle_mask, 'head_angle_velocity'] = np.nan
-        
-        # left right
-        head_angle_left_mask = df['facecam_pose_nose_neck_body1_angle_velocity'] < df['facecam_pose_nose_neck_body1_angle_velocity'].median()
-        df['head_angle_velocity_left'] = behavior_aligned['facecam_pose_nose_neck_body1_angle_velocity']
-        df.loc[~head_angle_left_mask, 'head_angle_velocity_left'] = np.nan
-        df['head_angle_velocity_right'] = behavior_aligned['facecam_pose_nose_neck_body1_angle_velocity']
-        df.loc[head_angle_left_mask, 'head_angle_velocity_right'] = np.nan
-
-        
-        df['zone_before_reward1'] = behavior_aligned['zone_before_reward1'].astype(float)
-        df['zone_before_reward2'] = behavior_aligned['zone_before_reward2'].astype(float)
-        df['zone_between_cues'] = behavior_aligned['zone_between_cues'].astype(float)
-        df['zone_cue2'] = behavior_aligned['zone_cue2'].astype(float)
-        df['zone_cue2_passed'] = behavior_aligned['zone_cue2_passed'].astype(float)
-        df['zone_cue2_visible'] = behavior_aligned['zone_cue2_visible'].astype(float)
-        df['zone_post_reward'] = behavior_aligned['zone_post_reward'].astype(float)
-        df['zone_reward1'] = behavior_aligned['zone_reward1'].astype(float)
-        df['zone_reward2'] = behavior_aligned['zone_reward2'].astype(float)
-
-        # Reorder columns
-        column_order = [
-            'trial_id',
-            'cue',
-            'trial_outcome',
-            'choice_R1',
-            'choice_R2',
-            'trial_start_pc_timestamp',
-            'from_ephys_timestamp',
-            'to_ephys_timestamp',
-            
-            # forward velocity related
-            'frame_velocity',
-            'frame_raw',
-            'frame_raw_quantile',
-            
-            # acceleration related
-            'frame_acceleration',
-            'abs_frame_acceleration',
-            'frame_positive_acceleration',
-            'frame_negative_acceleration',
-
-            # yaw related
-            'frame_yaw',
-            'frame_yaw_left',
-            'frame_yaw_right',
-
-            # pitch related
-            'frame_pitch',
-            'frame_pitch_left',
-            'frame_pitch_right',
-            
-            'lick_count',
-            'post_lick',
-            'post_reward_sound',
-            'post_reward',
-            
-            # zone_before_reward1	zone_before_reward2	zone_between_cues	zone_cue2	zone_cue2_passed	zone_cue2_visible	zone_post_reward	zone_reward1	zone_reward2
-            'frame_position',
-            'visible_cue',
-            # 'track_zone',
-            'zone_before_reward1',
-            'zone_before_reward2',
-            'zone_between_cues',
-            
-            'zone_cue2',
-            'zone_cue2_passed',
-            'zone_cue2_visible',
-            'zone_post_reward',
-            'zone_reward1',
-            'zone_reward2',
-
-            'head_angle',
-            'head_angle_left',
-            'head_angle_right',
-
-            'head_angle_velocity',
-            'head_angle_velocity_left',
-            'head_angle_velocity_right',
-        ]
-        return df[column_order]
-
-    iti_mask = (behavior['frame_position'] > 260) | (behavior['frame_position'] < -160)
-    behavior['track_zone'] = behavior['track_zone'].cat.add_categories(['ITI'])
-    behavior.loc[iti_mask, 'track_zone'] = 'ITI'
-
-    # add columns for each zone, one hot encoding
-    behavior['track_zone'].unique()
-    zone_dummies = pd.get_dummies(behavior['track_zone'], prefix='zone')
-
-    # concatenate back to behavior
-    behavior = pd.concat([behavior, zone_dummies], axis=1)
+    # Assign each frame to an ephys bin
+    frame_bin_assignment = pd.cut(
+        behavior['frame_ephys_timestamp'],
+        bins=ephys_intervals,
+        labels=np.arange(len(ephys_intervals))
+    )
     
-    behavior_aligned = align_frame_to_ephys_bins(fr, behavior)
-        
-    # Apply preprocessing
-    behavior_aligned_cleaned = preprocess_behavior(behavior_aligned).reset_index(drop=True)
-    return behavior_aligned_cleaned
+    # Add bin assignment back to frame data
+    behavior['ephys_bin_id'] = frame_bin_assignment
+
+    # Group frames by ephys bins and aggregate
+    behavior_aligned = behavior.groupby('ephys_bin_id').agg(aT.column2agg_map(behavior.columns))
+    
+    # Add ephys bin timestamps
+    behavior_aligned['from_ephys_timestamp'] = fr['from_ephys_timestamp'].values
+    behavior_aligned['to_ephys_timestamp'] = fr['to_ephys_timestamp'].values
+    return behavior_aligned
 
 def get_TrialWiseT0Events40ms(behavior):
     def select_t0_events(trial_beh):

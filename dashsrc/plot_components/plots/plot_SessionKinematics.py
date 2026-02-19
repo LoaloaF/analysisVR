@@ -11,23 +11,23 @@ from .general_plot_helpers import make_discr_trial_cmap
 
 from dashsrc.components.dashvis_constants import *
 
-def _parse_args(n_trials, group_by, metric, metric_max):
+def _parse_args(n_trials, group_by, metric, metric_max, smooth_data):
     # parse arguemnts and set defaults    
     if metric == 'Velocity':
         metric_col = 'posbin_velocity'
         y_axis_label = 'Velocity [cm/s]'
         y_axis_range = 0, metric_max
     elif metric == 'Acceleration':
-        metric_col = 'posbin_acceleration'
+        metric_col = 'posbin_acc'
         y_axis_label = 'Acceleration [cm/s^2]'
         y_axis_range = -metric_max, metric_max
     elif metric == 'Lick':
-        metric_col = 'lick_count'
+        metric_col = 'lick_detected'
         y_axis_label = 'Lick count'
         y_axis_range = 0, metric_max
         
     elif metric == 'RawYawPitch Sum Velocity':
-        metric_col = 'posbin_RawYawPitch_abs_velocity_sum'
+        metric_col = 'posbin_RawYawPitch_abs_vel_sum'
         y_axis_label = 'RawYawPitch Sum Velocity [cm/s]'
         y_axis_range = 0, metric_max
     
@@ -46,6 +46,8 @@ def _parse_args(n_trials, group_by, metric, metric_max):
         y_axis_label = 'BallRotation Velocity [cm/s]'
         y_axis_range = -metric_max/2, metric_max/2
         
+    if smooth_data and metric not in ['Lick', 'Velocity', 'Acceleration']:
+        metric_col = metric_col + '_500msMedian'
     
     # Determine the color column and color mapping
     if group_by == 'Outcome':
@@ -198,14 +200,14 @@ def render_plot(all_data, metadata, n_trials, group_by, group_by_values, metric,
         
     fig = make_kinematics_figure(height=height)
     # parse the arguments
-    _ = _parse_args(n_trials, group_by, metric, metric_max)
+    _ = _parse_args(n_trials, group_by, metric, metric_max, smooth_data)
     metric_col, y_axis_label, y_axis_range, group_col, cmap, cmap_transparent = _
     
     for session_id, data in all_data.groupby(level='session_id'):
         # handle the data
         # Smooth the data with exponential moving average
-        if smooth_data:
-            data[metric_col] = data[metric_col].rolling(window=10, center=True, min_periods=1).mean()
+        # if smooth_data:
+        #     data[metric_col] = data[metric_col].rolling(window=30, center=True, min_periods=1).median()
         
         # # last spatial bins can ba NaN, remove them
         # min_max_pos_bin = data['from_position_bin'].min(), data['from_position_bin'].max()
@@ -233,7 +235,7 @@ def render_plot(all_data, metadata, n_trials, group_by, group_by_values, metric,
         if data['both_R1_R2_rewarded'].dropna().iloc[0] == 1:
             draw_cues = []
             double_rewards = True
-        if data['flip_Cue1R1_Cue2R2'].dropna().any() or session_id >= 27:
+        if data['flip_Cue1R1_Cue2R2'].dropna().any():# or session_id >= 27:
             flipped = True
         
         min_track, max_track = data['from_position_bin'].min(), data['from_position_bin'].max()

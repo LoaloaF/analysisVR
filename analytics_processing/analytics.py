@@ -445,33 +445,26 @@ def _compute_sess_analytic(analytic, session_fullfname):
             L.logger.warning("Missing lower level analytic")
             return None
         
-        cols = ["frame_ephys_timestamp",
-            "frame_pc_timestamp",
-            "trial_start_pc_timestamp",
-            # generally useful
-            "trial_id",
-            "cue",
-            "trial_outcome",
-            "choice_R1",
-            "choice_R2",
-            # action based
-            "frame_velocity",
-            "frame_acceleration",
-            "frame_raw",
-            "frame_yaw",
-            "frame_pitch",
-            "lick_count",
-            # action from camera pose
-            "facecam_pose_nose_neck_body1_angle",
-            "facecam_pose_nose_neck_body1_angle_likelihood",
-            "facecam_pose_nose_neck_body1_angle_velocity",
-            
-            # state based
-            "frame_position",
-            "track_zone",
-            # "reward-removed_count",
-            "reward-sound_count",
-            "reward-valve-open_count",
+        cols = ["frame_ephys_timestamp", "frame_pc_timestamp",
+                # generally useful
+                "trial_id", "cue", "trial_outcome", "choice_R1", "choice_R2",
+                # forward velocity and acc
+               'frame_raw_500msMedian', 'frame_raw_abs_acc_500msMedian', 
+               # off rotations velocity
+               'frame_YawPitch_abs_vel_sum_500msMedian', 'frame_YawPitch_abs_acc_sum_500msMedian', 
+               # sum for reward threshold and acc
+               'frame_RawYawPitch_abs_vel_sum_500msMedian', 'frame_RawYawPitch_abs_acc_sum_500msMedian',
+               # derived metrics
+               'frame_forward_prop',
+               'forward_vs_rotation_corr',
+               # count based events
+               'lick_detected', 'reward-sound_detected', 'reward-valve-open_detected', # 'reward-removed_detected', can be missing TODO, fix
+                # position info
+                "frame_position", "track_zone",
+                # action from camera pose
+                "facecam_pose_nose_neck_body1_angle",
+                "facecam_pose_nose_neck_body1_angle_likelihood",
+                "facecam_pose_nose_neck_body1_angle_velocity",
         ]
         behavior = get_analytics('BehaviorFramewise', session_names=[session_name], 
                                  columns=cols)

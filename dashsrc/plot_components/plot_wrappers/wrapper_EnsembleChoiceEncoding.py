@@ -15,14 +15,14 @@ from .data_selection_components import (
     event_dropdown_component,
     session_range_slider_component,
     
-    metric_radioitems_component,
+    # metric_radioitems_component,
     groupby_radioitems_component,
-    variance_radioitems_component,
+    # variance_radioitems_component,
     outcome_group_filter_component,
     cue_group_filter_component,
     trial_group_filter_component,
-    max_metric_input_component,
-    smooth_checklist_component,
+    # max_metric_input_component,
+    # smooth_checklist_component,
     
 
     register_animal_dropdown_callback,
@@ -55,10 +55,10 @@ def render(app: Dash, global_data: dict, vis_name: str) -> html.Div:
     # session_dropd, SESSION_DROPD_ID = session_dropdown_component(*comp_args)
     # these don't need global_data to be initialized    
     groupby_radioi, GROUPBY_RADIOI_ID = groupby_radioitems_component(vis_name)
-    metrics_radioi, METRICS_RADIOI_ID = metric_radioitems_component(vis_name)
-    maxmetric_inp, MAXMETRIC_INP_ID = max_metric_input_component(vis_name, initial_value=80)
-    smooth_checkl, SMOOTH_CHECKL_ID = smooth_checklist_component(vis_name)
-    varianve_radioi, VARIANCE_RADIOI_ID = variance_radioitems_component(vis_name)
+    # metrics_radioi, METRICS_RADIOI_ID = metric_radioitems_component(vis_name)
+    # maxmetric_inp, MAXMETRIC_INP_ID = max_metric_input_component(vis_name, initial_value=80)
+    # smooth_checkl, SMOOTH_CHECKL_ID = smooth_checklist_component(vis_name)
+    # varianve_radioi, VARIANCE_RADIOI_ID = variance_radioitems_component(vis_name)
     outcome_filter, OUTCOME_FILTER_ID = outcome_group_filter_component(vis_name)
     cue_filter, CUE_FILTER_ID = cue_group_filter_component(vis_name)
     trial_filter, TRIAL_FILTER_ID = trial_group_filter_component(vis_name)
@@ -73,10 +73,10 @@ def render(app: Dash, global_data: dict, vis_name: str) -> html.Div:
         Input(EVENT_DROPD_ID, 'value'),
         Input(SESSION_SLIDER_ID, 'value'),
         Input(GROUPBY_RADIOI_ID, 'value'),
-        Input(METRICS_RADIOI_ID, 'value'),
-        Input(MAXMETRIC_INP_ID, 'value'),
-        Input(SMOOTH_CHECKL_ID, 'value'),
-        Input(VARIANCE_RADIOI_ID, 'value'),
+        # Input(METRICS_RADIOI_ID, 'value'),
+        # Input(MAXMETRIC_INP_ID, 'value'),
+        # Input(SMOOTH_CHECKL_ID, 'value'),
+        # Input(VARIANCE_RADIOI_ID, 'value'),
         Input(OUTCOME_FILTER_ID, 'value'),
         Input(CUE_FILTER_ID, 'value'),
         Input(TRIAL_FILTER_ID, 'value'),
@@ -84,7 +84,7 @@ def render(app: Dash, global_data: dict, vis_name: str) -> html.Div:
         Input(R2_CHOICE_FILTER_ID, 'value'),
     )
     def update_plot(selected_animal, ens_selection, event_selection, session_slider, group_by, 
-                    metric, metric_max, smooth_data, var_viz,
+                    # metric, metric_max, smooth_data, var_viz,
                     outcome_filter, cue_filter, trial_filter,
                     R1_choice_filter, R2_choice_filter):
 
@@ -170,13 +170,13 @@ def render(app: Dash, global_data: dict, vis_name: str) -> html.Div:
                         *animal_dropd,
                         *ensemble_dropd,
                         *event_dropd,
-                        *metrics_radioi,
+                        # *metrics_radioi,
                     ], width=4),
                     
                     # Other options in middle column
                     dbc.Col([
                         # Radioitems for group by selection and variance visualization
-                        *groupby_radioi, *varianve_radioi,
+                        *groupby_radioi, # *varianve_radioi,
                     ], width=4),
                     
                     # Other options in right column
@@ -184,7 +184,7 @@ def render(app: Dash, global_data: dict, vis_name: str) -> html.Div:
                         # Filter checklist, max metric and smooth global_data
                         *outcome_filter, *cue_filter, *trial_filter, *R1_choice_filter, *R2_choice_filter,
                         html.Hr(),
-                        *maxmetric_inp, *smooth_checkl,
+                        # *maxmetric_inp, *smooth_checkl,
                     ], width=4),
                 ]),
                 dbc.Row([

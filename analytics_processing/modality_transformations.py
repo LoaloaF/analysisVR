@@ -221,23 +221,6 @@ def frame_wise_ball_velocity(frames, ball_vel):
     frame_wise_ryp['frame_yaw'] *= UNITY_YAW_ROTATE_NORM_TO_CM
     frame_wise_ryp['frame_pitch'] *= UNITY_PITCH_SIDE_NORM_TO_CM
     
-    # clip these three columns to 99.95 percentile to avoid extreme outliers
-    frame_wise_ryp_raw = frame_wise_ryp.copy()
-    for col in ['frame_raw', 'frame_yaw', 'frame_pitch']:
-        upper_bound = frame_wise_ryp[col].quantile(0.9999)
-        lower_bound = frame_wise_ryp[col].quantile(0.0001)
-        # set to nan instead of clipping
-        frame_wise_ryp[col] = frame_wise_ryp[col].where(
-            (frame_wise_ryp[col] >= lower_bound) & (frame_wise_ryp[col] <= upper_bound), 
-            other=np.nan)
-        # print what percentage of frames (and n) were clipped
-        n_clipped = (frame_wise_ryp[col] != frame_wise_ryp_raw[col]).sum()
-        if n_clipped == 0:
-            continue
-        pct_clipped = n_clipped / frame_wise_ryp.shape[0] * 100
-        Logger().logger.debug(f"Clipped {n_clipped} frames ({pct_clipped:.4f}%)"
-                              f" in column {col} to bounds [{lower_bound:.4f}, "
-                              f"{upper_bound:.4f}]")
     return frame_wise_ryp
 
 
@@ -319,7 +302,8 @@ def calc_trialwise_metrics(trials, track_kinematics, trial_variable):
     return result
 
 def unity_modality_track_spatial_bins(frames):
-    z = frames['frame_z_position'].astype(int)
+    z = np.floor(frames['frame_z_position'])
+    
     bin_edges = np.arange(z.min(), z.max()+1, 1)
     binned_pos = pd.cut(z, bins=bin_edges, right=False)
     from_z_position = binned_pos.values.map(lambda interval: interval.left, 
@@ -328,9 +312,159 @@ def unity_modality_track_spatial_bins(frames):
                                             na_action='ignore')
     return from_z_position, to_z_position
 
+def fix_trial_id_in_ITI(frames):
+    """
+    Fix trial_id in ITI zones: trial_id should carry forward from the preceding trial,
+    not be -1. Uses vectorized numpy operations for performance.
+    
+    Logic:
+    - ITI zones after a valid trial should have that trial's ID (forward fill)
+    - Initial frames before any trial starts remain NaN (track_zone is also NaN there)
+    """
+    trial_id = frames['trial_id'].values.copy().astype(float)
+    is_iti = (frames['track_zone'] == "ITI").values | (trial_id == -1)
+    
+    # Set all ITI frames to -1 first (as per original logic)
+    trial_id[is_iti] = -1
+    
+    # Find frames where we have a valid positive trial_id (not -1 and not NaN)
+    is_valid_trial = (trial_id > 0) & ~np.isnan(trial_id)
+    
+    # Find transition points: where trial_id goes from positive to -1
+    # These are the boundaries where we need to start forward-filling
+    shifted_trial_id = np.roll(trial_id, 1)
+    shifted_trial_id[0] = np.nan  # First element has no predecessor
+    
+    # Transitions from valid trial (>0) to ITI (-1)
+    transition_to_iti = (shifted_trial_id > 0) & (trial_id == -1)
+    
+    # Create a "last valid trial_id" array using cumulative maximum approach
+    # First, create an array where valid trials keep their ID, others get NaN
+    valid_trial_markers = np.where(is_valid_trial, trial_id, np.nan)
+    
+    # Forward fill the valid trial IDs using pandas (efficient)
+    valid_trial_filled = pd.Series(valid_trial_markers).ffill().values
+    
+    # Apply the forward-filled trial_id only to ITI frames that come after a valid trial
+    # (where valid_trial_filled is not NaN)
+    iti_after_valid_trial = is_iti & ~np.isnan(valid_trial_filled)
+    trial_id[iti_after_valid_trial] = valid_trial_filled[iti_after_valid_trial]
+    
+    # Convert back to pandas Series with original index
+    new_trial_id = pd.Series(trial_id, index=frames.index)
+    
+    # the first frame still has trial_id -1, set to NaN
+    assert (new_trial_id==-1).sum() <= 1, "More than one frame with trial_id -1 after fixing!"
+    new_trial_id.replace(-1, np.nan, inplace=True)
+    
+    # from matplotlib import pyplot as plt
+    # plt.close('all')
+    # plt.figure(figsize=(20,6))
+    # # plt.ylim(-170, 270)
+    # n_frames = 9000
+    # # plt.scatter(frames['frame_id'][:n_frames], frames['trial_id'][:n_frames], s=1, color='blue', label='original trial_id', alpha=0.5)
+    # plt.scatter(frames['frame_id'][:n_frames], new_trial_id[:n_frames], s=1, color='red', label='fixed trial_id', alpha=0.5)
+    # plt.vlines(frames['frame_id'][transition_to_iti][:3], ymin=0, ymax=4, color='green', linestyles='dashed', label='transition to ITI')
+    # plt.legend()
+    # plt.savefig("iti_z_position.png")
+    return new_trial_id
+
+def calculate_additional_kinematic_features(raw_yaw_pitch, tstamps, r_exponent=5, window_size=30, still_vel_threshold=2.5):
+        # create frame_(raw|yaw|pitch)_500msMedian smoothed velocity columns
+        raw_yaw_pitch_smoothed = pd.DataFrame(index=raw_yaw_pitch.index)
+        # create ...abs_acc_500msMedian smoothed acceleration columns
+        raw_yaw_pitch_acc_abs_smoothed = pd.DataFrame(index=raw_yaw_pitch.index)
+        for col in raw_yaw_pitch.columns:
+            smthd_vel = raw_yaw_pitch[col].rolling(window=30, center=True, min_periods=5).median()
+            raw_yaw_pitch_smoothed[col + '_500msMedian'] = smthd_vel
+            
+            smthd_abs_acc = np.gradient(smthd_vel.abs().values, tstamps) # convert us to s
+            raw_yaw_pitch_acc_abs_smoothed[col + '_abs_acc_500msMedian'] = np.abs(smthd_abs_acc)
+        
+        sum_kinem = pd.DataFrame(index=raw_yaw_pitch.index)
+        # sum over all non smoothed vel (reward threshold is based on this)
+        sum_kinem['frame_RawYawPitch_abs_vel_sum'] = raw_yaw_pitch.abs().sum(axis=1)
+        
+        # sum over all smoothed vel and acc 
+        sum_kinem['frame_RawYawPitch_abs_vel_sum_500msMedian'] = raw_yaw_pitch_smoothed.abs().sum(axis=1)
+        sum_kinem['frame_RawYawPitch_abs_acc_sum_500msMedian'] = raw_yaw_pitch_acc_abs_smoothed.sum(axis=1)
+
+        # abs vel and acc mean columns for yaw and pitch (off rotations)
+        off_rot_vel = raw_yaw_pitch_smoothed[['frame_yaw_500msMedian', 'frame_pitch_500msMedian']].abs().sum(axis=1)
+        off_rot_acc = raw_yaw_pitch_acc_abs_smoothed[['frame_yaw_abs_acc_500msMedian', 'frame_pitch_abs_acc_500msMedian']].sum(axis=1)
+        sum_kinem['frame_YawPitch_abs_vel_sum_500msMedian'] = off_rot_vel
+        sum_kinem['frame_YawPitch_abs_acc_sum_500msMedian'] = off_rot_acc
+        
+        # within a rolling window, calculate the correlation between forward velocity 
+        # and off-rotation velocity, an raise to uneven power to reduce extreme values (r is inflated)
+        # differences (since correlation is often close to 0 in this case)
+        # also need clip, for some strange reason (5=6 frames)... 
+        rolling_corr = off_rot_vel.rolling(window=window_size, center=True) \
+                                  .corr(raw_yaw_pitch_smoothed['frame_raw_500msMedian']) \
+                                  .clip(-1, 1) ** r_exponent
+        rolling_corr = rolling_corr.rename('forward_vs_rotation_corr').to_frame().fillna(0)
+        # assert (((rolling_corr>1) | (rolling_corr<-1)).sum() == 0).any(), f"Found {((rolling_corr>1) | (rolling_corr<-1)).sum()} values outside [-1,1] range"
+
+        # forward proportion
+        forwrd_prop = raw_yaw_pitch_smoothed['frame_raw_500msMedian']/ sum_kinem['frame_RawYawPitch_abs_vel_sum_500msMedian']
+        forwrd_prop = forwrd_prop.clip(0, 1) # very rarely, can be negative if ball rotation reversed
+        still_mask = sum_kinem['frame_RawYawPitch_abs_vel_sum_500msMedian'] < still_vel_threshold
+        forwrd_prop[still_mask] = 0.5 # if the animal is still, set forward prop to 0.5, un reliable at low velocities
+        forwrd_prop = forwrd_prop.rename('frame_forward_prop').to_frame()
+
+        return pd.concat([raw_yaw_pitch_smoothed, raw_yaw_pitch_acc_abs_smoothed, 
+                          sum_kinem, rolling_corr, forwrd_prop], axis=1)
+
+def calculate_below_vel_thr(kinematics, thresholds):
+    """
+    Calculate whether velocity is below threshold in reward zones.
+    
+    Parameters:
+    -----------
+    kinematics : DataFrame
+        Contains columns: frame_RawYawPitch_abs_vel_sum, fps, track_zone, trial_id
+    thresholds : DataFrame
+        Contains columns: velocity_threshold_at_R1, velocity_threshold_at_R2
+        Index is trial_id
+    
+    Returns:
+    --------
+    Series
+        1 if below threshold in reward zone, 0 if above threshold, NaN elsewhere
+    """
+    thresholds.set_index('trial_id', inplace=True, drop=False)
+    
+    def check_below_thr(trial_frames):
+        below_thr_res = pd.Series(index=trial_frames.index, dtype='float')
+        # geth scaler value for this trial
+        trial_id = trial_frames['trial_id'].iloc[0]
+        r1_thr, r2_thr = thresholds.loc[trial_id, ['velocity_threshold_at_R1', 'velocity_threshold_at_R2']]
+        
+        # for those frames we will set a bool if < threshold, for the rest it will remain NaN
+        r1_zone_mask = trial_frames['track_zone'] == 'reward1Zone'
+        r2_zone_mask = trial_frames['track_zone'] == 'reward2Zone'
+        r1_thr *= trial_frames.loc[r1_zone_mask, 'fps'].astype(float)
+        below_thr_res[r1_zone_mask] = (trial_frames.loc[r1_zone_mask, 'frame_RawYawPitch_abs_vel_sum'] < r1_thr).astype(float)
+        r2_thr *= trial_frames.loc[r2_zone_mask, 'fps'].astype(float)
+        below_thr_res[r2_zone_mask] = (trial_frames.loc[r2_zone_mask, 'frame_RawYawPitch_abs_vel_sum'] < r2_thr).astype(float)
+        return below_thr_res
+        
+    below_thr_frames = kinematics.groupby('trial_id').apply(check_below_thr, include_groups=True)
+    # drop the trial_id level from the index
+    below_thr_frames = below_thr_frames.reset_index(level=0, drop=True) 
+    return below_thr_frames
+
+
+# def calculate_rolling_metrics(rotation_vel, forward_vel, window_size, debug=True, r_exponent=5, n_windows=5):
+#     rolling_corr = rotation_vel.rolling(window=window_size, center=True).corr(forward_vel).clip(-1, 1) ** r_exponent
+    
+    
+    
+#     return rolling_corr
+
+        
 def unity_modality_track_zones(frames, track_details):
     # Extract start and end positions from the dictionary
-    # intervals = [(details['start_pos'], details['end_pos']) for details in track_details.values()]
     intervals = track_details.values()
     
     # Create an IntervalIndex from the list of tuples
@@ -360,7 +494,14 @@ def unity_modality_track_kinematics(frames):
                              name='frame_z_acceleration')
     return velocity, acceleration # in cm/s, cm/s^2
 
-
+def dilate_post_events(event_timeseries, n_bins_after=5):
+    dilated = event_timeseries.copy()
+    # Find indices where events occur
+    event_indices = np.where(event_timeseries == 1)[0]
+    # For each event, set the next n_bins to 1
+    for idx in event_indices:
+        dilated[idx:min(idx + n_bins_after + 1, len(event_timeseries))] = 1
+    return dilated
 
 
 
@@ -465,57 +606,57 @@ def fix_ephys_timestamps_offset(data):
 
 
 
-def transform_to_position_bin_index(data):
-    Logger().logger.debug(f"Transforming {data.shape[0]} unity frames to 1cm "
-                          "position bin-index...")
-    def proc_trial_data(trial_data):
-        trial_id = trial_data['trial_id'].iloc[0]
-        if trial_id == -1:
-            return
+# def transform_to_position_bin_index(data):
+#     Logger().logger.debug(f"Transforming {data.shape[0]} unity frames to 1cm "
+#                           "position bin-index...")
+#     def proc_trial_data(trial_data):
+#         trial_id = trial_data['trial_id'].iloc[0]
+#         if trial_id == -1:
+#             return
         
-        # collapse the unity frames corresponding to the same spatial bin, 1cm in size
-        def proc_pos_bin(pos_bin_data):
-            # average over all frames in the spatial bin
-            mean_cols = ['frame_z_position', 'z_velocity', 'z_acceleration']
-            agg_bin_data = pos_bin_data[mean_cols].mean()
+#         # collapse the unity frames corresponding to the same spatial bin, 1cm in size
+#         def proc_pos_bin(pos_bin_data):
+#             # average over all frames in the spatial bin
+#             mean_cols = ['frame_z_position', 'z_velocity', 'z_acceleration']
+#             agg_bin_data = pos_bin_data[mean_cols].mean()
             
-            # if any of the frames in the bin had a reward or lick event
-            all_none_cols = ['frame_reward', 'frame_lick']
-            agg_bin_data = pd.concat([agg_bin_data,pos_bin_data[all_none_cols].any()])
+#             # if any of the frames in the bin had a reward or lick event
+#             all_none_cols = ['frame_reward', 'frame_lick']
+#             agg_bin_data = pd.concat([agg_bin_data,pos_bin_data[all_none_cols].any()])
             
-            # sum the ball velocity components
-            ball_vel_cols = ['frame_raw', 'frame_yaw', 'frame_pitch']
-            agg_bin_data = pd.concat([agg_bin_data, pos_bin_data[ball_vel_cols].sum()])
+#             # sum the ball velocity components
+#             ball_vel_cols = ['frame_raw', 'frame_yaw', 'frame_pitch']
+#             agg_bin_data = pd.concat([agg_bin_data, pos_bin_data[ball_vel_cols].sum()])
             
-            # these columns are identical for all frames in the bin
-            idential_cols = ['trial_id', 'cue', 'trial_outcome', 'zone',
-                            'frame_pc_timestamp', 'binned_pos',]
-            idential_cols = [col for col in idential_cols if col in pos_bin_data.columns]
-            agg_bin_data = pd.concat([agg_bin_data, pos_bin_data[idential_cols].iloc[0]])
+#             # these columns are identical for all frames in the bin
+#             idential_cols = ['trial_id', 'cue', 'trial_outcome', 'zone',
+#                             'frame_pc_timestamp', 'binned_pos',]
+#             idential_cols = [col for col in idential_cols if col in pos_bin_data.columns]
+#             agg_bin_data = pd.concat([agg_bin_data, pos_bin_data[idential_cols].iloc[0]])
             
-            renamer = {'frame_z_position': 'posbin_z_position',
-                    'z_velocity': 'posbin_z_velocity',
-                    'z_acceleration': 'posbin_z_acceleration',
-                    'frame_pc_timestamp': 'posbin_start_pc_timestamp',
-                    'frame_id': 'posbin_start_frame_id',
-                    'frame_reward': 'posbin_reward',
-                    'frame_lick': 'posbin_lick',
-                    'frame_raw': 'posbin_raw',
-                    'frame_yaw': 'posbin_yaw',
-                    'frame_pitch': 'posbin_pitch',
-                    }
-            agg_bin_data.rename(renamer, inplace=True)
-            agg_bin_data['nframes_in_bin'] = pos_bin_data.shape[0]
-            agg_bin_data.name = agg_bin_data['binned_pos']
-            return agg_bin_data
-        # on trial level, group by spatial bin
-        return trial_data.groupby('binned_pos', observed=True).apply(proc_pos_bin)
-    # first, group into trials
-    posbin_data = data.groupby('trial_id').apply(proc_trial_data)
+#             renamer = {'frame_z_position': 'posbin_z_position',
+#                     'z_velocity': 'posbin_z_velocity',
+#                     'z_acceleration': 'posbin_z_acceleration',
+#                     'frame_pc_timestamp': 'posbin_start_pc_timestamp',
+#                     'frame_id': 'posbin_start_frame_id',
+#                     'frame_reward': 'posbin_reward',
+#                     'frame_lick': 'posbin_lick',
+#                     'frame_raw': 'posbin_raw',
+#                     'frame_yaw': 'posbin_yaw',
+#                     'frame_pitch': 'posbin_pitch',
+#                     }
+#             agg_bin_data.rename(renamer, inplace=True)
+#             agg_bin_data['nframes_in_bin'] = pos_bin_data.shape[0]
+#             agg_bin_data.name = agg_bin_data['binned_pos']
+#             return agg_bin_data
+#         # on trial level, group by spatial bin
+#         return trial_data.groupby('binned_pos', observed=True).apply(proc_pos_bin)
+#     # first, group into trials
+#     posbin_data = data.groupby('trial_id').apply(proc_trial_data)
     
-    posbin_data = posbin_data.astype({'posbin_reward': bool, 'posbin_lick': bool})
-    posbin_data.index = posbin_data.index.droplevel(0)
-    return posbin_data    
+#     posbin_data = posbin_data.astype({'posbin_reward': bool, 'posbin_lick': bool})
+#     posbin_data.index = posbin_data.index.droplevel(0)
+#     return posbin_data    
 
 
 
@@ -563,43 +704,43 @@ def transform_to_position_bin_index(data):
 #     return result
 
 
-# join frames and events and aggregate events to frame resolution
-def frame_wise_events(frames, events):
-    # Create intervals for each frame
-    frame_intervals = pd.IntervalIndex.from_arrays(
-        frames['frame_pc_timestamp'],
-        frames['frame_pc_timestamp'].shift(-1, fill_value=frames['frame_pc_timestamp'].iloc[-1] + 16_666),
-        closed='left'
-    )
+# # join frames and events and aggregate events to frame resolution
+# def frame_wise_events(frames, events):
+#     # Create intervals for each frame
+#     frame_intervals = pd.IntervalIndex.from_arrays(
+#         frames['frame_pc_timestamp'],
+#         frames['frame_pc_timestamp'].shift(-1, fill_value=frames['frame_pc_timestamp'].iloc[-1] + 16_666),
+#         closed='left'
+#     )
     
-    # final event postporcessing columns
-    # licking: not, licks, bites, consumes 
-    # reward_available: False, True
-    # sound: S event +250ms
+#     # final event postporcessing columns
+#     # licking: not, licks, bites, consumes 
+#     # reward_available: False, True
+#     # sound: S event +250ms
     
-    # assign each event to a frame interval, initial and final events can be outside of frame intervals
-    events['frame_bin'] = pd.cut(events['event_pc_timestamp'], bins=frame_intervals)
-    events.set_index('frame_bin', inplace=True)
-    # keep only one event per frame
-    events = events[~events.index.duplicated(keep='first')]
+#     # assign each event to a frame interval, initial and final events can be outside of frame intervals
+#     events['frame_bin'] = pd.cut(events['event_pc_timestamp'], bins=frame_intervals)
+#     events.set_index('frame_bin', inplace=True)
+#     # keep only one event per frame
+#     events = events[~events.index.duplicated(keep='first')]
 
-    #TODO: add sound events, vacuum, reward available, etc.
-    #TODO lick has length, calc backwards using value field
-    events = events.reindex(frame_intervals).reset_index(drop=True)
-    events['reward'] = (events['event_name'] == 'R').fillna(False)
-    events['lick'] = (events['event_name'] == 'L').fillna(False)
-    return events['reward'], events['lick']
+#     #TODO: add sound events, vacuum, reward available, etc.
+#     #TODO lick has length, calc backwards using value field
+#     events = events.reindex(frame_intervals).reset_index(drop=True)
+#     events['reward'] = (events['event_name'] == 'R').fillna(False)
+#     events['lick'] = (events['event_name'] == 'L').fillna(False)
+#     return events['reward'], events['lick']
 
-    # trial_i = merged_df[merged_df['trial_id'] == 3].reset_index()
-    # import matplotlib.pyplot as plt
-    # # plt.plot(trial_i['frame_z_position'], label='position')
-    # plt.plot(trial_i['lick'], alpha=.5, label='lick')
-    # plt.plot(trial_i['reward'], alpha=.5, label='reward')
-    # plt.legend()
-    # plt.show()
-    # exit()
+#     # trial_i = merged_df[merged_df['trial_id'] == 3].reset_index()
+#     # import matplotlib.pyplot as plt
+#     # # plt.plot(trial_i['frame_z_position'], label='position')
+#     # plt.plot(trial_i['lick'], alpha=.5, label='lick')
+#     # plt.plot(trial_i['reward'], alpha=.5, label='reward')
+#     # plt.legend()
+#     # plt.show()
+#     # exit()
 
 
 
-def _validate_ballvell_package_ids():
-    pass
+# def _validate_ballvell_package_ids():
+#     pass

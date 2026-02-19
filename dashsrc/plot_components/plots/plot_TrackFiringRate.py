@@ -128,7 +128,7 @@ def _draw_percentile_area_plot(fig, upper_perc, lower_perc, metric_col, transp_c
         name='80th perc.',
     ), row=2, col=1)
     
-def render_plot(track_data, fr, metadata, spike_metadata, metric, n_sessions,
+def render_plot(track_data, fr, metadata, spike_metadata, n_sessions,
                 metric_max, smooth_data, normalize_data, width=-1, height=-1):
     fr = fr.set_index(['trial_id', 'from_position_bin', 'cue', 'choice_R1', 'choice_R2'], append=True, )
     fr.drop(columns=['trial_outcome','bin_length'], inplace=True)

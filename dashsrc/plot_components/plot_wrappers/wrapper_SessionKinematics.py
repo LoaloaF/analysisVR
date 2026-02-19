@@ -86,11 +86,16 @@ def render(app: Dash, global_data: dict, vis_name: str) -> html.Div:
         data = global_data[analytic].loc[pd.IndexSlice[paradigm_slice, animal_slice, 
                                                        session_slice, :]]
         
-        # print("----")
-        # print(data)
+        print("----")
+        print(data)
+        print(data['trial_id'])
+        print("----")
+        print("----")
+        print("----")
         
+        # pr
         # check max trial id for the session, before potential filtering
-        n_trials = data['trial_id'].max().item()
+        n_trials = data['trial_id'].dropna().max().item()
         # filter the data based on the group by values
         data, group_by_values = group_filter_data(data, outcome_filter, cue_filter, 
                                                   trial_filter, group_by=group_by)

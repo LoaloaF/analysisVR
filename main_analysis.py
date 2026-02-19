@@ -53,8 +53,8 @@ def main():
     # Initialize app
     app = dash.Dash(__name__, external_stylesheets=[dbc.themes.BOOTSTRAP])
     app.layout = create_layout(app, loaded_analytics, loaded_raw_traces)
-    # app.run(host="0.0.0.0", port=8050, debug=True)
-    app.run(host="127.0.0.1", port=8055, debug=True)
+    app.run(host="0.0.0.0", port=8050, debug=True)
+    # app.run(host="127.0.0.1", port=8055, debug=True)
 
 if __name__ == '__main__':
     main()

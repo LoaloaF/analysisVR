@@ -27,6 +27,46 @@ def _get_sessions_for_animal(data, selected_animal):
 
     sessions = idx[mask].get_level_values("session_id").unique().tolist()
     return sorted(sessions)
+
+
+def get_session_slice_from_range(data, selected_animal, session_range, selected_paradigm=None):
+    """Map slider positions to actual session ids for the current animal/paradigm selection."""
+    if data is None or selected_animal is None or not session_range:
+        return []
+
+    idx = data.index
+    if not isinstance(idx, pd.MultiIndex) or "session_id" not in idx.names:
+        return []
+
+    animal_vals = idx.get_level_values("animal_id") if "animal_id" in idx.names else None
+    paradigm_vals = idx.get_level_values("paradigm_id") if "paradigm_id" in idx.names else None
+
+    mask = pd.Series(True, index=idx)
+
+    if animal_vals is not None:
+        animal_mask = animal_vals == selected_animal
+        if not animal_mask.any():
+            animal_mask = animal_vals.astype(str) == str(selected_animal)
+        mask &= animal_mask
+
+    if selected_paradigm is not None and paradigm_vals is not None:
+        paradigm_mask = paradigm_vals == selected_paradigm
+        if not paradigm_mask.any():
+            paradigm_mask = paradigm_vals.astype(str) == str(selected_paradigm)
+        mask &= paradigm_mask
+
+    sessions = idx[mask.to_numpy()].get_level_values("session_id").unique().tolist()
+    sessions = sorted(sessions)
+    if not sessions:
+        return []
+
+    i0, i1 = session_range
+    i0 = max(0, int(i0))
+    i1 = min(len(sessions) - 1, int(i1))
+    if i0 > i1:
+        i0, i1 = i1, i0
+
+    return sessions[i0:i1 + 1]
     
 def paradigm_dropdown_component(vis_name, global_data, analytic, multi=False):
     data = global_data[analytic]
@@ -584,7 +624,7 @@ def register_session_dropdown_callback(app, vis_name, global_data, analytic):
         return session_ids
 
 def register_session_slider_callback(app, vis_name, global_data, analytic, 
-                                     default_select_sessions=None):
+                                     default_select_sessions=None, mark_label_style=None):
     # html not used, just ensure that callcack is linked to correct component
     _, session_slider_comp_id = session_range_slider_component(vis_name)
     _, animal_dropd_comp_id = animal_dropdown_component(vis_name, global_data, analytic)
@@ -599,6 +639,12 @@ def register_session_slider_callback(app, vis_name, global_data, analytic,
         data = global_data[analytic]
         if selected_animal is None or data is None:
             return 0, 0, (0, 0), {0: "no sessions"}
+
+        def _mark_label(label):
+            style = {'writing-mode': 'vertical-rl', 'white-space': 'nowrap'}
+            if mark_label_style is not None:
+                style = mark_label_style
+            return {'label': str(label), 'style': style}
 
         # sessions for the selected animal
         sessions = _get_sessions_for_animal(data, selected_animal)
@@ -621,14 +667,14 @@ def register_session_slider_callback(app, vis_name, global_data, analytic,
         else:
             i0, i1 = min_v, max_v
 
-        # Marks: show a readable subset to avoid clutter
-        if n <= 12:
-            marks = {i: sessions[i] for i in range(n)}
+        #show a readable subset to avoid clutter
+        if n <= 20:
+            marks = {i: _mark_label(sessions[i]) for i in range(n)}
         else:
             step = max(1, n // 10)
-            marks = {0: sessions[0], max_v: sessions[-1]}
+            marks = {0: _mark_label(sessions[0]), max_v: _mark_label(sessions[-1])}
             for i in range(0, n, step):
-                marks[i] = sessions[i]
+                marks[i] = _mark_label(sessions[i])
 
         return min_v, max_v, (i0, i1), marks
 

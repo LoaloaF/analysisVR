@@ -2009,7 +2009,10 @@ def get_ensembles_t0_events(
         ensamble_proj.set_index(['session_id'], inplace = True)
 
 
-    interval_cols = [c for c in t0_events.columns if interval_substr in c]
+    interval_cols = [
+        c for c in t0_events.columns
+        if interval_substr in c and not str(c).endswith("_bins")
+    ]
     t0_idx_names = list(t0_events.index.names)
 
     parts = []
@@ -2020,7 +2023,6 @@ def get_ensembles_t0_events(
         try:
             t0_s = t0_events.xs(s_id, level="session_id", drop_level=False)
         except KeyError:
-            print(f"No data for session: {s_id}")
             continue
         
         # Long table of intervals for this session
@@ -2441,4 +2443,3 @@ def get_ConcatenatedEnsambleProj40ms(ens_weights, all_fr_hz):
                                      index=idx)
     
     return assembly_activity
-

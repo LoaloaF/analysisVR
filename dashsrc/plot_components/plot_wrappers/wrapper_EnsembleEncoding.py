@@ -29,6 +29,7 @@ from .data_selection_components import (
     register_session_slider_callback,
     register_ensemble_dropdown_callback,
     register_event_dropdown_callback,
+    get_session_slice_from_range,
     
     # register_session_dropdown_callback,
     # register_paradigm_dropdown_callback,
@@ -37,15 +38,14 @@ from .data_selection import group_filter_data
 from ..plots import plot_SessionKinematics
 
 def render(app: Dash, global_data: dict, vis_name: str) -> html.Div:
-    analytic = 'Ensemble40msProjEventAligned'  # the global_data to be used for the plot
+    analytic = 'EnsembleT0Projection'  # the global_data to be used for the plot
     # components with global_data depedency need these arguments
     comp_args = vis_name, global_data, analytic
     
     # Register the callbacks
     register_animal_dropdown_callback(app, vis_name, global_data, 'SessionMetadata')
-    register_session_slider_callback(app, *comp_args)
+    register_session_slider_callback(app, vis_name, global_data, 'SessionMetadata')
     register_ensemble_dropdown_callback(app, *comp_args)
-    register_event_dropdown_callback(app, *comp_args)
     
     # create the html components to have their IDs (needed for the callbacks)
     animal_dropd, ANIMAL_DROPD_ID = animal_dropdown_component(*comp_args)
@@ -66,6 +66,18 @@ def render(app: Dash, global_data: dict, vis_name: str) -> html.Div:
     R1_choice_filter, R1_CHOICE_FILTER_ID = R1_choice_filter_component(vis_name)
     R2_choice_filter, R2_CHOICE_FILTER_ID = R2_choice_filter_component(vis_name)
     graph, GRAPH_ID = get_general_graph_component(vis_name)
+
+    @app.callback(
+        Output(EVENT_DROPD_ID, 'options'),
+        Input(C.get_vis_name_data_loaded_id(vis_name), 'data'),
+    )
+    def update_event_options(data_loaded):
+        data = global_data[analytic]
+        if not data_loaded or data is None:
+            return []
+        event_col = 'interval_name' if 'interval_name' in data.columns else 't0_event_name'
+        events = data[event_col].dropna().unique()
+        return [{'label': ev, 'value': ev} for ev in events]
     
     @app.callback(
         Output(GRAPH_ID, 'figure'),
@@ -112,17 +124,55 @@ def render(app: Dash, global_data: dict, vis_name: str) -> html.Div:
         #                                         session_ids=session_ids)
         # global_data[analytic].set_index(['session_id', 't0', 'interval_t'], inplace=True,)
         
-        invalid_session_ids = 10, 24, 25
-        data = global_data[analytic][~global_data[analytic].index.get_level_values('session_id').isin(invalid_session_ids)].copy()
+        data = global_data[analytic].copy()
+        invalid_session_ids = {'10', '24', '25'}
+        if isinstance(data.index, pd.MultiIndex) and 'session_id' in data.index.names:
+            keep_mask = ~data.index.get_level_values('session_id').astype(str).isin(invalid_session_ids)
+            data = data[keep_mask].copy()
 
         # ens_selection = 'Assembly012'
         # event_selection = ['enter_afterCueZone',]
         # session_slider = [4, 19]
-        valid_sessions = [sid for sid in range(session_slider[0], session_slider[1] + 1) 
-                        if sid in data.index.unique('session_id')]
+        valid_sessions = get_session_slice_from_range(
+            global_data['SessionMetadata'],
+            selected_animal,
+            session_slider,
+        )
+        if len(valid_sessions) == 0:
+            return {}
 
-        data = data.loc[valid_sessions,]
-        data = data[data.t0_event_name.isin(event_selection)]
+        valid_sessions_str = [str(s) for s in valid_sessions]
+        if isinstance(data.index, pd.MultiIndex) and 'session_id' in data.index.names:
+            sess_vals = data.index.get_level_values('session_id').astype(str)
+            data = data[sess_vals.isin(valid_sessions_str)]
+        elif 'session_id' in data.columns:
+            data = data[data['session_id'].astype(str).isin(valid_sessions_str)]
+        else:
+            data = data.loc[valid_sessions,]
+
+        if 'interval_t' not in data.index.names:
+            data = data.reset_index()
+            if 'from_ephys_timestamp' in data.columns:
+                data = data.sort_values('from_ephys_timestamp')
+            event_group_cols = [c for c in ('session_id', 'trial_id', 't0_event_name', 'interval_name', 't0')
+                                if c in data.columns]
+            data['event_id'] = data.groupby(event_group_cols, sort=False).ngroup()
+            data['interval_t'] = data.groupby('event_id', sort=False).cumcount()
+            data.set_index(['session_id', 'event_id', 'interval_t'], inplace=True)
+
+        if isinstance(event_selection, str):
+            event_selection = [event_selection]
+        selected = set(event_selection)
+        event_col = 't0_event_name'
+        if 'interval_name' in data.columns:
+            t0_overlap = len(selected.intersection(set(data['t0_event_name'].dropna().unique())))
+            interval_overlap = len(selected.intersection(set(data['interval_name'].dropna().unique())))
+            if interval_overlap > t0_overlap:
+                event_col = 'interval_name'
+        data['_event_name'] = data[event_col]
+        data = data[data['_event_name'].isin(event_selection)]
+        if data.empty:
+            return {}
         drp_ens_cols = [c for c in data.columns if c.startswith('Assembly') and c != ens_selection]
         data.drop(columns=drp_ens_cols, inplace=True)
 
@@ -141,6 +191,8 @@ def render(app: Dash, global_data: dict, vis_name: str) -> html.Div:
                                                             r1_choice_filter=R1_choice_filter,
                                                             r2_choice_filter=R2_choice_filter,
                                                             group_by=group_by)
+        if data.empty:
+            return {}
         print(group_by_values)
         # print(global_data[analytic])
 

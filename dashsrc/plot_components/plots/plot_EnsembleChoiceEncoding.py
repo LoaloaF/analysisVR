@@ -5,6 +5,25 @@ from plotly.subplots import make_subplots
 
 import plotly.colors
 
+
+def _get_session_ids(encoding_data):
+    idx = encoding_data.index
+    if isinstance(idx, pd.MultiIndex) and 'session_id' in idx.names:
+        return idx.unique('session_id')
+    if idx.name == 'session_id':
+        return idx.unique()
+    if 'session_id' in encoding_data.columns:
+        return pd.Index(encoding_data['session_id'].unique())
+    return idx.unique()
+
+
+def _format_session_id(session_id):
+    try:
+        return f"{int(session_id):02d}"
+    except (TypeError, ValueError):
+        return str(session_id)
+
+
 def activation_to_color(activation, vmin=0.6, vmax=1.4):
     # Normalize activation to [0, 1]
     norm = (activation - vmin) / (vmax - vmin)
@@ -388,11 +407,13 @@ def render_plot(encoding_data, ens_selection, which_cue='Cue1',
     add_vertical_bars(fig, final_nodes, compute_outgoing_flows(DATA), data, highlight_data, N, HIGHLIGHT_COLOR,
                       post_cue_thr, bef_R1_thr, bef_R2_thr)
 
-    sessions = encoding_data.index.unique('session_id')
+    sessions = _get_session_ids(encoding_data).tolist()
     if len(sessions) > 1:
-        sess_str = f"{sessions[0]:02d}-{sessions[-1]:02d}"
+        sess_str = f"{_format_session_id(sessions[0])}-{_format_session_id(sessions[-1])}"
+    elif len(sessions) == 1:
+        sess_str = _format_session_id(sessions[0])
     else:
-        sess_str = f"{sessions[0]:02d}"
+        sess_str = "NA"
     fig.update_layout(
         title_text=f"{ens_selection} S{sess_str}",
         font_size=8,

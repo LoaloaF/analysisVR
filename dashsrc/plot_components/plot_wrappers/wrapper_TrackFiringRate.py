@@ -21,6 +21,7 @@ from .data_selection_components import (
     register_animal_dropdown_callback,
     register_session_slider_callback,
     register_paradigm_dropdown_callback,
+    get_session_slice_from_range,
 )
 from .data_selection import group_filter_data
 from ..plots import plot_TrackFiringRate
@@ -41,31 +42,14 @@ def calculate_figure(selected_paradigm, selected_animal, session_range,
     if not session_range: 
         return {}
         
-    # Build the available sessions for the selected paradigm+animal
-    idx = global_data[sec_analytic].index
-    available_sessions = (
-        idx[
-            (idx.get_level_values("paradigm_id") == selected_paradigm) &
-            (idx.get_level_values("animal_id") == selected_animal)
-        ]
-        .get_level_values("session_id")
-        .unique()
-        .tolist()
+    session_slice = get_session_slice_from_range(
+        global_data[sec_analytic],
+        selected_animal,
+        session_range,
+        selected_paradigm=selected_paradigm,
     )
-    available_sessions = sorted(available_sessions)
-
-    if len(available_sessions) == 0:
+    if len(session_slice) == 0:
         return {}
-
-    # session_range is positional indices
-    i0, i1 = session_range
-    i0 = max(0, int(i0))
-    i1 = min(len(available_sessions) - 1, int(i1))
-
-    if i0 > i1:
-        i0, i1 = i1, i0
-
-    session_slice = available_sessions[i0:i1 + 1]
 
     
     # paradigm, animal and session filtering
@@ -94,7 +78,7 @@ def calculate_figure(selected_paradigm, selected_animal, session_range,
         
     fig = plot_TrackFiringRate.render_plot(prim_data, sec_data, global_data['SessionMetadata'], 
                                             global_data['SpikeClusterMetadata'],
-                                            metric, n_sessions, metric_max, smooth_data, normalize_data)
+                                            n_sessions, metric_max, smooth_data, normalize_data)
     return fig
 
 

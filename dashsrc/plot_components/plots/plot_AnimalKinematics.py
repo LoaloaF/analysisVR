@@ -79,8 +79,10 @@ def _configure_axis(fig, session_ids, width, height):
         row=2, col=1
     )
     fig.update_yaxes(
-        range=[session_ids[-1]+.5, session_ids[0]-.55],
+        autorange='reversed',
+        tickmode='array',
         tickvals=session_ids,
+        ticktext=[str(s) for s in session_ids],
         zeroline=False,
         ticks='outside',
         title_text="Session ID",

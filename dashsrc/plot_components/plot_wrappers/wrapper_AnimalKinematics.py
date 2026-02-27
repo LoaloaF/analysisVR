@@ -20,6 +20,7 @@ from .data_selection_components import (
     register_animal_dropdown_callback,
     register_session_slider_callback,
     register_paradigm_dropdown_callback,
+    get_session_slice_from_range,
 )
 from .data_selection import group_filter_data
 from ..plots import plot_AnimalKinematics
@@ -81,8 +82,14 @@ def render(app: Dash, global_data: dict, vis_name: str) -> html.Div:
         
         paradigm_slice = slice(selected_paradigm, selected_paradigm)
         animal_slice = slice(selected_animal, selected_animal)
-        session_slice = [sid for sid in np.arange(session_range[0], session_range[1] + 1)
-                         if sid in global_data[analytic].index.unique('session_id')]
+        session_slice = get_session_slice_from_range(
+            global_data[analytic],
+            selected_animal,
+            session_range,
+            selected_paradigm=selected_paradigm,
+        )
+        if len(session_slice) == 0:
+            return {}
         
         # paradigm, animal and session filtering
         data = global_data[analytic].loc[pd.IndexSlice[paradigm_slice, animal_slice, 

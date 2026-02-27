@@ -7,6 +7,31 @@ from .general_plot_helpers import make_discr_trial_cmap
 from dashsrc.components.dashvis_constants import *
 
 
+def _get_session_ids(encoding_data):
+    idx = encoding_data.index
+    if isinstance(idx, pd.MultiIndex) and 'session_id' in idx.names:
+        return idx.unique('session_id')
+    if idx.name == 'session_id':
+        return idx.unique()
+    if 'session_id' in encoding_data.columns:
+        return pd.Index(encoding_data['session_id'].unique())
+    return idx.unique()
+
+
+def _session_slice(dat, session_id):
+    idx = dat.index
+    if isinstance(idx, pd.MultiIndex) and 'session_id' in idx.names:
+        return dat[idx.get_level_values('session_id') == session_id]
+    return dat.loc[session_id]
+
+
+def _format_session_label(session_id):
+    try:
+        return f"S{int(session_id):02}"
+    except (TypeError, ValueError):
+        return f"S{session_id}"
+
+
 def draw_group(fig, dat, i, j, event_name, session_id, var_viz, group_name=None,
                color='#000000', transp_color='rgba(50, 50, 50, 0.3)'):
     """Draw one ensemble group as a line with optional percentile fill."""
@@ -47,6 +72,7 @@ def draw_group(fig, dat, i, j, event_name, session_id, var_viz, group_name=None,
 
 def render_plot(encoding_data, group_by, group_by_values, ens_selection):
     print(encoding_data)
+    event_col = '_event_name' if '_event_name' in encoding_data.columns else 't0_event_name'
 
     # determine grouping column and color map
     if group_by == 'Cue':
@@ -76,8 +102,8 @@ def render_plot(encoding_data, group_by, group_by_values, ens_selection):
     var_viz = '50th perc.'
     smooth = 6
     yrange = [-0.4, 3]
-    event_names = encoding_data['t0_event_name'].unique()
-    session_ids = encoding_data.index.unique('session_id')
+    event_names = encoding_data[event_col].unique()
+    session_ids = _get_session_ids(encoding_data)
 
     # subplot titles
     subplot_titles = []
@@ -108,12 +134,17 @@ def render_plot(encoding_data, group_by, group_by_values, ens_selection):
     # precompute smoothed data
     precomputed_data = {}
     for ev in event_names:
-        dat_event = encoding_data[encoding_data['t0_event_name'] == ev]
+        dat_event = encoding_data[encoding_data[event_col] == ev]
         for s in session_ids:
-            sub = dat_event.loc[s, ens_selection].unstack(level='interval_t')
+            sub = _session_slice(dat_event, s)[ens_selection].unstack(level='interval_t')
             if smooth is not None:
-                sub = sub.T.rolling(window=smooth, center=True,
-                                    min_periods=smooth).median().dropna(how='all').T
+                # Keep short intervals visible: fixed-window smoothing can erase all samples.
+                if sub.shape[1] >= smooth:
+                    sub_smoothed = sub.T.rolling(
+                        window=smooth, center=True, min_periods=smooth
+                    ).median().dropna(how='all').T
+                    if not sub_smoothed.empty:
+                        sub = sub_smoothed
             precomputed_data[(ev, s)] = sub
 
     shapes = []
@@ -164,7 +195,7 @@ def render_plot(encoding_data, group_by, group_by_values, ens_selection):
 
                 # collect annotations
                 annotations.append(dict(
-                    x=35, y=1.45, text=f"S{session_id:02}", showarrow=False,
+                    x=35, y=1.45, text=_format_session_label(session_id), showarrow=False,
                     font=dict(size=16, color='black'),
                     xref=f"x{j+1}", yref=f"y{i+1}"
                 ))
@@ -173,9 +204,12 @@ def render_plot(encoding_data, group_by, group_by_values, ens_selection):
                 if group_by == 'None':
                     draw_group(fig, ens_dat, i, j, event_name, session_id, var_viz)
                 else:
-                    dat = encoding_data[encoding_data['t0_event_name'] == event_name]
+                    dat = encoding_data[encoding_data[event_col] == event_name]
                     for group_name, group_vals in group_by_values.items():
-                        group_dat_vals = dat.loc[session_id, group_by_col].unstack(level='interval_t').iloc[:, 0]
+                        group_dat_unstacked = _session_slice(dat, session_id)[group_by_col].unstack(level='interval_t')
+                        if group_dat_unstacked.shape[1] == 0:
+                            continue
+                        group_dat_vals = group_dat_unstacked.iloc[:, 0]
                         mask = group_dat_vals.isin(group_vals)
                         if mask.any():
                             group_dat = ens_dat[mask]

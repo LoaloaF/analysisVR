@@ -19,6 +19,7 @@ from .data_selection_components import (
     register_animal_dropdown_callback,
     register_session_slider_callback,
     register_paradigm_dropdown_callback,
+    get_session_slice_from_range,
 )
 from .data_selection import group_filter_data
 from ..plots import plot_TrackFiringRate
@@ -45,17 +46,28 @@ def calculate_figure(selected_paradigm, selected_animal, session_range,
     if not session_range: 
         return {}
         
-    session_slice = [sid for sid in np.arange(session_range[0], session_range[1] + 1)
-                        if sid in global_data[sec_analytic].index.unique('session_id')]
-
-    # session_slice = [sid for sid in np.arange(session_range[0], session_range[1] + 1)
-    #                     if sid in global_data[sec_analytic].index.unique('session_id')]
+    session_slice = get_session_slice_from_range(
+        global_data[prim_analytic],
+        selected_animal,
+        session_range,
+        selected_paradigm=selected_paradigm,
+    )
+    if len(session_slice) == 0:
+        return {}
     
     # paradigm, animal and session filtering
     prim_data = global_data[prim_analytic].loc[pd.IndexSlice[paradigm_slice, animal_slice, 
                                                     session_slice, :]]
-    sec_data = global_data[sec_analytic].loc[pd.IndexSlice[#paradigm_slice, animal_slice,
-                                                    session_slice, :]]
+    sec_data = global_data[sec_analytic]
+    session_slice_str = [str(s) for s in session_slice]
+    if isinstance(sec_data.index, pd.MultiIndex) and 'session_id' in sec_data.index.names:
+        sec_mask = sec_data.index.get_level_values('session_id').astype(str).isin(session_slice_str)
+        sec_data = sec_data[sec_mask]
+    elif 'session_id' in sec_data.columns:
+        sec_data = sec_data[sec_data['session_id'].astype(str).isin(session_slice_str)].copy()
+        sec_data = sec_data.set_index('session_id')
+    else:
+        sec_data = sec_data.loc[session_slice, :]
     n_sessions = len(session_slice)
     
     # filter the data based on the group by values
@@ -77,7 +89,7 @@ def calculate_figure(selected_paradigm, selected_animal, session_range,
         
     fig = plot_TrackFiringRate.render_plot(prim_data, sec_data, global_data['SessionMetadata'], 
                                             global_data['SpikeClusterMetadata'],
-                                            metric, n_sessions, metric_max, smooth_data, normalize_data)
+                                            n_sessions, metric_max, smooth_data, normalize_data)
     return fig
 
 

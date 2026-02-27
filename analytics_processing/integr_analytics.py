@@ -141,6 +141,25 @@ def get_TrialWiseT0Events40ms(behavior):
                             't0': t.index[0], 
                             'x_position': trial_beh.loc[t.index[0], 'frame_position'],
                             'x_alignment': zone_x})
+
+        valve_hits = trial_beh[trial_beh['reward-sound_detected'] == 1]
+        if not valve_hits.empty:
+            valve_t = valve_hits.index[0]
+            valve_x = valve_hits.iloc[0]['frame_position']
+
+            if base_info['choice_R1'] and base_info['cue'] == 1:
+                sound_event_name = 'reward1_sound'
+            elif base_info['choice_R2'] and base_info['cue'] == 2:
+                sound_event_name = 'reward2_sound'
+            else:
+                sound_event_name = None
+
+            if sound_event_name is not None:
+                zone_ts.append({**base_info,
+                                't0_event_name': sound_event_name,
+                                't0': valve_t,
+                                'x_position': valve_x,
+                                'x_alignment': np.nan})
         zone_ts = pd.DataFrame(zone_ts)
         return zone_ts
 
@@ -150,6 +169,8 @@ def get_TrialWiseT0Events40ms(behavior):
         'cueZone_exit': 25,
         'enter_reward1Zone': 50,
         'enter_reward2Zone': 170,
+        'exit_reward1Zone': 110,
+        'exit_reward2Zone': 230,
     }
     
     # kinematics
@@ -174,6 +195,10 @@ def get_TrialWiseT0Events40ms(behavior):
         'cue_exit_interval': {'zone_alignment': 'cueZone_exit', 'n_bins_left': 10, 'n_bins_right': 30},
         'R1_entry_interval': {'zone_alignment': 'enter_reward1Zone', 'n_bins_left': 10, 'n_bins_right': 30},
         'R2_entry_interval': {'zone_alignment': 'enter_reward2Zone', 'n_bins_left': 10, 'n_bins_right': 30},
+        'R1_exit_interval': {'zone_alignment': 'exit_reward1Zone', 'n_bins_left': 10, 'n_bins_right': 30},
+        'R2_exit_interval': {'zone_alignment': 'exit_reward2Zone', 'n_bins_left': 10, 'n_bins_right': 30},
+        'reward1_valve_open_interval': {'zone_alignment': 'reward1_valve_open', 'n_bins_left': 1, 'n_bins_right': 39},
+        'reward2_valve_open_interval': {'zone_alignment': 'reward2_valve_open', 'n_bins_left': 1, 'n_bins_right': 39},
     }
     
     # make a table where every row is a t0 event, keep info like cue, outcome, choice, trial_id

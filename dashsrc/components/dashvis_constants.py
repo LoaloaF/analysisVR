@@ -103,7 +103,7 @@ def get_vis_name_req_data(vis_name):
         case 'EvolvingPCSubspace':
             req_data = "SessionPCs40msCAs", "SessionPCs40ms", 'SessionMetadata'
         case 'EnsembleEncoding':
-            req_data = 'Ensemble40msProjEventAligned', "SessionMetadata" #'BehaviorTrackwise', 
+            req_data = 'EnsembleT0Projection', "SessionMetadata" #'BehaviorTrackwise', 
         case 'EnsembleChoiceEncoding':
             req_data = 'Ensemble40msProjEventAligned', "SessionMetadata" #'BehaviorTrackwise', 
         case _:

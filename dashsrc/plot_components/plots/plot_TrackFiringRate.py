@@ -129,7 +129,8 @@ def _draw_percentile_area_plot(fig, upper_perc, lower_perc, metric_col, transp_c
     ), row=2, col=1)
     
 def render_plot(track_data, fr, metadata, spike_metadata, n_sessions,
-                metric_max, smooth_data, normalize_data, width=-1, height=-1):
+                metric_max, smooth_data, normalize_data, width=-1, height=-1,
+                colormap='oxy'):
     fr = fr.set_index(['trial_id', 'from_position_bin', 'cue', 'choice_R1', 'choice_R2'], append=True, )
     fr.drop(columns=['trial_outcome','bin_length'], inplace=True)
 
@@ -138,7 +139,12 @@ def render_plot(track_data, fr, metadata, spike_metadata, n_sessions,
     show_shank = True
     if any(str(col).startswith("Assembly") for col in fr.columns):
         y_label = "Assembly"
-        color = 'oxy'
+        colormap_lookup = {
+            'oxy': 'oxy',
+            'viridis': 'Viridis',
+            'solar': 'solar',
+        }
+        color = colormap_lookup.get(str(colormap).lower(), 'oxy')
         show_shank = False
     else:
         y_label = "Neuron"

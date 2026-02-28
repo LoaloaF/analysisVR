@@ -27,7 +27,8 @@ import dashsrc.components.dashvis_constants as C
 
 def calculate_figure(selected_paradigm, selected_animal, session_range,
                     metric, metric_max, smooth_data, normalize_data,
-                    outcome_filter, cue_filter, trial_filter, 
+                    outcome_filter, cue_filter, trial_filter,
+                    colormap,
                     global_data, prim_analytic, sec_analytic):
     
     if not all((selected_paradigm, selected_animal, metric_max)):
@@ -89,8 +90,27 @@ def calculate_figure(selected_paradigm, selected_animal, session_range,
         
     fig = plot_TrackFiringRate.render_plot(prim_data, sec_data, global_data['SessionMetadata'], 
                                             global_data['SpikeClusterMetadata'],
-                                            n_sessions, metric_max, smooth_data, normalize_data)
+                                            n_sessions, metric_max, smooth_data, normalize_data,
+                                            colormap=colormap)
     return fig
+
+
+def colormap_dropdown_component(instance_vis_name):
+    colormap_dropd_id = f"{instance_vis_name}-colormap-dropdown"
+    colormap_dropd = [
+        html.Label("Color map"),
+        dcc.Dropdown(
+            id=colormap_dropd_id,
+            options=[
+                {"label": "Default", "value": "oxy"},
+                {"label": "Viridis", "value": "viridis"},
+                {"label": "Solar", "value": "solar"},
+            ],
+            value="oxy",
+            clearable=False,
+        ),
+    ]
+    return colormap_dropd, colormap_dropd_id
 
 
 # Creates one instance of the plot + controls
@@ -113,6 +133,7 @@ def create_view_instance(app, global_data, base_vis_name, suffix_id, prim_analyt
     maxmetric_inp, MAXMETRIC_INP_ID = max_metric_input_component(instance_vis_name, initial_value=80)
     smooth_checkl, SMOOTH_CHECKL_ID = smooth_checklist_component(instance_vis_name)
     normalize_checkl, NORMALIZE_CHECKL_ID = normalize_checklist_component(instance_vis_name)
+    colormap_dropd, COLORMAP_DROPD_ID = colormap_dropdown_component(instance_vis_name)
 
     outcome_filter, OUTCOME_FILTER_ID = outcome_group_filter_component(instance_vis_name)
     cue_filter, CUE_FILTER_ID = cue_group_filter_component(instance_vis_name)
@@ -128,7 +149,7 @@ def create_view_instance(app, global_data, base_vis_name, suffix_id, prim_analyt
                 dbc.Row([html.H5(f"Data Selection", style={"marginTop": 20})]),                                
                 dbc.Row([
                     dbc.Col([*paradigm_dropd, *animal_dropd, *metrics_radioi], width=12),
-                    dbc.Col([*outcome_filter, *cue_filter, *trial_filter, html.Hr(), *maxmetric_inp, *smooth_checkl, *normalize_checkl], width=12),
+                    dbc.Col([*outcome_filter, *cue_filter, *trial_filter, html.Hr(), *maxmetric_inp, *smooth_checkl, *normalize_checkl, *colormap_dropd], width=12),
                 ]),
                 *session_slider
             ], width=2)
@@ -148,18 +169,19 @@ def create_view_instance(app, global_data, base_vis_name, suffix_id, prim_analyt
         Input(OUTCOME_FILTER_ID, 'value'),
         Input(CUE_FILTER_ID, 'value'),
         Input(TRIAL_FILTER_ID, 'value'),
+        Input(COLORMAP_DROPD_ID, 'value'),
         # Input(WIDTH_INP_ID, 'value'),
         # Input(HEIGHT_INP_ID, 'value'),
     )
     def update_plot_wrapper(selected_paradigm, selected_animal, session_range,
                             metric, metric_max, smooth_data, normalize_data,
-                            outcome_filter, cue_filter, trial_filter):
+                            outcome_filter, cue_filter, trial_filter, colormap):
                             # width, height
         
         return calculate_figure(
             selected_paradigm, selected_animal, session_range,
             metric, metric_max, smooth_data, normalize_data,
-            outcome_filter, cue_filter, trial_filter,
+            outcome_filter, cue_filter, trial_filter, colormap,
             global_data, prim_analytic, sec_analytic
         )
 

@@ -103,9 +103,10 @@ def session_dropdown_component(vis_name, global_data, analytic):
         html.Label("Select session", style={"marginTop": 15}),
         dcc.Dropdown(
             id=component_id,
-            options=[] if data is None else [{'label': f'Session {i:02}', 'value': i} 
+            options=[] if data is None else [{'label': str(i), 'value': i} 
                                              for i in data.index.unique("session_id")],
-            placeholder="Session ID"
+            placeholder="Session ID",
+            style={"fontSize": "9px"},
         )
     ], component_id
     
@@ -620,7 +621,7 @@ def register_session_dropdown_callback(app, vis_name, global_data, analytic):
         if selected_animal is None or data is None:
             return []
         sessions = _get_sessions_for_animal(data, selected_animal)
-        session_ids = [{'label': f'Session {i}', 'value': i} for i in sessions]
+        session_ids = [{'label': str(i), 'value': i} for i in sessions]
         return session_ids
 
 def register_session_slider_callback(app, vis_name, global_data, analytic, 

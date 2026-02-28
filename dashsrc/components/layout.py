@@ -20,6 +20,8 @@ from ..plot_components.plot_wrappers import wrapper_SVMPredictions
 from ..plot_components.plot_wrappers import wrapper_EvolvingPCSubspace
 from ..plot_components.plot_wrappers import wrapper_CueCorrelation
 from ..plot_components.plot_wrappers import wrapper_EnsembleEncoding
+from ..plot_components.plot_wrappers import wrapper_EnsembleRidgeline
+from ..plot_components.plot_wrappers import wrapper_EnsembleTrialwise
 from ..plot_components.plot_wrappers import wrapper_EnsembleChoiceEncoding
 
 def create_sessionwise_vis_containers(app: Dash, loaded_analytics: dict, loaded_raw_traces: dict):
@@ -42,6 +44,12 @@ def create_sessionwise_vis_containers(app: Dash, loaded_analytics: dict, loaded_
             case "EnsembleEncoding":
                 analysis_div = wrapper_EnsembleEncoding.render(app, loaded_analytics,
                                                                vis_name=vis_name)
+            case "EnsembleRidgeline":
+                analysis_div = wrapper_EnsembleRidgeline.render(app, loaded_analytics,
+                                                                vis_name=vis_name)
+            case "EnsembleTrialwise":
+                analysis_div = wrapper_EnsembleTrialwise.render(app, loaded_analytics,
+                                                                vis_name=vis_name)
             case "EnsembleChoiceEncoding":
                 analysis_div = wrapper_EnsembleChoiceEncoding.render(app, loaded_analytics,
                                                                vis_name=vis_name)
@@ -100,11 +108,14 @@ def create_layout(app: Dash, loaded_analytics: dict, loaded_raw_traces: dict) ->
                 html.H3("VR Sesssion Wise", style={"textAlign": "center"}),
             ], width=2),
             dbc.Col([
-                session_wise_vis_buttons.render(app),
-            ], width=4),
-            dbc.Col([
                 data_loading_controls.render(app, loaded_analytics, loaded_raw_traces)
-            ], width=6),
+            ], width=10),
+        ], align="center"),
+        dbc.Row([
+            dbc.Col([], width=2),
+            dbc.Col([
+                session_wise_vis_buttons.render(app),
+            ], width=10),
         ], align="center"),
         html.Hr(style={"borderTop": "2px solid #bbb", "marginBottom": "20px"}),
         create_sessionwise_vis_containers(app, loaded_analytics, loaded_raw_traces),

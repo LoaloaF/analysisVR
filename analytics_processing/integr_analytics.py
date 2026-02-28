@@ -197,8 +197,8 @@ def get_TrialWiseT0Events40ms(behavior):
         'R2_entry_interval': {'zone_alignment': 'enter_reward2Zone', 'n_bins_left': 10, 'n_bins_right': 30},
         'R1_exit_interval': {'zone_alignment': 'exit_reward1Zone', 'n_bins_left': 10, 'n_bins_right': 30},
         'R2_exit_interval': {'zone_alignment': 'exit_reward2Zone', 'n_bins_left': 10, 'n_bins_right': 30},
-        'reward1_valve_open_interval': {'zone_alignment': 'reward1_valve_open', 'n_bins_left': 1, 'n_bins_right': 39},
-        'reward2_valve_open_interval': {'zone_alignment': 'reward2_valve_open', 'n_bins_left': 1, 'n_bins_right': 39},
+        'reward1_sound_interval': {'zone_alignment': 'reward1_sound', 'n_bins_left': 1, 'n_bins_right': 39},
+        'reward2_sound_interval': {'zone_alignment': 'reward2_sound', 'n_bins_left': 1, 'n_bins_right': 39},
     }
     
     # make a table where every row is a t0 event, keep info like cue, outcome, choice, trial_id

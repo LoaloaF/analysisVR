@@ -30,6 +30,7 @@ Note: `main_analysis.py` imports `baseVR.base_functionality` from the parent dir
 Note: You might have to change data source paths depending on the machine you are running this repo on (Debug Logging will tell you where).
 
 ## Analytics Included in the GUI (Plots + Wrappers)
+![alt text](readme_gui_screenshot.png)
 
 ### Session-wise plots
 
@@ -60,8 +61,8 @@ Most behavior-driven wrappers use shared filtering/grouping controls from
 `dashsrc/plot_components/plot_wrappers/data_selection.py`.
 
 - Outcome split:
-  - `1 R`: single-reward outcomes
-  - `1+ R`: higher/other rewarded outcomes
+  - `1 R`: Stoping only in correct reward zone
+  - `1+ R`: Stop in both reward zones
   - `no R`: non-rewarded outcomes
 - Cue split:
   - `Cue1 trials`
@@ -72,7 +73,7 @@ Most behavior-driven wrappers use shared filtering/grouping controls from
 - Session-progress split:
   - `1/3`, `2/3`, `3/3` (first/middle/last third of trials)
 
-Where supported, data can be grouped by:
+Where supported, data can be split/grouped by:
 - `Outcome`
 - `Cue`
 - `Part of session`

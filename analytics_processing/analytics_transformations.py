@@ -201,11 +201,11 @@ def column2agg_map(columns):
     kinem_cols = [c for c in columns if any(key in c for key in ['frame_velocity', 'frame_position', 'frame_acceleration', 
                                                                  'vel', 'acc', 'yaw', 'pitch', 'raw', 'forward_vs_rotation_corr', 
                                                                  'frame_forward_prop'])]
-    cam_cols = [c for c in columns if any(key in c for key in ['_pose_'])]
+    cam_cols = [c for c in columns if any(key in c for key in ['head_angle', 'head_angle_vel', 'movement_energy_smooth5'])]
     sum_cols = [c for c in columns if any(key in c for key in ['count'])]
     first = [c for c in columns if any(key in c for key in ['frame_pc_timestamp', 'frame_ephys_timestamp'])]
     last_cols = [c for c in columns if any(key in c for key in ['frame_pc_timestamp', 'frame_ephys_timestamp'])]
-    other_cols = [c for c in columns if '_detected' in c or c in ['track_zone', 'track_zone_int', 'trial_outcome', 
+    other_cols = [c for c in columns if '_detected' in c or c in ['track_zone', 'track_zone_int', 'trial_outcome', 'cue_visible',
                                                                   'cue', 'flip_Cue1R1_Cue2R2','both_R1_R2_rewarded', 
                                                                   'choice_R1', 'choice_R2', 'trial_id']]
     return {**{col: 'mean' for col in kinem_cols},

@@ -36,31 +36,37 @@ def get_BehaviorFramewise(track_kinematics, trialwise, events, pose_data):
     event_detected['lick_detected'] = mT.dilate_post_events(event_detected['lick_detected'], n_bins_after=5)
     
     framedata = pd.concat([framedata, event_detected], axis=1)
-    
-    # TODO merge facecam poses with frames
-    timestamp_col = 'frame_ephys_timestamp'
-    if framedata.loc[:,timestamp_col].isna().iloc[0]:
-        timestamp_col = 'frame_pc_timestamp'
-    camera_timestamp_col = timestamp_col.replace('frame', 'facecam_image')
 
-    # Create a copy of pose_data with timestamp as index for merging
-    pose_data_indexed = pose_data.set_index(camera_timestamp_col)
+     # rat 10 didn't have ephys integrated properly for this camera...
+    if pose_data['image'+which_t_col].isna().sum() > 0: # shounld never happen
+        print(pose_data)
+        Logger().logger.error("Pose data contains NaN timestamps, cannot merge with framedata. Need to use PC timestamps.")
+        pose_data.drop(columns=['image_ephys_timestamp'], inplace=True)
+        which_t_col = '_pc_timestamp'
     
-    # Create a Series mapping frame timestamps to nearest camera timestamps
-    frame_to_camera = pd.Series(index=framedata[timestamp_col], 
-                               data=framedata[timestamp_col].values).map(
-        lambda x: pose_data_indexed.index[abs(pose_data_indexed.index - x).argmin()]
-    )
-                               
-    # Use the mapping to merge pose data
-    pose_data_matched = pose_data_indexed.loc[frame_to_camera].reset_index()
-    pose_data_matched.index = framedata.index
-    
-    # Merge the matched pose data with framedata
-    framedata = pd.concat([framedata, pose_data_matched.drop(columns=[camera_timestamp_col])], axis=1)
-    
+    # Nearest-timestamp merge
+    pose_data_matched = pd.merge_asof(
+        framedata[['frame' + which_t_col]].astype('float64'),
+        pose_data.rename(columns={'image' + which_t_col: 'frame' + which_t_col}).astype('float64'),
+        on='frame' + which_t_col,
+        direction='nearest',
+        tolerance=2e5,  # 200ms
+    ).drop(columns=['frame' + which_t_col])
+    framedata = pd.concat([framedata, pose_data_matched], axis=1)
     # merge trialwise data in (big)
     framedata = pd.merge(framedata, trialwise, on='trial_id', how='left')
+    
+    # add if a cue is visible, and if yes which one
+    framedata['cue_visible'] = 0
+    cue_mask = framedata['track_zone'].isin(['visibleCue', 'nextToCue']) & ~framedata['both_R1_R2_rewarded'].astype(bool)   
+    framedata.loc[cue_mask, 'cue_visible'] = framedata.loc[cue_mask, 'cue']
+    # flip for reversal sessions
+    if 'flip_Cue1R1_Cue2R2' in framedata.columns:
+        # print(framedata['flip_Cue1R1_Cue2R2'].astype(bool).value_counts())
+        fl = framedata.loc[cue_mask & (framedata['flip_Cue1R1_Cue2R2']), 'cue_visible'].map({1: 2, 2: 1})
+        framedata.loc[cue_mask & (framedata['flip_Cue1R1_Cue2R2']), 'cue_visible'] = fl
+        # print(framedata['cue_visible'].value_counts())
+    
     return framedata
 
 def get_BehaviorTrackwise(framewise):

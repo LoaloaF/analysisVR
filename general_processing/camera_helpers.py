@@ -15,7 +15,12 @@ def hdf5_frames2mp4_gpu(merged_fullfname, gpu_id=0, camera_names=None):
     
     def _calc_fps(packages, cam_name):
         timestamps = packages[f'{cam_name}_image_pc_timestamp']
-        return np.round(1 / np.mean(np.diff(timestamps)) * 1e6, 0)
+        diffs = np.diff(timestamps).astype(float)
+        # round diffs to nearest integer (microsecond precision) so we can compute a mode robustly
+        diffs_rounded = np.round(diffs).astype(np.int64)
+        vals, counts = np.unique(diffs_rounded, return_counts=True)
+        mode_us = vals[np.argmax(counts)]
+        return np.round(1 / (mode_us / 1e6), 0)
 
     def _create_ffmpeg_writer(out_fullfname, fps, width, height, is_color=True):
         """Create FFmpeg subprocess with NVENC hardware encoding."""
@@ -90,13 +95,14 @@ def hdf5_frames2mp4_gpu(merged_fullfname, gpu_id=0, camera_names=None):
                     # insert black frames if package ID is discontinuous
                     gap = pack_id - prv_pack_id
                     if gap != 1:
-                        n_missing = gap - 1
+                        n_missing = int(gap - 1)
                         L.logger.warning(f"Package ID discontinuous; gap was {gap}. "
                                          f"Inserting {n_missing} black frame(s).")
                         black_frame = np.zeros_like(frame).tobytes()
                         for _ in range(n_missing):
                             ffmpeg_proc.stdin.write(black_frame)
                     
+                    print(f"Writing frame {i+1}/{n_frames} (package ID: {pack_id}, prv pack id: {prv_pack_id})... ", end='\r')
                     ffmpeg_proc.stdin.write(frame.tobytes())
                     prv_pack_id = pack_id
                     
@@ -124,6 +130,7 @@ def hdf5_frames2mp4_gpu(merged_fullfname, gpu_id=0, camera_names=None):
                     ffmpeg_proc.stdin.close()
                     ffmpeg_proc.kill()
                 return
+        return True
 
     L = Logger()
     L.logger.info(f"Rendering videos from HDF5 files in {os.path.dirname(merged_fullfname)} (GPU accelerated)")
@@ -134,102 +141,115 @@ def hdf5_frames2mp4_gpu(merged_fullfname, gpu_id=0, camera_names=None):
     if camera_names is None:
         camera_names = ["facecam", "bodycam", "unitycam", "ttlcam2", "ttlcam3", "ttlcam4"]
         
+    results = {}
     for cam in camera_names:
         # check if mp4 altready exists
         out_fullfname = os.path.join(output_dir, f'{cam}.mp4')
         if os.path.exists(out_fullfname):
-            L.logger.info(f"Video for {cam} already exists, skipping...")
-            continue
+            L.logger.info(f"Video for {cam} already exists, check if it's valid...")
+            #open mp4 file to check if it's valid
+            try:                
+                cap = cv2.VideoCapture(out_fullfname)
+                if not cap.isOpened():
+                    L.logger.warning(f"Existing video for {cam} is not valid, will attempt to re-render.")
+                else:
+                    L.logger.info(f"Existing video for {cam} is valid, skipping rendering.")
+                    continue
+            except Exception as e:
+                L.logger.warning(f"Could not open existing video for {cam} due to error: {e}. Will attempt to re-render.")
+            
         L.logger.info(f"Rendering {cam}...")
-        render_video(cam)
+        result = render_video(cam)
+        results[cam] = result
+    return results
 
 
 
-def jpglist_to_mp4_gpu(jpg_list, output_path, fps=30, gpu_id=0):
-    """
-    Render video from a list of JPG file paths using NVIDIA GPU acceleration.
+# def jpglist_to_mp4_gpu(jpg_list, output_path, fps=30, gpu_id=0):
+#     """
+#     Render video from a list of JPG file paths using NVIDIA GPU acceleration.
     
-    Args:
-        jpg_list: List of paths to JPG files (in order)
-        output_path: Output MP4 file path
-        fps: Frames per second for output video
-        gpu_id: NVIDIA GPU device ID to use
-    """
-    L = Logger()
+#     Args:
+#         jpg_list: List of paths to JPG files (in order)
+#         output_path: Output MP4 file path
+#         fps: Frames per second for output video
+#         gpu_id: NVIDIA GPU device ID to use
+#     """
+#     L = Logger()
     
-    if not jpg_list:
-        L.logger.error("Empty JPG list provided")
-        return False
+#     if not jpg_list:
+#         L.logger.error("Empty JPG list provided")
+#         return False
     
-    # Read first frame to get dimensions
-    first_frame = cv2.imread(jpg_list[0])
-    if first_frame is None:
-        L.logger.error(f"Could not read first frame: {jpg_list[0]}")
-        return False
+#     # Read first frame to get dimensions
+#     first_frame = cv2.imread(jpg_list[0])
+#     if first_frame is None:
+#         L.logger.error(f"Could not read first frame: {jpg_list[0]}")
+#         return False
     
-    height, width = first_frame.shape[:2]
-    is_color = len(first_frame.shape) == 3
-    pix_fmt = 'bgr24' if is_color else 'gray'
+#     height, width = first_frame.shape[:2]
+#     is_color = len(first_frame.shape) == 3
+#     pix_fmt = 'bgr24' if is_color else 'gray'
     
-    L.logger.info(f"Rendering {len(jpg_list):,} frames at {fps} FPS ({width}x{height}) using GPU...")
+#     L.logger.info(f"Rendering {len(jpg_list):,} frames at {fps} FPS ({width}x{height}) using GPU...")
     
-    cmd = [
-        'ffmpeg',
-        '-y',
-        '-f', 'rawvideo',
-        '-vcodec', 'rawvideo',
-        '-s', f'{width}x{height}',
-        '-pix_fmt', pix_fmt,
-        '-r', str(fps),
-        '-i', '-',
-        '-an',
-        '-c:v', 'h264_nvenc',
-        '-gpu', str(gpu_id),
-        '-preset', 'p4',
-        '-tune', 'hq',
-        '-rc', 'vbr',
-        '-cq', '23',
-        '-b:v', '0',
-        '-pix_fmt', 'yuv420p',
-        output_path
-    ]
+#     cmd = [
+#         'ffmpeg',
+#         '-y',
+#         '-f', 'rawvideo',
+#         '-vcodec', 'rawvideo',
+#         '-s', f'{width}x{height}',
+#         '-pix_fmt', pix_fmt,
+#         '-r', str(fps),
+#         '-i', '-',
+#         '-an',
+#         '-c:v', 'h264_nvenc',
+#         '-gpu', str(gpu_id),
+#         '-preset', 'p4',
+#         '-tune', 'hq',
+#         '-rc', 'vbr',
+#         '-cq', '23',
+#         '-b:v', '0',
+#         '-pix_fmt', 'yuv420p',
+#         output_path
+#     ]
     
-    ffmpeg_proc = subprocess.Popen(
-        cmd,
-        stdin=subprocess.PIPE,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.PIPE
-    )
+#     ffmpeg_proc = subprocess.Popen(
+#         cmd,
+#         stdin=subprocess.PIPE,
+#         stdout=subprocess.DEVNULL,
+#         stderr=subprocess.PIPE
+#     )
     
-    n_frames = len(jpg_list)
-    try:
-        for i, jpg_path in enumerate(jpg_list):
-            frame = cv2.imread(jpg_path)
-            if frame is None:
-                L.logger.warning(f"Could not read frame {i}: {jpg_path}, inserting black frame")
-                frame = np.zeros_like(first_frame)
+#     n_frames = len(jpg_list)
+#     try:
+#         for i, jpg_path in enumerate(jpg_list):
+#             frame = cv2.imread(jpg_path)
+#             if frame is None:
+#                 L.logger.warning(f"Could not read frame {i}: {jpg_path}, inserting black frame")
+#                 frame = np.zeros_like(first_frame)
             
-            ffmpeg_proc.stdin.write(frame.tobytes())
+#             ffmpeg_proc.stdin.write(frame.tobytes())
             
-            if n_frames >= 10 and i % (n_frames // 10) == 0:
-                print(f"{i / n_frames * 100:.0f}% done...", end='\r')
+#             if n_frames >= 10 and i % (n_frames // 10) == 0:
+#                 print(f"{i / n_frames * 100:.0f}% done...", end='\r')
         
-        ffmpeg_proc.stdin.close()
-        ffmpeg_proc.wait()
+#         ffmpeg_proc.stdin.close()
+#         ffmpeg_proc.wait()
         
-        if ffmpeg_proc.returncode != 0:
-            stderr = ffmpeg_proc.stderr.read().decode()
-            L.logger.error(f"FFmpeg error: {stderr}")
-            return False
+#         if ffmpeg_proc.returncode != 0:
+#             stderr = ffmpeg_proc.stderr.read().decode()
+#             L.logger.error(f"FFmpeg error: {stderr}")
+#             return False
         
-        L.logger.info(f"Successfully rendered video to {output_path}")
-        return True
+#         L.logger.info(f"Successfully rendered video to {output_path}")
+#         return True
         
-    except Exception as e:
-        L.logger.error(f"Failed to render video: {e}")
-        ffmpeg_proc.stdin.close()
-        ffmpeg_proc.kill()
-        return False
+#     except Exception as e:
+#         L.logger.error(f"Failed to render video: {e}")
+#         ffmpeg_proc.stdin.close()
+#         ffmpeg_proc.kill()
+#         return False
     
 def link_dlc_training_data(session_fullfname, link_to_dir, cam_name='facecam'):
     L = Logger()

@@ -3,16 +3,25 @@ import json
 import pandas as pd
 import numpy as np
 import os
-import yaml
-# from CustomLogger import CustomLogger as Logger
+from CustomLogger import CustomLogger as Logger
 import analytics_processing.analytics_constants as C
 
 import analytics_processing.modality_transformations as mT
 import analytics_processing.analytics_utils as aU
-from analytics_processing.analytics_constants import device_paths
+import analytics_processing.analytics_constants as aC
 
 from analytics_processing.modality_loading import session_modality_from_nas
 from analytics_processing.modality_loading import get_modality_summary
+from general_processing.camera_helpers import hdf5_frames2mp4_gpu
+from general_processing.pose_features import add_kinematic_features, kinematic_feature_summary
+
+try:
+    # may fail, DLC analytic computation of pose should use differnt conda env
+    import yaml
+    import deeplabcut
+except ImportError as e:
+    print(f"Warning: {e}. DeepLabCut-related functionality will not work. Please install deeplabcut and pyyaml to compute the BehaviorPose analytic.")
+
     
 def get_SesssionMetadata(session_fullfname):
     data = session_modality_from_nas(session_fullfname, "metadata")
@@ -167,129 +176,88 @@ def get_BehaviorEvents(session_fullfname, trialwise_data):
     return eventdata    
 
 
-# TODO: implement this function
-def get_BehaviorPose(session_fullfname, track_kinematics):
-    data = session_modality_from_nas(session_fullfname, "facecam_packages")
-    nas_dir, _, _ = device_paths()
-    project_path = os.path.join(nas_dir, "pose_estimation", "ratvt_butt-Haotian-2024-10-04") # modify based on the model
-    project_yaml_path = os.path.join(project_path, "config.yaml")
-    # modify the project_path in the yaml file based on the current nas_dir
-    with open(project_yaml_path, 'r') as file:
+def get_BehaviorPose(session_fullfname, ):
+    L = Logger()
+    nas_dir, _, _ = aC.device_paths()
+    dlc_project_path = os.path.join(nas_dir, aC.DLC_MODEL_SUBDIR)
+    dlc_config_path = os.path.join(dlc_project_path, "config.yaml")
+    
+    # if calculted on different machine, update project base path here to mappend NAS location
+    with open(dlc_config_path, 'r') as file:
         yaml_content = yaml.safe_load(file)
-
-    project_base_path = yaml_content.get('project_base_path')
-    modify_project_path = os.path.join(nas_dir, project_base_path)
-    yaml_content['project_path'] = modify_project_path
-
-    # Write the updated content back to the YAML file
-    with open(project_yaml_path, 'w') as file:
-        yaml.safe_dump(yaml_content, file)
+        L.logger.debug("Loaded DLC config.yaml content:")
+        L.logger.debug(L.fmtmsg(yaml_content))
+    if yaml_content.get('project_path') != dlc_project_path:
+        L.logger.info(f"Updating DLC config path to {dlc_project_path}")   
+        yaml_content['project_path'] = dlc_project_path
+        with open(dlc_config_path, 'w') as file:
+            yaml.safe_dump(yaml_content, file)
 
     session_dir = os.path.dirname(session_fullfname)
-    file_name = os.path.basename(session_fullfname)
+    camera_dir = os.path.join(session_dir, 'rendered_videos')
+    CAM = aC.DLC_CAMERA_FNAME.replace('.mp4','')
 
-    all_files = [file for file in os.listdir(session_dir)]
-    # check if there is already DLC csv files
-    dlc_csv_files = [file for file in all_files if "DLC" in file and file.endswith(".csv")]
-
-    if not dlc_csv_files:
-        import deeplabcut # only done here to avoid unnecessary import
-        
-        # check if there is already facecam mp4 for analysis
-        if "facecam.mp4" not in all_files:
-            print("Generating facecam mp4 for DLC analysis...")
-            aU.hdf5_frames2mp4(session_dir, file_name)
-        
-        video_path = os.path.join(session_dir, "facecam.mp4")
-        
-        deeplabcut.analyze_videos(
-            config=f"{project_path}/config.yaml",
-            videos=video_path,
-            videotype='mp4',  # Replace with the video file format if different
-            batchsize=8,
-            save_as_csv=True,  # Save as intermediate CSVs for inspection
-        )
-
-        all_files = [file for file in os.listdir(session_dir)]
-        dlc_csv_files = [file for file in all_files if "DLC" in file and file.endswith(".csv")]
+    # check if there is already camera file mp4 for analysis
+    if aC.DLC_CAMERA_FNAME not in [file for file in os.listdir(camera_dir) if file.endswith('.mp4')]:
+        L.logger.info(f"Generating {aC.DLC_CAMERA_FNAME} for DLC analysis...")
+        result = hdf5_frames2mp4_gpu(session_fullfname, gpu_id=0, camera_names=[CAM], )
+        if not result[CAM]:
+            # failed to generate video, cannot run DLC analysis, return None
+            return
     
+    deeplabcut.analyze_videos(
+        config=dlc_config_path,
+        videos=os.path.join(session_dir, 'rendered_videos', aC.DLC_CAMERA_FNAME),
+        videotype='mp4',  # Replace with the video file format if different
+        batchsize=aC.DLC_BATCH_SIZE,
+        save_as_csv=True,  # Save as intermediate CSVs for inspection
+    )
+    dlc_result_fname = [f for f in os.listdir(camera_dir) if f.endswith('.csv')][0]
     # read the csv file and reformat
-    df_pose = pd.read_csv(os.path.join(session_dir, dlc_csv_files[0]), low_memory=False)
+    df_pose = pd.read_csv(os.path.join(camera_dir, dlc_result_fname), low_memory=False)    
+    
+    # unpack properly, first two rows are multiindex for body part and coordinate
+    # combine them and drop scorer level
     df_pose.drop(columns=['scorer'], inplace=True)
-    # reset the column names
-    new_columns = df_pose.iloc[0] + '_' + df_pose.iloc[1]
-    df_pose.columns = new_columns
+    df_pose.columns = df_pose.iloc[0] + '_' + df_pose.iloc[1]
     df_pose = df_pose.iloc[2:]
     df_pose.reset_index(drop=True, inplace=True)
-    df_pose = df_pose.add_prefix("facecam_pose_")
-    df_pose['facecam_pose_ephys_timestamp'] = data['facecam_image_ephys_timestamp']
-    df_pose['facecam_pose_pc_timestamp'] = data['facecam_image_pc_timestamp']
-
-    # Add vector lengths and angles
-    def calculate_vector_length(row, point1, point2):
-        return np.hypot(
-            row[f'facecam_pose_{point1}_x'] - row[f'facecam_pose_{point2}_x'],
-            row[f'facecam_pose_{point1}_y'] - row[f'facecam_pose_{point2}_y']
-        )
-
-    def calculate_angle(row, point1, point2, point3):
-        """Calculate angle at point2 between vectors point2->point1 and point2->point3"""
-        v1 = np.array([
-            float(row[f'facecam_pose_{point1}_x']) - float(row[f'facecam_pose_{point2}_x']),
-            float(row[f'facecam_pose_{point1}_y']) - float(row[f'facecam_pose_{point2}_y'])
-        ])
-        v2 = np.array([
-            float(row[f'facecam_pose_{point3}_x']) - float(row[f'facecam_pose_{point2}_x']),
-            float(row[f'facecam_pose_{point3}_y']) - float(row[f'facecam_pose_{point2}_y'])
-        ])
-        
-        v1_norm = np.linalg.norm(v1)
-        v2_norm = np.linalg.norm(v2)
-        
-        if v1_norm == 0 or v2_norm == 0:
-            return np.nan
-        
-        dot_product = np.clip(np.dot(v1, v2) / (v1_norm * v2_norm), -1.0, 1.0)
-        angle_rad = np.arccos(dot_product)
-        return np.degrees(angle_rad)
-
-    # Convert numeric columns to float
-    numeric_cols = [col for col in df_pose.columns if col.endswith(('_x', '_y', '_likelihood'))]
-    df_pose[numeric_cols] = df_pose[numeric_cols].astype(float)
-
-    # Calculate vector lengths
-    df_pose['facecam_pose_nose_neck_length'] = df_pose.apply(
-        calculate_vector_length, args=('nose', 'neck'), axis=1)
-    df_pose['facecam_pose_neck_body1_length'] = df_pose.apply(
-        calculate_vector_length, args=('neck', 'body_1'), axis=1)
-
-    # Calculate angles at joints
-    df_pose['facecam_pose_nose_neck_body1_angle'] = df_pose.apply(
-        calculate_angle, args=('nose', 'neck', 'body_1'), axis=1)
-    # TODO model needs finetuning...
-    valid_angle_mask = df_pose['facecam_pose_nose_neck_body1_angle'].between(55, 235)
-    df_pose.loc[~valid_angle_mask, 'facecam_pose_nose_neck_body1_angle'] = np.nan
-    df_pose['facecam_pose_body1_body2_body3_angle'] = df_pose.apply(
-        calculate_angle, args=('body_1', 'body_2', 'body_3'), axis=1)
+    df_pose = df_pose.astype(float)
     
+    # remove dlc files again
+    dlc_files = [f for f in os.listdir(camera_dir) if not f.endswith('.mp4')]
+    for f in dlc_files:
+        os.remove(os.path.join(camera_dir, f))
+    
+    timestamps = session_modality_from_nas(session_fullfname, f"{CAM}_packages")
+    # reindex to full range of image ids, can be missing
+    timestamps = timestamps.set_index(f"{CAM}_image_id").reindex(range(timestamps.index.min(), 
+                                                                       timestamps.index.max() + 1))  
+    # interpolate missing timestamps linearly, if any
+    timestamps[f'{CAM}_image_pc_timestamp'] = timestamps[f'{CAM}_image_pc_timestamp'].interpolate(method='linear')
+    timestamps[f'{CAM}_image_ephys_timestamp'] = timestamps[f'{CAM}_image_ephys_timestamp'].interpolate(method='linear')
 
-    # add angular velocity columns
-    timestamp_col = 'facecam_pose_ephys_timestamp'
-    if df_pose.loc[:,timestamp_col].isna().iloc[0]:
-        timestamp_col = 'facecam_pose_pc_timestamp'
-
-    timestamps = df_pose[timestamp_col].astype(float).values
-
-    for angle_col in ['facecam_pose_nose_neck_body1_angle',
-                      'facecam_pose_body1_body2_body3_angle']:
-        pose_angle_diff = np.diff(df_pose[angle_col].astype(float).values)
-        timediff_s = np.diff(timestamps) / 1_000_000  # convert us to s
-        pose_angle_vel = pose_angle_diff / timediff_s
-
-        df_pose[angle_col + '_velocity'] = np.concatenate(([pose_angle_vel[0]], pose_angle_vel))
-        in_range = df_pose[angle_col + '_velocity'].abs() < 450
-        df_pose[angle_col + '_likelihood'] = in_range.astype(float)
-
-    df_pose["facecam_image_pc_timestamp"] = data["facecam_image_pc_timestamp"]
-    df_pose["facecam_image_ephys_timestamp"] = data["facecam_image_ephys_timestamp"]
-    return df_pose 
+    length_mism = len(df_pose) - len(timestamps)
+    if length_mism != 0:
+        L.logger.error(f"Length mismatch between DLC pose data and timestamps: {len(df_pose)} vs {len(timestamps)}. Diff: {length_mism}. ")
+        return
+    
+    us_timestamps = timestamps[f'{CAM}_image_ephys_timestamp']
+    if pd.isna(us_timestamps).all():
+        us_timestamps = timestamps[f'{CAM}_image_pc_timestamp']
+    
+    # add kinematic features, this will also filter out low-likelihood frames and 
+    # frames with high angular velocity (potentially tracking errors)
+    df_pose = add_kinematic_features(
+        df=df_pose,
+        skeleton=yaml_content.get('skeleton'),
+        timestamps_us=us_timestamps.values,
+        min_likelihood=aC.DLC_MIN_LIKELIHOOD,
+        max_angular_vel=aC.DLC_MAX_ANGULAR_VELOCITY,
+        segment_names=aC.DLC_SKELETON_NAMES,
+    )
+    
+    # add back the timestamps for merging with framewise data
+    df_pose["image_pc_timestamp"] = timestamps[f"{CAM}_image_pc_timestamp"].values
+    df_pose["image_ephys_timestamp"] = timestamps[f"{CAM}_image_ephys_timestamp"].values
+    return df_pose

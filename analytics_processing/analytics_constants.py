@@ -70,8 +70,20 @@ PARADIGM_NAMES = {
     0: "[logger]",
     1100: '[tethered]',
 }
-    
 
+DLC_MODEL_SUBDIR = os.path.join("dlc_pose_estim", "ratVRposes-Simon-2026-02-11") # modify based on the model
+DLC_CAMERA_FNAME = 'ttlcam4.mp4'
+DLC_CAMERA_FNAME = 'facecam.mp4'
+DLC_BATCH_SIZE = 64
+DLC_MIN_LIKELIHOOD = 0.6
+DLC_MAX_ANGULAR_VELOCITY = 720.0
+DLC_SKELETON_NAMES = {
+    ('nose', 'neck'): 'head',
+    ('neck', 'right_front_paw'): 'front_paw',
+    ('neck', 'mid_spine'): 'fixed_body',
+    ('mid_spine', 'late_spine'): 'lower_body',
+    ('late_spine', 'right_hind_paw'): 'hind_paw',
+}
 
 
 

@@ -26,7 +26,7 @@ def session_modality_from_nas(session_fullfname, key, where=None, start=None,
         data = _handle_ephys_from_nas(session_fullfname, start, stop, columns, raw=True)
         
     # special key for camera frames
-    elif key.endswith("cam_frames"):
+    elif key.endswith("_frames"):
         session_file = _load_session_hdf5(session_fullfname)
         data = _load_cam_frames(session_file, key, columns)
         session_file.close()

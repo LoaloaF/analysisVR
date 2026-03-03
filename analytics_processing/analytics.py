@@ -205,9 +205,8 @@ def _compute_sess_analytic(analytic, session_fullfname):
         track_kinematics = get_analytics(analytic="TrackKinematics",
                                          columns=['trial_id', 'frame_pc_timestamp',
                                                   'frame_ephys_timestamp', 'fps',
-                                                  'track_zone', 'frame_RawYawPitch_abs_velocity_sum',
-                                                  'frame_position', 'frame_velocity',
-                                                  'frame_acceleration', 
+                                                  'track_zone', 'frame_RawYawPitch_abs_vel_sum',
+                                                  'frame_position', 
                                                   ],
                                          session_names=[session_name])
         if track_kinematics is None:
@@ -229,18 +228,8 @@ def _compute_sess_analytic(analytic, session_fullfname):
         data = m2a.get_BehaviorEvents(session_fullfname, trialwise)
         schema = C.SCHEMA_BehaviorEvents
         
-    # TODO impelemnt 
     elif analytic == "BehaviorPose":
-        cols = ['trial_id', 'trial_start_pc_timestamp', 'trial_end_pc_timestamp',
-                'cue', 'trial_outcome', 'choice_R1', 'choice_R2']
-        trialwise = get_analytics(analytic="BehaviorTrialwise", columns=cols,
-                                  session_names=[session_name])
-        if trialwise is None:
-            L.logger.warning("Missing lower level analytic")
-            return None
-        
-        data = m2a.get_BehaviorPose(session_fullfname, trialwise)
-        # schema = C.SCHEMA_BehaviorPose
+        data = m2a.get_BehaviorPose(session_fullfname)
     
     elif analytic == "BehaviorFramewise":
         # 1. track kinematics
@@ -266,7 +255,13 @@ def _compute_sess_analytic(analytic, session_fullfname):
             return None
         
         pose_data = get_analytics(analytic="BehaviorPose",
+                                  columns=['image_ephys_timestamp', 'image_pc_timestamp', 
+                                           'head_angle', 'head_angle_vel',
+                                           'movement_energy_smooth5'],
                                   session_names=[session_name],)
+        if pose_data is None:
+            L.logger.warning("Missing lower level analytic")
+            return None
     
         data = integr_analytics.get_BehaviorFramewise(track_kinematics, trialwise, 
                                                       events, pose_data)
@@ -387,8 +382,7 @@ def _compute_sess_analytic(analytic, session_fullfname):
         if fr_z is None:
             return None
         cols = ['trial_id', 'cue', 'trial_outcome', 'choice_R1', 'choice_R2',
-                 'to_ephys_timestamp', 'frame_position',
-                 'frame_raw', 'frame_yaw', 'frame_pitch']
+                 'to_ephys_timestamp', 'frame_position',]
         beh = get_analytics('Behavior40msAligned', session_names=[session_name],
                             columns=cols)
         if beh is None:
@@ -460,11 +454,11 @@ def _compute_sess_analytic(analytic, session_fullfname):
                # count based events
                'lick_detected', 'reward-sound_detected', 'reward-valve-open_detected', # 'reward-removed_detected', can be missing TODO, fix
                 # position info
-                "frame_position", "track_zone",
+                "frame_position", "track_zone", "track_zone_int", 'cue_visible',
                 # action from camera pose
-                "facecam_pose_nose_neck_body1_angle",
-                "facecam_pose_nose_neck_body1_angle_likelihood",
-                "facecam_pose_nose_neck_body1_angle_velocity",
+                "frame_head_angle",
+                "frame_head_angle_vel",
+                "frame_movement_energy_smooth5",
         ]
         behavior = get_analytics('BehaviorFramewise', session_names=[session_name], 
                                  columns=cols)

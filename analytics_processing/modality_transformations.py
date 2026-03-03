@@ -263,7 +263,7 @@ def calc_trialwise_metrics(trials, track_kinematics, trial_variable):
             
             # calculate when animal was below velocity threshold
             fps = zone_trial_frames["fps"].iloc[0]
-            stopping_mask = zone_trial_frames["frame_RawYawPitch_abs_velocity_sum"] < thr*fps
+            stopping_mask = zone_trial_frames["frame_RawYawPitch_abs_vel_sum"] < thr*fps
             R_str = "R1" if zone == "reward1Zone" else "R2"
             
             zone_trial_metrics[f"choice_{R_str}"] = stopping_mask.any().astype(int)
@@ -296,9 +296,6 @@ def calc_trialwise_metrics(trials, track_kinematics, trial_variable):
                                                            include_groups=True)
     result.index = result.index.droplevel(1)  # drop the track_zone level
     result = result.unstack(level=1).reset_index(drop=True)
-    
-    print(result.dtypes)
-    # exit()
     return result
 
 def unity_modality_track_spatial_bins(frames):
@@ -532,13 +529,24 @@ def fix_missing_paradigm_variable_names(data):
         # P800
         "LR": "lick_triggers_reward",
         
-        # P1100
+        "ST_1": "velocity_threshold_at_R1",
         "ST_2": "velocity_threshold_at_R2",
         "SR": 'multi_reward_requires_stop',
         "DR": 'both_R1_R2_rewarded',
         "RF": 'flip_Cue1R1_Cue2R2',
         "NP": 'prob_cue1_trial',
         "GF": 'movement_gain_scaler',
+        
+        # P1100 revised with one R location....
+        #     trial_id  stop_threshold  stop_threshold_2  maximum_reward_number  cue  stay_reward  double_reward  reward_flip  near_probability  gain_factor
+        "stop_threshold": "velocity_threshold_at_R1",
+        "stop_threshold_2": "velocity_threshold_at_R2",
+        "stay_reward": 'multi_reward_requires_stop',
+        "double_reward": 'both_R1_R2_rewarded',
+        "reward_flip": 'flip_Cue1R1_Cue2R2',
+        "near_probability": 'prob_cue1_trial',
+        "gain_factor": 'movement_gain_scaler',
+        
     }
     # paradigm P1100 hacky fix to correct an old label from P0800...
     if all(True if c in data.columns else False for c in ['trial_id', 'stay_time', 'maximum_reward_number', 'cue', 'DR']):

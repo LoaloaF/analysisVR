@@ -2,6 +2,7 @@ import os
 import time
 import json
 
+from joblib import Parallel, delayed
 import numpy as np
 import pandas as pd
 import re
@@ -2083,90 +2084,96 @@ def get_ensembles_t0_events(
 
 def get_SVMCueOutcomeChoicePred(fr_z, behavior, t0_event_intervals):
     
-    
     def fit_SVMs_with_bootstrap(X, Y, n_iterations=200):
-        # if lbl_counts.min() < 5:
-        #     print(f"Not enough samples for {name}: ({lbl_counts})")
-        #     return None
-        
-        predictions = []
-        rng = np.random.default_rng(42)
+        # --- run grid search ONCE on the full data to find best C ---
+        Cs = [0.1, .5, 1, 5, 10]
+        pipeline = Pipeline([
+            ('norm', Normalizer(norm='l2')),
+            ('svc', SVC(kernel='linear', gamma='scale'))
+        ])
+        grid_search = GridSearchCV(
+            estimator=pipeline,
+            param_grid={'svc__C': Cs},
+            cv=6,
+            scoring='balanced_accuracy',
+            n_jobs=-1,
+            verbose=False,
+        )
+        grid_search.fit(X, Y)
+        best_C = grid_search.best_params_['svc__C']
+        print(f"Best C from grid search: {best_C}")
 
-        Cs = [0.1, .5, 1, 5, 10,]
-        accs, f1s = [], []
+        # precompute once before loop
+        lbl_counts = pd.Series(Y).value_counts()
+        if lbl_counts.min() < 3:
+            print(f"Not enough samples ({lbl_counts}), aborting")
+            return None
 
-        aggr_predictions = np.ones((n_iterations, len(X)), dtype=int) * -1
-        print(aggr_predictions.shape)
-        
-        # model params
-        ws, bs = [], []
-        for i in range(n_iterations):
+        def _one_bootstrap(seed):
+            rng = np.random.default_rng(seed)
             indices = rng.choice(len(X), size=len(X), replace=True)
             X_boot, y_boot = X[indices], Y[indices]
-            # only a single class check:
+
             if len(np.unique(y_boot)) < 2:
-                print("Skipping SVM fit due to single class in bootstrap sample")
-                continue
+                return None
+
             oob_mask = np.ones(len(X), dtype=bool)
             oob_mask[indices] = False
             X_oob, y_oob = X[oob_mask], Y[oob_mask]
 
             if len(y_oob) < 4 or len(np.unique(y_oob)) < 2:
-                print("Skipping SVM fit due to insufficient or single class in OOB sample")
-                continue
-            
-            lbl_counts = pd.Series(Y).value_counts()
-            if lbl_counts.min() < 3:
-                print(f"Not enough samples ({lbl_counts})")
-                continue
-            
-             # Define a pipeline combining a scaler with the SVC
-            pipeline = Pipeline([
-                # ('scaler', StandardScaler()),
-                ('norm', Normalizer(norm='l2')), # cosine distance
-                ('svc', SVC(kernel='linear', gamma='scale'))
+                return None
+
+            pipe = Pipeline([
+                ('norm', Normalizer(norm='l2')),
+                ('svc', SVC(kernel='linear', gamma='scale', C=best_C))
             ])
-            grid_search = GridSearchCV(
-                estimator=pipeline,
-                param_grid={'svc__C': Cs},
-                cv=6,
-                scoring='balanced_accuracy',
-                n_jobs=-1,
-                verbose=False,
-            )
-            grid_search.fit(X_boot, y_boot)
-            y_pred = grid_search.predict(X_oob)
-            report = classification_report(y_oob, y_pred, output_dict=True, zero_division=0)
+            pipe.fit(X_boot, y_boot)
+            y_pred = pipe.predict(X_oob)
 
-            ws.append(grid_search.best_estimator_.named_steps['svc'].coef_)
-            bs.append(grid_search.best_estimator_.named_steps['svc'].intercept_)
+            acc = balanced_accuracy_score(y_oob, y_pred)
+            f1 = classification_report(y_oob, y_pred, output_dict=True, zero_division=0)['macro avg']['f1-score']
+            w = pipe.named_steps['svc'].coef_
+            b = pipe.named_steps['svc'].intercept_
 
-            accs.append(balanced_accuracy_score(y_oob, y_pred))
-            f1s.append(report['macro avg']['f1-score'])
-            
-            # every row is one bootstrap iteration
-            aggr_predictions[i, oob_mask] = y_pred
-        
-        if len(ws) > 0:
-            W = np.vstack(ws)  # shape: (n_iterations, n_features)
-            w_mean = W.mean(axis=0)
-            # w_mean_unit = w_mean / np.linalg.norm(w_mean)
-            print("Average |w| =", np.linalg.norm(w_mean))
+            # return oob predictions as (indices, predictions) to reconstruct later
+            oob_indices = np.where(oob_mask)[0]
+            return {'acc': acc, 'f1': f1, 'w': w, 'b': b,
+                    'oob_indices': oob_indices, 'oob_preds': y_pred}
 
-        else:
-            w_mean = None
-        
-        # # get the "average" prediction across bootstrap iterations
-        aggr_predictions = pd.DataFrame(aggr_predictions)
-        aggr_predictions[aggr_predictions == -1] = np.nan
-        pred = aggr_predictions.mode(axis=0).iloc[0].values
-        
-        # difference
+        # parallelise over bootstrap iterations — each gets a unique seed
+        results_raw = Parallel(n_jobs=-1, backend='loky')(
+            delayed(_one_bootstrap)(seed) for seed in range(n_iterations)
+        )
+
+        # collect results, dropping failed iterations (None)
+        accs, f1s, ws, bs = [], [], [], []
+        aggr_predictions = np.ones((n_iterations, len(X)), dtype=float) * np.nan
+        for i, res in enumerate(results_raw):
+            if res is None:
+                continue
+            accs.append(res['acc'])
+            f1s.append(res['f1'])
+            ws.append(res['w'])
+            bs.append(res['b'])
+            aggr_predictions[i, res['oob_indices']] = res['oob_preds']
+
+        if len(ws) == 0:
+            return None
+
+        W = np.vstack(ws)
+        w_mean = W.mean(axis=0)
+        print(f"Average |w| = {np.linalg.norm(w_mean):.4f}")
+        print(f"Successful iterations: {len(f1s)} / {n_iterations}")
+
+        aggr_predictions_df = pd.DataFrame(aggr_predictions)
+        pred = aggr_predictions_df.mode(axis=0).iloc[0].values
+
         f1_aggr = classification_report(Y, pred, output_dict=True, zero_division=0)['macro avg']['f1-score']
-        aggr_err = (np.mean(f1s) - f1_aggr)
-        
+        aggr_err = np.mean(f1s) - f1_aggr
         ci = np.percentile(f1s, [10, 90])
         print(f"mean F1 {f1_aggr:.3f} (±{aggr_err:.2f}), 80% CI [{ci[0]:.3f}, {ci[1]:.3f}], len: {len(f1s)}\n")
+
         return {
             'aggr_error': aggr_err,
             'n_iterations': n_iterations,
@@ -2174,16 +2181,12 @@ def get_SVMCueOutcomeChoicePred(fr_z, behavior, t0_event_intervals):
             'w': w_mean,
             'predictions': pred,
             'y_true': Y.tolist(),
-            # 'b': np.mean(bs) if len(bs) > 0 else None,
-            
             'n_positives': int(np.sum(Y)),
             'n_negatives': int(len(Y) - np.sum(Y)),
-            
             'f1_aggr': float(f1_aggr),
             'f1_mean': float(np.mean(f1s)),
             'f1_ci_lower': float(ci[0]),
             'f1_ci_upper': float(ci[1]),
-            
             'acc_mean': float(np.mean(accs)),
             'acc_ci_lower': float(np.percentile(accs, 10)),
             'acc_ci_upper': float(np.percentile(accs, 90)),

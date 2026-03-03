@@ -1,4 +1,5 @@
 *.png
+!readme_gui_screenshot.png
 *.svg
 *.pkl
 ephys/impedance*

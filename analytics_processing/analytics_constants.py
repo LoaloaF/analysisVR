@@ -36,7 +36,10 @@ def device_paths():
             project_dir = "/Users/yaohaotian/Downloads/Study/BME/Research/MasterThesis/code/"
         elif "Sam" in folders:
             local_data_dir = "/Users/sam/eth_master/local_data/analysisVR_cache"
-            project_dir = "/Users/sam/eth_master/VirtualReality/"   
+            project_dir = "/Users/sam/eth_master/VirtualReality/" 
+        elif "alexlgv" in folders:
+            local_data_dir = "/Users/alexlgv/local_data/analysisVR_cache"
+            project_dir = "/Users/alexlgv/VirtualReality/"   
         else:
             raise ValueError("Unknown MacOS user. Edit analytics_constants.py in analysisVR.")
     

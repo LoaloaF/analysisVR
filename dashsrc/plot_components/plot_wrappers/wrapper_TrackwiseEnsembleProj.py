@@ -2,6 +2,7 @@ from dash import html, dcc, Input, Output, State, Dash, callback_context
 import dash_bootstrap_components as dbc
 import pandas as pd
 import numpy as np
+import inspect
 
 from ...components.dcc_graphs import get_general_graph_component
 from .data_selection_components import (
@@ -88,10 +89,16 @@ def calculate_figure(selected_paradigm, selected_animal, session_range,
     else:
         normalize_data = False
         
-    fig = plot_TrackFiringRate.render_plot(prim_data, sec_data, global_data['SessionMetadata'], 
-                                            global_data['SpikeClusterMetadata'],
-                                            n_sessions, metric_max, smooth_data, normalize_data,
-                                            colormap=colormap)
+    render_plot_params = inspect.signature(plot_TrackFiringRate.render_plot).parameters
+    if 'colormap' in render_plot_params:
+        fig = plot_TrackFiringRate.render_plot(prim_data, sec_data, global_data['SessionMetadata'],
+                                               global_data['SpikeClusterMetadata'],
+                                               n_sessions, metric_max, smooth_data, normalize_data,
+                                               colormap=colormap)
+    else:
+        fig = plot_TrackFiringRate.render_plot(prim_data, sec_data, global_data['SessionMetadata'],
+                                               global_data['SpikeClusterMetadata'],
+                                               n_sessions, metric_max, smooth_data, normalize_data)
     return fig
 
 

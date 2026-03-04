@@ -4,6 +4,7 @@ import dash_bootstrap_components as dbc
 from dash import ctx  # Dash >= 2.9
 
 import numpy as np
+import pandas as pd
 
 from CustomLogger import CustomLogger as Logger
 
@@ -21,6 +22,7 @@ def render(app: Dash, loaded_analytics: dict, loaded_raw_traces: dict) -> html.D
     D2M_PARADIGMS_DROPDOWN_ID = 'd2m-paradigm-dropdown'
     D2M_ANALYTICS_DROPDOWN_ID = 'd2m-analytics-dropdown'
     D2M_LOAD_DATA_BUTTON_ID = 'd2m-load-data-button'
+    D2M_EXCLUDE_SHORT_SESSIONS_ID = 'd2m-exclude-short-sessions'
     LOADING_OUTPUT_ID = 'loading-output'
 
     all_vis_names = C.SESSION_WISE_VISS + C.ANIMAL_WISE_VISS
@@ -65,24 +67,38 @@ def render(app: Dash, loaded_analytics: dict, loaded_raw_traces: dict) -> html.D
         Output(LOADING_OUTPUT_ID, 'children'),
         *[Output(data_loaded_id, 'data') for data_loaded_id in C.get_all_data_loaded_ids()],
         Input(D2M_LOAD_DATA_BUTTON_ID, 'n_clicks'),
+        Input(D2M_EXCLUDE_SHORT_SESSIONS_ID, 'value'),
         State(D2M_ANALYTICS_DROPDOWN_ID, 'value'),
         State(D2M_PARADIGMS_DROPDOWN_ID, 'value'),
         State(D2M_ANIMALS_DROPDOWN_ID, 'value'),
     )
-    def load_data(n_clicks, selected_analytics, selected_paradigms, selected_animals):
+    def load_data(n_clicks, exclude_short_sessions_value, selected_analytics, selected_paradigms, selected_animals):
         n_plots = len(C.SESSION_WISE_VISS) + len(C.ANIMAL_WISE_VISS)
         if n_clicks and selected_analytics:
             # Show loading message
             loading_message = "Loading data, please wait..."
+            exclude_short_sessions = (
+                exclude_short_sessions_value is not None and
+                'exclude_short_sessions' in exclude_short_sessions_value
+            )
 
             _load_all_data(selected_analytics, loaded_analytics, loaded_raw_traces, 
-                           selected_paradigms, selected_animals)
+                           selected_paradigms, selected_animals,
+                           exclude_short_sessions=exclude_short_sessions)
             
             data_exists = [np.all(np.isin(req_d, selected_analytics)).item()
                            for req_d in C.get_all_viss_req_data()]
             L.logger.debug(L.fmtmsg((dict(zip(C.get_all_data_loaded_ids(), data_exists)))))
-                
-            return {"marginTop": 15, "backgroundColor": "green"}, "", *data_exists
+            data_loaded_payload = [
+                {
+                    "loaded": True,
+                    "exclude_short_sessions": exclude_short_sessions,
+                    "load_clicks": n_clicks
+                } if exists else False
+                for exists in data_exists
+            ]
+
+            return {"marginTop": 15, "backgroundColor": "green"}, "", *data_loaded_payload
         return {"marginTop": 15, "backgroundColor": "blue"}, no_update, *([False] * n_plots)
 
     default_animals = [6]
@@ -101,6 +117,16 @@ def render(app: Dash, loaded_analytics: dict, loaded_raw_traces: dict) -> html.D
                 style={"marginTop": 15},
                 inputStyle={"marginRight": 10}
             ),
+            dcc.Checklist(
+                id=D2M_EXCLUDE_SHORT_SESSIONS_ID,
+                options=[
+                    {'label': 'exclude sessions <10 trials', 'value': 'exclude_short_sessions'},
+                ],
+                value=[],
+                inline=True,
+                style={"marginTop": 5},
+                inputStyle={"marginRight": 10}
+            )
         ], width=2),
         
         dbc.Col([
@@ -152,7 +178,8 @@ def render(app: Dash, loaded_analytics: dict, loaded_raw_traces: dict) -> html.D
         ], width=1),
     ])
     
-def _load_all_data(selected_analytics, loaded_analytics, loaded_raw_traces, selected_paradigms, selected_animals):
+def _load_all_data(selected_analytics, loaded_analytics, loaded_raw_traces, selected_paradigms, selected_animals,
+                   exclude_short_sessions=False):
     L = Logger()
     
     selected_analytics_filt = [a for a in selected_analytics if a != 'raw_traces']
@@ -170,6 +197,10 @@ def _load_all_data(selected_analytics, loaded_analytics, loaded_raw_traces, sele
         if analytic == 'Ensemble40msProjEventAligned':
             dat.set_index(['session_id', 't0', 'interval_t'], inplace=True,)
             print(dat)
+
+        if exclude_short_sessions:
+            dat = _exclude_sessions_with_less_than_n_trials(dat, min_trials=10)
+
         loaded_analytics[analytic] = dat
         
         # check if also raw_traces was in the passed selected_analytics list
@@ -192,3 +223,47 @@ def _load_all_data(selected_analytics, loaded_analytics, loaded_raw_traces, sele
                else f"Loaded ({loaded_analytics[analytic].shape})" 
                for analytic in loaded_analytics.keys()}
     L.logger.debug(L.fmtmsg(log_msg))
+
+
+def _exclude_sessions_with_less_than_n_trials(data, min_trials: int = 10):
+    if not hasattr(data, 'index') or not hasattr(data, 'columns'):
+        return data
+
+    index_names = list(getattr(data.index, 'names', [getattr(data.index, 'name', None)]))
+
+    if 'session_id' in index_names:
+        session_values = data.index.get_level_values('session_id')
+    elif 'session_id' in data.columns:
+        session_values = data['session_id']
+    else:
+        return data
+
+    if 'trial_id' in data.columns:
+        trial_values = data['trial_id']
+    elif 'trial_id' in index_names:
+        trial_values = data.index.get_level_values('trial_id')
+    elif 'triald_id' in data.columns:
+        trial_values = data['triald_id']
+    elif 'triald_id' in index_names:
+        trial_values = data.index.get_level_values('triald_id')
+    else:
+        return data
+
+    pairs = pd.DataFrame({
+        'session_id': np.asarray(session_values),
+        'trial_id': np.asarray(trial_values),
+    })
+
+    if pairs.empty:
+        return data
+
+    pairs = pairs.dropna(subset=['session_id', 'trial_id']).drop_duplicates()
+    if pairs.empty:
+        return data
+
+    session_trial_counts = pairs.groupby('session_id').size()
+    valid_sessions = session_trial_counts[session_trial_counts >= min_trials].index
+
+    if 'session_id' in index_names:
+        return data[data.index.get_level_values('session_id').isin(valid_sessions)]
+    return data[np.isin(np.asarray(data['session_id']), valid_sessions)]

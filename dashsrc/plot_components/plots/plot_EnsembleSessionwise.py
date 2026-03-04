@@ -568,7 +568,7 @@ def render_plot(data, ens_selection, event_selection, group_by="None", group_by_
     fig.update_layout(
         title=dict(
             text=(
-                "Session-wise ridgeline ensemble trajectories "
+                "EnsembleSessionwise trajectories "
                 f"(ensemble={ens_selection}, group by={group_by})"
             ),
             y=0.995,

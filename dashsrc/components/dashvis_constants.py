@@ -10,11 +10,11 @@ ANIMALS = 6,9, 10,11,12,13,15
 PARADIGMS = 800, 1100, 500, 0
 
 SESSION_WISE_VISS = ('SessionKinematics', "RawSpikes", 'SVMPredictions', 'CueCorrelation',
-                     'EnsembleEncoding', 'EnsembleRidgeline', 'EnsembleTrialwise',
+                     'EnsembleEncoding', 'EnsembleSessionwise', 'EnsembleTrialwise',
                      'EnsembleChoiceEncoding')
 ANIMAL_WISE_VISS = ('Kinematics', 'StayPerformance', 'StayRatio', 'SessionsOverview', 
                     'EvolvingStayTime', 'EvolvingStayDecision', 'TrackFiringRate', 
-                    'EvolvingPCSubspace', 'TrackwiseEnsembleProj')
+                    'EvolvingPCSubspace', 'TrackwiseEnsembleProj', 'NeuronCorrelation')
 DATA_LOADED_SessionKinematics_ID = 'SessionKinematics-data-loaded'
 DATA_LOADED_Kinematics_ID = 'Kinematics-data-loaded'
 DATA_LOADED_StayRatio_ID = 'Staytimes-data-loaded'
@@ -25,11 +25,12 @@ DATA_LOADED_EvolvingStayDecision_ID = 'EvolvingStayDecision-data-loaded'
 DATA_LOADED_RawSpikes_ID = 'RawSpikes-data-loaded'
 DATA_LOADED_TrackFiringRate_ID = 'TrackFiringRate-data-loaded'
 DATA_LOADED_TrackwiseEnsembleProj_ID = 'TrackwiseEnsembleProj-data-loaded'
+DATA_LOADED_NeuronCorrelation_ID = 'NeuronCorrelation-data-loaded'
 DATA_LOADED_SVMPredictions_ID = 'SVMPredictions-data-loaded'
 DATA_LOADED_CueCorrelation_ID = 'CueCorrelation-data-loaded'
 DATA_LOADED_EvolvingPCSubspace_ID = 'EvolvingPCSubspace-data-loaded'
 DATA_LOADED_EnsembleEncoding_ID = 'EnsembleEncoding-data-loaded'
-DATA_LOADED_EnsembleRidgeline_ID = 'EnsembleRidgeline-data-loaded'
+DATA_LOADED_EnsembleSessionwise_ID = 'EnsembleSessionwise-data-loaded'
 DATA_LOADED_EnsembleTrialwise_ID = 'EnsembleTrialwise-data-loaded'
 DATA_LOADED_EnsembleChoiceEncoding_ID = 'EnsembleChoiceEncoding-data-loaded'
 
@@ -57,6 +58,8 @@ def get_vis_name_data_loaded_id(vis_name):
             data_loaded_id = DATA_LOADED_TrackFiringRate_ID
         case 'TrackwiseEnsembleProj':
             data_loaded_id = DATA_LOADED_TrackwiseEnsembleProj_ID
+        case 'NeuronCorrelation':
+            data_loaded_id = DATA_LOADED_NeuronCorrelation_ID
         case 'SVMPredictions':
             data_loaded_id = DATA_LOADED_SVMPredictions_ID
         case 'CueCorrelation':
@@ -65,8 +68,8 @@ def get_vis_name_data_loaded_id(vis_name):
             data_loaded_id = DATA_LOADED_EvolvingPCSubspace_ID
         case 'EnsembleEncoding':
             data_loaded_id = DATA_LOADED_EnsembleEncoding_ID
-        case 'EnsembleRidgeline':
-            data_loaded_id = DATA_LOADED_EnsembleRidgeline_ID
+        case 'EnsembleSessionwise':
+            data_loaded_id = DATA_LOADED_EnsembleSessionwise_ID
         case 'EnsembleTrialwise':
             data_loaded_id = DATA_LOADED_EnsembleTrialwise_ID
         case 'EnsembleChoiceEncoding':
@@ -103,6 +106,8 @@ def get_vis_name_req_data(vis_name):
         case 'TrackwiseEnsembleProj':
             req_data = ("SpikeClusterMetadata", 'ConcatenatedEnsambles40ms',
                        'BehaviorTrackwise', 'SessionMetadata', 'TrackwiseEnsembleProj')
+        case 'NeuronCorrelation':
+            req_data = ('FiringRateTrackwiseHz', 'ConcatenatedEnsambles40ms')
         case 'SVMPredictions':
             req_data = 'SVMCueOutcomeChoicePred', 'SessionMetadata'
         case 'CueCorrelation':
@@ -111,7 +116,7 @@ def get_vis_name_req_data(vis_name):
             req_data = "SessionPCs40msCAs", "SessionPCs40ms", 'SessionMetadata'
         case 'EnsembleEncoding':
             req_data = 'EnsembleT0Projection', "SessionMetadata" #'BehaviorTrackwise', 
-        case 'EnsembleRidgeline':
+        case 'EnsembleSessionwise':
             req_data = 'EnsembleT0Projection', "SessionMetadata"
         case 'EnsembleTrialwise':
             req_data = 'EnsembleT0Projection', "SessionMetadata"

@@ -16,11 +16,12 @@ from ..plot_components.plot_wrappers import wrapper_EvolvingStayDecision
 from ..plot_components.plot_wrappers import wrapper_RawSpikes
 from ..plot_components.plot_wrappers import wrapper_TrackFiringRate
 from ..plot_components.plot_wrappers import wrapper_TrackwiseEnsembleProj
+from ..plot_components.plot_wrappers import wrapper_NeuronCorrelation
 from ..plot_components.plot_wrappers import wrapper_SVMPredictions
 from ..plot_components.plot_wrappers import wrapper_EvolvingPCSubspace
 from ..plot_components.plot_wrappers import wrapper_CueCorrelation
 from ..plot_components.plot_wrappers import wrapper_EnsembleEncoding
-from ..plot_components.plot_wrappers import wrapper_EnsembleRidgeline
+from ..plot_components.plot_wrappers import wrapper_EnsembleSessionwise
 from ..plot_components.plot_wrappers import wrapper_EnsembleTrialwise
 from ..plot_components.plot_wrappers import wrapper_EnsembleChoiceEncoding
 
@@ -44,8 +45,8 @@ def create_sessionwise_vis_containers(app: Dash, loaded_analytics: dict, loaded_
             case "EnsembleEncoding":
                 analysis_div = wrapper_EnsembleEncoding.render(app, loaded_analytics,
                                                                vis_name=vis_name)
-            case "EnsembleRidgeline":
-                analysis_div = wrapper_EnsembleRidgeline.render(app, loaded_analytics,
+            case "EnsembleSessionwise":
+                analysis_div = wrapper_EnsembleSessionwise.render(app, loaded_analytics,
                                                                 vis_name=vis_name)
             case "EnsembleTrialwise":
                 analysis_div = wrapper_EnsembleTrialwise.render(app, loaded_analytics,
@@ -88,6 +89,9 @@ def create_multisession_vis_containers(app: Dash, loaded_analytics: dict):
                                                               vis_name=vis_name)
             case "TrackwiseEnsembleProj":
                 analysis_div = wrapper_TrackwiseEnsembleProj.render(app, loaded_analytics,
+                                                              vis_name=vis_name)
+            case "NeuronCorrelation":
+                analysis_div = wrapper_NeuronCorrelation.render(app, loaded_analytics,
                                                               vis_name=vis_name)
             case "EvolvingPCSubspace":
                 analysis_div = wrapper_EvolvingPCSubspace.render(app, loaded_analytics,

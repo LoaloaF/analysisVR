@@ -3,7 +3,7 @@ import dash_bootstrap_components as dbc
 import pandas as pd
 
 import dashsrc.components.dashvis_constants as C
-from ..plots import plot_EnsembleRidgeline
+from ..plots import plot_EnsembleSessionwise
 
 from .. .components.dcc_graphs import get_general_graph_component
 from .data_selection_components import (
@@ -236,7 +236,7 @@ def render(app: Dash, global_data: dict, vis_name: str) -> html.Div:
         if data.empty:
             return {}
 
-        return plot_EnsembleRidgeline.render_plot(
+        return plot_EnsembleSessionwise.render_plot(
             data,
             ens_selection=ens_selection,
             event_selection=event_selection,

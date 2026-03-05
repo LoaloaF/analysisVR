@@ -8,7 +8,12 @@ def device_paths():
     user = os.getlogin()
     # print(f"OS: {which_os}, User: {user}")
     
-    if which_os == 'Linux' and user == 'houmanjava':
+    if which_os == 'Linux' and os.path.isdir("/mnt/slow/BMI/VirtualReality/SpatialSequenceLearning/"):
+        nas_dir = "/mnt/slow/BMI/VirtualReality/SpatialSequenceLearning/"
+        local_data_dir = os.path.expanduser("~/local_data/")
+        project_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+
+    elif which_os == 'Linux' and user == 'houmanjava':
         nas_dir = "/mnt/SpatialSequenceLearning/"
         local_data_dir = "/home/houmanjava/local_data/"
         project_dir = "/home/houmanjava/meatesting/"

@@ -9,7 +9,7 @@ from plotly.colors import convert_colors_to_same_type
 ANIMALS = 6,9, 10,11,12,13,15
 PARADIGMS = 800, 1100, 500, 0
 
-SESSION_WISE_VISS = ('SessionKinematics', "RawSpikes", 'SVMPredictions', 'CueCorrelation',
+SESSION_WISE_VISS = ('SessionKinematics', "RawSpikes", 'SVMPredictions', 'mPFCRepresentation', 'CueCorrelation',
                      'EnsembleEncoding', 'EnsembleRidgeline', 'EnsembleTrialwise',
                      'EnsembleChoiceEncoding')
 ANIMAL_WISE_VISS = ('Kinematics', 'StayPerformance', 'StayRatio', 'SessionsOverview', 
@@ -26,6 +26,7 @@ DATA_LOADED_RawSpikes_ID = 'RawSpikes-data-loaded'
 DATA_LOADED_TrackFiringRate_ID = 'TrackFiringRate-data-loaded'
 DATA_LOADED_TrackwiseEnsembleProj_ID = 'TrackwiseEnsembleProj-data-loaded'
 DATA_LOADED_SVMPredictions_ID = 'SVMPredictions-data-loaded'
+DATA_LOADED_mPFCRepresentation_ID = 'mPFCRepresentation-data-loaded'
 DATA_LOADED_CueCorrelation_ID = 'CueCorrelation-data-loaded'
 DATA_LOADED_EvolvingPCSubspace_ID = 'EvolvingPCSubspace-data-loaded'
 DATA_LOADED_EnsembleEncoding_ID = 'EnsembleEncoding-data-loaded'
@@ -59,6 +60,8 @@ def get_vis_name_data_loaded_id(vis_name):
             data_loaded_id = DATA_LOADED_TrackwiseEnsembleProj_ID
         case 'SVMPredictions':
             data_loaded_id = DATA_LOADED_SVMPredictions_ID
+        case 'mPFCRepresentation':
+            data_loaded_id = DATA_LOADED_mPFCRepresentation_ID
         case 'CueCorrelation':
             data_loaded_id = DATA_LOADED_CueCorrelation_ID
         case 'EvolvingPCSubspace':
@@ -104,7 +107,21 @@ def get_vis_name_req_data(vis_name):
             req_data = ("SpikeClusterMetadata", 'ConcatenatedEnsambles40ms',
                        'BehaviorTrackwise', 'SessionMetadata', 'TrackwiseEnsembleProj')
         case 'SVMPredictions':
-            req_data = 'SVMCueOutcomeChoicePred', 'SessionMetadata'
+            req_data = (
+                'SVMCueOutcomeChoicePred',
+                'SessionMetadata',
+                'BehaviorTrialwise',
+                'TrialWiseT0Events40ms',
+                'Behavior40msAligned',
+            )
+        case 'mPFCRepresentation':
+            req_data = (
+                'SVMCueOutcomeChoicePred',
+                'SessionMetadata',
+                'BehaviorTrialwise',
+                'TrialWiseT0Events40ms',
+                'Behavior40msAligned',
+            )
         case 'CueCorrelation':
             req_data = 'PVCueCorr', 'SessionMetadata',
         case 'EvolvingPCSubspace':

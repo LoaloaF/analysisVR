@@ -326,9 +326,11 @@ def render_trial_split_plot(
     t0_events,
     behavior_aligned,
     x_modality,
+    x_modality_compare,
     predict_y_name,
     selected_intervals,
     model,
+    compare_mode,
     group1_filters,
     group2_filters,
     group1_label="Group 1",
@@ -337,7 +339,7 @@ def render_trial_split_plot(
     fig = make_subplots(
         rows=3,
         cols=1,
-        shared_xaxes=False,
+        shared_xaxes=True,
         vertical_spacing=0.08,
         row_heights=[0.42, 0.24, 0.34],
         subplot_titles=(
@@ -357,28 +359,48 @@ def render_trial_split_plot(
         fig.add_annotation(text="Missing required SVM columns for split plot.", x=0.5, y=0.5, xref="paper", yref="paper", showarrow=False)
         return fig
 
-    df = src.copy()
-    df = df[df["X_modality"].astype(str) == str(x_modality)]
-    df = df[df["predict_y_name"].astype(str) == str(predict_y_name)]
-    if "model" in df.columns and model is not None:
-        df = df[df["model"].astype(str) == str(model)]
+    base_df = src.copy()
+    base_df = base_df[base_df["predict_y_name"].astype(str) == str(predict_y_name)]
+    if "model" in base_df.columns and model is not None:
+        base_df = base_df[base_df["model"].astype(str) == str(model)]
 
+    df = base_df[base_df["X_modality"].astype(str) == str(x_modality)].copy()
     if df.empty:
         fig.add_annotation(text="No rows for selected modality/target/model.", x=0.5, y=0.5, xref="paper", yref="paper", showarrow=False)
         return fig
 
+    df_compare = pd.DataFrame()
+    if compare_mode == "brain_area" and x_modality_compare is not None:
+        df_compare = base_df[base_df["X_modality"].astype(str) == str(x_modality_compare)].copy()
+        if df_compare.empty:
+            fig.add_annotation(
+                text="No rows for secondary brain area under the current target/model.",
+                x=0.5,
+                y=0.5,
+                xref="paper",
+                yref="paper",
+                showarrow=False,
+            )
+            return fig
+
     intervals = _ordered_intervals(df, selected_intervals)
+    if compare_mode == "brain_area" and not df_compare.empty:
+        compare_intervals = set(df_compare["interval_name"].astype(str).unique())
+        intervals = [i for i in intervals if i in compare_intervals]
     if len(intervals) == 0:
         fig.add_annotation(text="No intervals selected.", x=0.5, y=0.5, xref="paper", yref="paper", showarrow=False)
         return fig
+
+    intervals = intervals[:3]
 
     trial_meta = _extract_trial_table(behavior_trialwise)
 
     offset = 0.0
     shown_legend = {"g1": False, "g2": False, "all": False, "pos": False}
     top_has_data = False
-    interval_counts = []
     plane_rows = []
+    plane_x_coords = []
+    interval_x_ranges = []
 
     for interval_name in intervals:
         interval_df = df[df["interval_name"].astype(str) == str(interval_name)].sort_values("timebin")
@@ -390,11 +412,21 @@ def render_trial_split_plot(
             # Fallback when interval trial mapping is unavailable.
             trial_ids = trial_meta.index.to_numpy(dtype=int) if len(trial_meta) else np.array([], dtype=int)
 
-        mask1 = _apply_group_filters(trial_meta, trial_ids, group1_filters)
-        mask2 = _apply_group_filters(trial_meta, trial_ids, group2_filters)
+        if compare_mode == "brain_area" and not df_compare.empty:
+            interval_df_compare = df_compare[df_compare["interval_name"].astype(str) == str(interval_name)].sort_values("timebin")
+            compare_trial_ids = _get_interval_trial_ids(t0_events, interval_name)
+            if len(compare_trial_ids) == 0:
+                compare_trial_ids = trial_meta.index.to_numpy(dtype=int) if len(trial_meta) else np.array([], dtype=int)
 
-        g1 = _compute_f1_for_group(interval_df, mask1)
-        g2 = _compute_f1_for_group(interval_df, mask2)
+            all_mask_primary = np.ones(len(trial_ids), dtype=bool)
+            all_mask_secondary = np.ones(len(compare_trial_ids), dtype=bool)
+            g1 = _compute_f1_for_group(interval_df, all_mask_primary)
+            g2 = _compute_f1_for_group(interval_df_compare, all_mask_secondary)
+        else:
+            mask1 = _apply_group_filters(trial_meta, trial_ids, group1_filters)
+            mask2 = _apply_group_filters(trial_meta, trial_ids, group2_filters)
+            g1 = _compute_f1_for_group(interval_df, mask1)
+            g2 = _compute_f1_for_group(interval_df, mask2)
 
         if "f1_mean" in interval_df.columns:
             all_trace = interval_df[["timebin", "f1_mean"]].copy().sort_values("timebin")
@@ -403,7 +435,6 @@ def render_trial_split_plot(
             all_trace = _compute_f1_for_group(interval_df, all_mask).rename(columns={"f1": "f1_mean"})
 
         plane_rows.append(interval_df.copy())
-        interval_counts.append(len(interval_df))
 
         x_vals = pd.to_numeric(interval_df["timebin"], errors="coerce").to_numpy()
         x_vals = x_vals[np.isfinite(x_vals)]
@@ -412,6 +443,8 @@ def render_trial_split_plot(
 
         interval_start = float(np.nanmin(x_vals) + offset)
         interval_end = float(np.nanmax(x_vals) + offset)
+        interval_x_ranges.append((interval_start, interval_end))
+        plane_x_coords.extend((x_vals + offset).tolist())
 
         pos_traj = _extract_interval_position_trajectories(behavior_aligned, t0_events, interval_name)
         if pos_traj is not None:
@@ -459,20 +492,21 @@ def render_trial_split_plot(
                 shown_legend["pos"] = True
                 top_has_data = True
 
-        fig.add_trace(
-            go.Scatter(
-                x=all_trace["timebin"] + offset,
-                y=all_trace["f1_mean"],
-                mode="lines",
-                line=dict(color="rgba(120,120,120,0.8)", dash="dot"),
-                name="All trials",
-                legendgroup="all",
-                showlegend=not shown_legend["all"],
-            ),
-            row=2,
-            col=1,
-        )
-        shown_legend["all"] = True
+        if compare_mode != "brain_area":
+            fig.add_trace(
+                go.Scatter(
+                    x=all_trace["timebin"] + offset,
+                    y=all_trace["f1_mean"],
+                    mode="lines",
+                    line=dict(color="rgba(120,120,120,0.8)", dash="dot"),
+                    name="All trials",
+                    legendgroup="all",
+                    showlegend=not shown_legend["all"],
+                ),
+                row=2,
+                col=1,
+            )
+            shown_legend["all"] = True
 
         fig.add_trace(
             go.Scatter(
@@ -551,9 +585,17 @@ def render_trial_split_plot(
         angle_matrix = _compute_angle_matrix(plane_df)
         if angle_matrix is not None:
             n = angle_matrix.shape[0]
+            if len(plane_x_coords) >= n:
+                heatmap_axis = np.asarray(plane_x_coords[:n], dtype=float)
+            else:
+                # Fallback keeps behavior stable when coordinate extraction is incomplete.
+                heatmap_axis = np.arange(n, dtype=float)
+
             fig.add_trace(
                 go.Heatmap(
                     z=angle_matrix,
+                    x=heatmap_axis,
+                    y=heatmap_axis,
                     colorscale="RdBu_r",
                     zmin=0,
                     zmax=180,
@@ -563,10 +605,10 @@ def render_trial_split_plot(
                 col=1,
             )
 
-            cum = np.cumsum(interval_counts)
-            for b in cum[:-1]:
-                fig.add_vline(x=b - 0.5, line_color="rgba(0,0,0,0.25)", line_dash="dash", row=3, col=1)
-                fig.add_hline(y=b - 0.5, line_color="rgba(0,0,0,0.25)", line_dash="dash", row=3, col=1)
+            for i in range(len(interval_x_ranges) - 1):
+                boundary = (interval_x_ranges[i][1] + interval_x_ranges[i + 1][0]) / 2
+                fig.add_vline(x=boundary, line_color="rgba(0,0,0,0.25)", line_dash="dash", row=3, col=1)
+                fig.add_hline(y=boundary, line_color="rgba(0,0,0,0.25)", line_dash="dash", row=3, col=1)
 
             fig.update_xaxes(title_text="Fitted planes (interval/timebin index)", row=3, col=1)
             fig.update_yaxes(title_text="Fitted planes", row=3, col=1)
@@ -585,8 +627,11 @@ def render_trial_split_plot(
     fig.update_yaxes(title_text="Position (cm)", row=1, col=1)
     fig.update_yaxes(range=[0.0, 1.0], title_text="Macro F1", row=2, col=1)
 
-    fig.update_xaxes(title_text="Timebin (concatenated across intervals)", row=1, col=1)
-    fig.update_xaxes(title_text="Timebin (concatenated across intervals)", row=2, col=1)
+    fig.update_xaxes(title_text="Timebin (concatenated across intervals)", showticklabels=True, row=1, col=1)
+    fig.update_xaxes(title_text="Timebin (concatenated across intervals)", showticklabels=True, row=2, col=1)
+    fig.update_xaxes(title_text="Timebin (concatenated across intervals)", showticklabels=True, row=3, col=1)
+    fig.update_xaxes(matches="x", row=2, col=1)
+    fig.update_xaxes(matches="x", row=3, col=1)
     fig.update_layout(
         margin=dict(l=20, r=20, t=50, b=30),
         height=1150,

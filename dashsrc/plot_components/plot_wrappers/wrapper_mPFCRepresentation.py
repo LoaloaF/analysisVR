@@ -1,5 +1,6 @@
 from dash import Dash, Input, Output, dcc, html
 import dash_bootstrap_components as dbc
+import numpy as np
 import pandas as pd
 
 import dashsrc.components.dashvis_constants as C
@@ -14,9 +15,29 @@ from .data_selection_components import (
     session_dropdown_component,
 )
 from ..plots import plot_mPFCRepresentation
+from ..plots.plot_mPFCRepresentation import (
+    _apply_group_filters,
+    _extract_trial_table,
+    _get_interval_trial_ids,
+)
 
 
 MAX_INTERVALS_PER_UNIT = 3
+
+
+def _compute_group_n(behavior, t0_events, selected_animal, selected_session, selected_intervals, filters):
+    """Return the number of trials that match *filters* and appear in the selected intervals."""
+    b = _slice_single_session(behavior, selected_animal, selected_session)
+    t0 = _slice_single_session(t0_events, selected_animal, selected_session)
+    trial_meta = _extract_trial_table(b)
+    all_ids: set = set()
+    for iv in (selected_intervals or [])[:MAX_INTERVALS_PER_UNIT]:
+        all_ids.update(_get_interval_trial_ids(t0, iv).tolist())
+    if not all_ids:
+        return 0
+    ids_arr = np.array(sorted(all_ids), dtype=int)
+    mask = _apply_group_filters(trial_meta, ids_arr, filters)
+    return int(mask.sum())
 
 
 def _slice_single_session(data, selected_animal, selected_session):
@@ -74,7 +95,10 @@ def _group_controls(vis_name, group_key, title):
     return (
         html.Div(
             [
-                html.H6(title, style={"marginTop": 8}),
+                html.Div(
+                    id=f"{prefix}-header-label",
+                    children=html.H4(title, style={"marginTop": 8, "fontWeight": "bold"}),
+                ),
                 *_checklist(
                     "Outcome",
                     f"{prefix}-outcome",
@@ -114,6 +138,7 @@ def _group_controls(vis_name, group_key, title):
             "trial": f"{prefix}-trial",
             "r1": f"{prefix}-r1",
             "r2": f"{prefix}-r2",
+            "header_label": f"{prefix}-header-label",
         },
     )
 
@@ -193,6 +218,78 @@ def render(app: Dash, global_data: dict, vis_name: str) -> html.Div:
             ypred_default,
             interval_options,
             interval_default,
+        )
+
+    # ── Dynamic group-header labels (n = X trials) ─────────────────────────
+    @app.callback(
+        Output(g1_ids["header_label"], "children"),
+        Output(g2_ids["header_label"], "children"),
+        Input(ANIMAL_DROPD_ID, "value"),
+        Input(SESSION_DROPD_ID, "value"),
+        Input(compare_mode_id, "value"),
+        Input(interval_dropdown_id, "value"),
+        Input(g1_ids["outcome"], "value"),
+        Input(g1_ids["cue"], "value"),
+        Input(g1_ids["trial"], "value"),
+        Input(g1_ids["r1"], "value"),
+        Input(g1_ids["r2"], "value"),
+        Input(g2_ids["outcome"], "value"),
+        Input(g2_ids["cue"], "value"),
+        Input(g2_ids["trial"], "value"),
+        Input(g2_ids["r1"], "value"),
+        Input(g2_ids["r2"], "value"),
+    )
+    def update_group_headers(
+        selected_animal,
+        selected_session,
+        compare_mode,
+        selected_intervals,
+        g1o, g1c, g1t, g1r1, g1r2,
+        g2o, g2c, g2t, g2r1, g2r2,
+    ):
+        _ALL = {
+            "outcome": ["1 R", "1+ R", "no R"],
+            "cue": ["Cue1 trials", "Cue2 trials"],
+            "trial": ["1/3", "2/3", "3/3"],
+            "r1": ["stop", "skip"],
+            "r2": ["stop", "skip"],
+        }
+        if compare_mode == "brain_area":
+            g1_filters = g2_filters = _ALL
+            label1, label2 = "Brain Area 1", "Brain Area 2"
+            desc1 = desc2 = "all trials"
+        elif compare_mode == "win_lose":
+            g1_filters = {**_ALL, "outcome": ["1 R", "1+ R"]}
+            g2_filters = {**_ALL, "outcome": ["no R"]}
+            label1, label2 = "Win  (rewarded)", "Lose  (no reward)"
+            desc1 = desc2 = None
+        else:
+            g1_filters = {"outcome": g1o or [], "cue": g1c or [], "trial": g1t or [], "r1": g1r1 or [], "r2": g1r2 or []}
+            g2_filters = {"outcome": g2o or [], "cue": g2c or [], "trial": g2t or [], "r1": g2r1 or [], "r2": g2r2 or []}
+            label1, label2 = "Group 1", "Group 2"
+            desc1 = desc2 = None
+
+        n1 = _compute_group_n(
+            global_data.get("BehaviorTrialwise"),
+            global_data.get("TrialWiseT0Events40ms"),
+            selected_animal, selected_session, selected_intervals, g1_filters,
+        )
+        n2 = _compute_group_n(
+            global_data.get("BehaviorTrialwise"),
+            global_data.get("TrialWiseT0Events40ms"),
+            selected_animal, selected_session, selected_intervals, g2_filters,
+        )
+
+        def _make_header(label, n, desc, color):
+            n_str = f"n = {n} trials" if desc is None else f"{desc}  |  n = {n} trials"
+            return [
+                html.H4(label, style={"marginTop": 8, "fontWeight": "bold", "color": color, "marginBottom": 2}),
+                html.Small(n_str, style={"color": "#666", "fontStyle": "italic"}),
+            ]
+
+        return (
+            _make_header(label1, n1, desc1, "#1f77b4"),
+            _make_header(label2, n2, desc2, "#ff7f0e"),
         )
 
     @app.callback(
@@ -328,6 +425,48 @@ def render(app: Dash, global_data: dict, vis_name: str) -> html.Div:
     return html.Div(
         [
             dcc.Store(id=C.get_vis_name_data_loaded_id(vis_name), data=False),
+            # ── Section description ──────────────────────────────────────────
+            html.Div(
+                [
+                    html.H2(
+                        "mPFC / HP Neural Representation — SVM Decoding",
+                        style={"marginTop": 12, "marginBottom": 4},
+                    ),
+                    html.P(
+                        [
+                            "An SVM decoder is trained on neural population activity (spike counts) "
+                            "for a chosen ",
+                            html.Strong("brain area"),
+                            ", ",
+                            html.Strong("decoded target"),
+                            " (e.g. cue identity, trial outcome, R1/R2 choice), and "
+                            "one or more ",
+                            html.Strong("time intervals"),
+                            ". "
+                            "The macro-F1 score is then re-evaluated "
+                            "\u2014 ",
+                            html.Em("without re-training"),
+                            " \u2014 "
+                            "separately on two user-defined trial subsets, revealing how well the "
+                            "population code generalises across different behavioural conditions. "
+                            "Select a ",
+                            html.Strong("comparison mode"),
+                            " to compare:",
+                        ],
+                        style={"color": "#444", "fontSize": "0.92rem", "marginBottom": 4},
+                    ),
+                    html.Ul(
+                        [
+                            html.Li([html.Strong("Custom groups"), " — freely filter trials by outcome, cue, session third, and R1/R2 choice."]),
+                            html.Li([html.Strong("Two brain areas"), " — same trial set decoded by Brain Area 1 vs Brain Area 2 (e.g. HP vs mPFC)."]),
+                            html.Li([html.Strong("Win vs Lose"), " — rewarded trials (1 R or 1+ R) vs unrewarded trials (no R)."]),
+                        ],
+                        style={"color": "#444", "fontSize": "0.92rem", "marginTop": 0, "marginBottom": 8},
+                    ),
+                    html.Hr(style={"marginBottom": 6}),
+                ],
+                style={"paddingLeft": 12, "paddingRight": 12},
+            ),
             dbc.Row(
                 [
                     dbc.Col([graph], width=9),

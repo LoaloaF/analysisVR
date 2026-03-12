@@ -441,16 +441,19 @@ def render_trial_split_plot(
         if len(x_vals) == 0:
             continue
 
-        interval_start = float(np.nanmin(x_vals) + offset)
-        interval_end = float(np.nanmax(x_vals) + offset)
+        interval_x0 = float(np.nanmin(x_vals))
+        x_vals_shifted = x_vals - interval_x0
+
+        interval_start = float(offset)
+        interval_end = float(np.nanmax(x_vals_shifted) + offset)
         interval_x_ranges.append((interval_start, interval_end))
-        plane_x_coords.extend((x_vals + offset).tolist())
+        plane_x_coords.extend((x_vals_shifted + offset).tolist())
 
         pos_traj = _extract_interval_position_trajectories(behavior_aligned, t0_events, interval_name)
         if pos_traj is not None:
             n_time = min(pos_traj.shape[1], len(all_trace), len(x_vals))
             if n_time >= 2:
-                x_plot = x_vals[:n_time] + offset
+                x_plot = x_vals_shifted[:n_time] + offset
                 y_traj = pos_traj[:, :n_time]
                 f1_color = pd.to_numeric(all_trace["f1_mean"], errors="coerce").to_numpy()[:n_time]
 
@@ -493,9 +496,10 @@ def render_trial_split_plot(
                 top_has_data = True
 
         if compare_mode != "brain_area":
+            all_x = pd.to_numeric(all_trace["timebin"], errors="coerce") - interval_x0 + offset
             fig.add_trace(
                 go.Scatter(
-                    x=all_trace["timebin"] + offset,
+                    x=all_x,
                     y=all_trace["f1_mean"],
                     mode="lines",
                     line=dict(color="rgba(120,120,120,0.8)", dash="dot"),
@@ -508,9 +512,10 @@ def render_trial_split_plot(
             )
             shown_legend["all"] = True
 
+        g1_x = pd.to_numeric(g1["timebin"], errors="coerce") - interval_x0 + offset
         fig.add_trace(
             go.Scatter(
-                x=g1["timebin"] + offset,
+                x=g1_x,
                 y=g1["f1"],
                 mode="lines+markers",
                 marker=dict(size=5),
@@ -524,9 +529,10 @@ def render_trial_split_plot(
         )
         shown_legend["g1"] = True
 
+        g2_x = pd.to_numeric(g2["timebin"], errors="coerce") - interval_x0 + offset
         fig.add_trace(
             go.Scatter(
-                x=g2["timebin"] + offset,
+                x=g2_x,
                 y=g2["f1"],
                 mode="lines+markers",
                 marker=dict(size=5),
@@ -541,16 +547,16 @@ def render_trial_split_plot(
         shown_legend["g2"] = True
 
         fig.add_vrect(
-            x0=interval_start - 0.5,
-            x1=interval_end + 0.5,
+            x0=interval_start,
+            x1=interval_end,
             fillcolor="rgba(0,0,0,0.03)",
             line_width=0,
             row=1,
             col=1,
         )
         fig.add_vrect(
-            x0=interval_start - 0.5,
-            x1=interval_end + 0.5,
+            x0=interval_start,
+            x1=interval_end,
             fillcolor="rgba(0,0,0,0.03)",
             line_width=0,
             row=2,
@@ -567,7 +573,7 @@ def render_trial_split_plot(
             font=dict(size=10, color="gray"),
         )
 
-        offset += float(np.nanmax(x_vals) + 1)
+        offset += float(np.nanmax(x_vals_shifted) + 1)
 
     if not top_has_data:
         fig.add_annotation(
@@ -632,8 +638,322 @@ def render_trial_split_plot(
     fig.update_xaxes(title_text="Timebin (concatenated across intervals)", showticklabels=True, row=3, col=1)
     fig.update_xaxes(matches="x", row=2, col=1)
     fig.update_xaxes(matches="x", row=3, col=1)
+    if len(interval_x_ranges) > 0:
+        # Keep shared x-axis flush with real data bounds (start exactly at x=0).
+        x_min = 0.0
+        x_max = float(interval_x_ranges[-1][1])
+        fig.update_xaxes(range=[x_min, x_max], row=1, col=1)
     fig.update_layout(
         margin=dict(l=20, r=20, t=50, b=30),
+        height=1150,
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0),
+        template="plotly_white",
+    )
+    return fig
+
+
+def render_two_group_columns(
+    svm_data,
+    behavior_trialwise,
+    t0_events,
+    behavior_aligned,
+    predict_y_name,
+    model,
+    group1_modality,
+    group2_modality,
+    group1_intervals,
+    group2_intervals,
+    group1_filters,
+    group2_filters,
+    group1_label="Group 1",
+    group2_label="Group 2",
+):
+    fig = make_subplots(
+        rows=3,
+        cols=2,
+        shared_xaxes=False,
+        vertical_spacing=0.08,
+        horizontal_spacing=0.07,
+        row_heights=[0.42, 0.24, 0.34],
+        subplot_titles=(
+            f"{group1_label}: Position vs Timebin",
+            f"{group2_label}: Position vs Timebin",
+            f"{group1_label}: Macro F1 over time",
+            f"{group2_label}: Macro F1 over time",
+            f"{group1_label}: Angle between fitted SVM planes (deg)",
+            f"{group2_label}: Angle between fitted SVM planes (deg)",
+        ),
+    )
+
+    if svm_data is None or len(svm_data) == 0:
+        fig.add_annotation(text="No SVM data available.", x=0.5, y=0.5, xref="paper", yref="paper", showarrow=False)
+        return fig
+
+    src = svm_data.reset_index() if isinstance(svm_data.index, pd.MultiIndex) else svm_data.copy()
+    required = {"X_modality", "predict_y_name", "interval_name", "timebin"}
+    if not required.issubset(set(src.columns)):
+        fig.add_annotation(text="Missing required SVM columns for split plot.", x=0.5, y=0.5, xref="paper", yref="paper", showarrow=False)
+        return fig
+
+    base_df = src.copy()
+    base_df = base_df[base_df["predict_y_name"].astype(str) == str(predict_y_name)]
+    if "model" in base_df.columns and model is not None:
+        base_df = base_df[base_df["model"].astype(str) == str(model)]
+
+    trial_meta = _extract_trial_table(behavior_trialwise)
+
+    def _render_group_column(col, x_modality, selected_intervals, filters, label, color, show_pos_colorbar=False):
+        df = base_df[base_df["X_modality"].astype(str) == str(x_modality)].copy()
+        if df.empty:
+            fig.add_annotation(
+                text=f"No rows for {label} ({x_modality}).",
+                x=0.23 if col == 1 else 0.77,
+                y=0.5,
+                xref="paper",
+                yref="paper",
+                showarrow=False,
+                font=dict(size=11, color="gray"),
+            )
+            return
+
+        intervals = _ordered_intervals(df, selected_intervals)
+        if len(intervals) == 0:
+            fig.add_annotation(
+                text=f"No intervals selected for {label}.",
+                x=0.23 if col == 1 else 0.77,
+                y=0.5,
+                xref="paper",
+                yref="paper",
+                showarrow=False,
+                font=dict(size=11, color="gray"),
+            )
+            return
+        intervals = intervals[:3]
+
+        offset = 0.0
+        plane_rows = []
+        plane_x_coords = []
+        interval_x_ranges = []
+        top_has_data = False
+        shown_legend = {"group": False, "all": False, "pos": False}
+
+        for interval_name in intervals:
+            interval_df = df[df["interval_name"].astype(str) == str(interval_name)].sort_values("timebin")
+            if interval_df.empty:
+                continue
+
+            trial_ids = _get_interval_trial_ids(t0_events, interval_name)
+            if len(trial_ids) == 0:
+                trial_ids = trial_meta.index.to_numpy(dtype=int) if len(trial_meta) else np.array([], dtype=int)
+
+            mask = _apply_group_filters(trial_meta, trial_ids, filters)
+            group_trace = _compute_f1_for_group(interval_df, mask)
+
+            if "f1_mean" in interval_df.columns:
+                all_trace = interval_df[["timebin", "f1_mean"]].copy().sort_values("timebin")
+            else:
+                all_mask = np.ones(len(trial_ids), dtype=bool)
+                all_trace = _compute_f1_for_group(interval_df, all_mask).rename(columns={"f1": "f1_mean"})
+
+            plane_rows.append(interval_df.copy())
+
+            x_vals = pd.to_numeric(interval_df["timebin"], errors="coerce").to_numpy()
+            x_vals = x_vals[np.isfinite(x_vals)]
+            if len(x_vals) == 0:
+                continue
+
+            interval_x0 = float(np.nanmin(x_vals))
+            x_vals_shifted = x_vals - interval_x0
+
+            interval_start = float(offset)
+            interval_end = float(np.nanmax(x_vals_shifted) + offset)
+            interval_x_ranges.append((interval_start, interval_end))
+            plane_x_coords.extend((x_vals_shifted + offset).tolist())
+
+            pos_traj = _extract_interval_position_trajectories(behavior_aligned, t0_events, interval_name)
+            if pos_traj is not None:
+                n_time = min(pos_traj.shape[1], len(all_trace), len(x_vals))
+                if n_time >= 2:
+                    x_plot = x_vals_shifted[:n_time] + offset
+                    y_traj = pos_traj[:, :n_time]
+                    f1_color = pd.to_numeric(all_trace["f1_mean"], errors="coerce").to_numpy()[:n_time]
+
+                    for tr in y_traj[:40]:
+                        fig.add_trace(
+                            go.Scatter(
+                                x=x_plot,
+                                y=tr,
+                                mode="lines",
+                                line=dict(color="rgba(70,70,70,0.12)", width=1),
+                                hoverinfo="skip",
+                                showlegend=False,
+                            ),
+                            row=1,
+                            col=col,
+                        )
+
+                    fig.add_trace(
+                        go.Scatter(
+                            x=x_plot,
+                            y=np.nanmean(y_traj, axis=0),
+                            mode="markers+lines",
+                            marker=dict(
+                                size=8,
+                                color=f1_color,
+                                cmin=0.2,
+                                cmax=0.9,
+                                colorscale="Viridis",
+                                showscale=show_pos_colorbar,
+                                colorbar=dict(title="Balanced F1"),
+                            ),
+                            line=dict(color="rgba(0,0,0,0.35)", width=1),
+                            name=f"Mean position ({label})",
+                            legendgroup=f"pos-{col}",
+                            showlegend=not shown_legend["pos"],
+                        ),
+                        row=1,
+                        col=col,
+                    )
+                    shown_legend["pos"] = True
+                    top_has_data = True
+
+            all_x = pd.to_numeric(all_trace["timebin"], errors="coerce") - interval_x0 + offset
+            fig.add_trace(
+                go.Scatter(
+                    x=all_x,
+                    y=all_trace["f1_mean"],
+                    mode="lines",
+                    line=dict(color="rgba(120,120,120,0.8)", dash="dot"),
+                    name="All trials",
+                    legendgroup=f"all-{col}",
+                    showlegend=not shown_legend["all"],
+                ),
+                row=2,
+                col=col,
+            )
+            shown_legend["all"] = True
+
+            gx = pd.to_numeric(group_trace["timebin"], errors="coerce") - interval_x0 + offset
+            fig.add_trace(
+                go.Scatter(
+                    x=gx,
+                    y=group_trace["f1"],
+                    mode="lines+markers",
+                    marker=dict(size=5),
+                    line=dict(color=color, width=2),
+                    name=label,
+                    legendgroup=f"group-{col}",
+                    showlegend=not shown_legend["group"],
+                ),
+                row=2,
+                col=col,
+            )
+            shown_legend["group"] = True
+
+            fig.add_vrect(
+                x0=interval_start,
+                x1=interval_end,
+                fillcolor="rgba(0,0,0,0.03)",
+                line_width=0,
+                row=1,
+                col=col,
+            )
+            fig.add_vrect(
+                x0=interval_start,
+                x1=interval_end,
+                fillcolor="rgba(0,0,0,0.03)",
+                line_width=0,
+                row=2,
+                col=col,
+            )
+
+            offset += float(np.nanmax(x_vals_shifted) + 1)
+
+        if not top_has_data:
+            fig.add_annotation(
+                text=f"No trajectory data available for {label} intervals.",
+                x=0.23 if col == 1 else 0.77,
+                y=0.88,
+                xref="paper",
+                yref="paper",
+                showarrow=False,
+                font=dict(size=10, color="gray"),
+            )
+
+        if len(plane_rows) > 0:
+            plane_df = pd.concat(plane_rows, axis=0, ignore_index=True)
+            angle_matrix = _compute_angle_matrix(plane_df)
+            if angle_matrix is not None:
+                n = angle_matrix.shape[0]
+                if len(plane_x_coords) >= n:
+                    heatmap_axis = np.asarray(plane_x_coords[:n], dtype=float)
+                else:
+                    heatmap_axis = np.arange(n, dtype=float)
+
+                fig.add_trace(
+                    go.Heatmap(
+                        z=angle_matrix,
+                        x=heatmap_axis,
+                        y=heatmap_axis,
+                        colorscale="RdBu_r",
+                        zmin=0,
+                        zmax=180,
+                        showscale=(col == 2),
+                        colorbar=dict(title="Angle (deg)"),
+                    ),
+                    row=3,
+                    col=col,
+                )
+
+                for i in range(len(interval_x_ranges) - 1):
+                    boundary = (interval_x_ranges[i][1] + interval_x_ranges[i + 1][0]) / 2
+                    fig.add_vline(x=boundary, line_color="rgba(0,0,0,0.25)", line_dash="dash", row=3, col=col)
+                    fig.add_hline(y=boundary, line_color="rgba(0,0,0,0.25)", line_dash="dash", row=3, col=col)
+            else:
+                fig.add_annotation(
+                    text=f"Not enough valid SVM vectors for {label} angle matrix.",
+                    x=0.23 if col == 1 else 0.77,
+                    y=0.2,
+                    xref="paper",
+                    yref="paper",
+                    showarrow=False,
+                    font=dict(size=10, color="gray"),
+                )
+
+        fig.add_hline(y=0.5, line_dash="dash", line_color="black", line_width=1, row=2, col=col)
+        fig.update_yaxes(title_text="Position (cm)", row=1, col=col)
+        fig.update_yaxes(range=[0.0, 1.0], title_text="Macro F1", row=2, col=col)
+        fig.update_xaxes(title_text="Timebin (concatenated across intervals)", showticklabels=True, row=1, col=col)
+        fig.update_xaxes(title_text="Timebin (concatenated across intervals)", showticklabels=True, row=2, col=col)
+        fig.update_xaxes(title_text="Timebin (concatenated across intervals)", showticklabels=True, row=3, col=col)
+        fig.update_yaxes(title_text="Fitted planes", row=3, col=col)
+        if len(interval_x_ranges) > 0:
+            x_max = float(interval_x_ranges[-1][1])
+            fig.update_xaxes(range=[0.0, x_max], row=1, col=col)
+            fig.update_xaxes(range=[0.0, x_max], row=2, col=col)
+            fig.update_xaxes(range=[0.0, x_max], row=3, col=col)
+
+    _render_group_column(
+        col=1,
+        x_modality=group1_modality,
+        selected_intervals=group1_intervals,
+        filters=group1_filters,
+        label=group1_label,
+        color="#2a9d8f",
+        show_pos_colorbar=False,
+    )
+    _render_group_column(
+        col=2,
+        x_modality=group2_modality,
+        selected_intervals=group2_intervals,
+        filters=group2_filters,
+        label=group2_label,
+        color="#e76f51",
+        show_pos_colorbar=True,
+    )
+
+    fig.update_layout(
+        margin=dict(l=20, r=20, t=65, b=30),
         height=1150,
         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0),
         template="plotly_white",

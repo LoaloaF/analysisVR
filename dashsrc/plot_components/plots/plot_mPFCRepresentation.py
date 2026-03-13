@@ -320,6 +320,21 @@ def _compute_angle_matrix(plane_df):
     return np.degrees(np.arccos(sim))
 
 
+def _build_axis_ticks(interval_tick_data, max_ticks_per_interval=8):
+    """Build tickvals/ticktext so each interval's start is labelled t=0."""
+    tick_vals, tick_texts = [], []
+    for interval_start, x_vals_shifted in interval_tick_data:
+        n = len(x_vals_shifted)
+        if n == 0:
+            continue
+        stride = max(1, n // max_ticks_per_interval)
+        indices = list(range(0, n, stride))
+        for i in indices:
+            tick_vals.append(float(x_vals_shifted[i] + interval_start))
+            tick_texts.append(str(int(round(float(x_vals_shifted[i])))))
+    return tick_vals, tick_texts
+
+
 def render_trial_split_plot(
     svm_data,
     behavior_trialwise,
@@ -401,6 +416,7 @@ def render_trial_split_plot(
     plane_rows = []
     plane_x_coords = []
     interval_x_ranges = []
+    interval_tick_data = []
 
     for interval_name in intervals:
         interval_df = df[df["interval_name"].astype(str) == str(interval_name)].sort_values("timebin")
@@ -448,6 +464,7 @@ def render_trial_split_plot(
         interval_end = float(np.nanmax(x_vals_shifted) + offset)
         interval_x_ranges.append((interval_start, interval_end))
         plane_x_coords.extend((x_vals_shifted + offset).tolist())
+        interval_tick_data.append((interval_start, x_vals_shifted))
 
         pos_traj = _extract_interval_position_trajectories(behavior_aligned, t0_events, interval_name)
         if pos_traj is not None:
@@ -613,7 +630,6 @@ def render_trial_split_plot(
 
             for i in range(len(interval_x_ranges) - 1):
                 boundary = (interval_x_ranges[i][1] + interval_x_ranges[i + 1][0]) / 2
-                fig.add_vline(x=boundary, line_color="rgba(0,0,0,0.25)", line_dash="dash", row=3, col=1)
                 fig.add_hline(y=boundary, line_color="rgba(0,0,0,0.25)", line_dash="dash", row=3, col=1)
 
             fig.update_xaxes(title_text="Fitted planes (interval/timebin index)", row=3, col=1)
@@ -642,7 +658,24 @@ def render_trial_split_plot(
         # Keep shared x-axis flush with real data bounds (start exactly at x=0).
         x_min = 0.0
         x_max = float(interval_x_ranges[-1][1])
-        fig.update_xaxes(range=[x_min, x_max], row=1, col=1)
+        for r in (1, 2, 3):
+            fig.update_xaxes(
+                autorange=False,
+                range=[x_min, x_max],
+                constrain="domain",
+                row=r,
+                col=1,
+            )
+        # Dashed line at the start of each non-first interval (marks t=0 for that interval)
+        for i in range(1, len(interval_x_ranges)):
+            iv_start = interval_x_ranges[i][0]
+            fig.add_vline(x=iv_start, line_color="rgba(0,0,0,0.45)", line_dash="dash", row=1, col=1)
+            fig.add_vline(x=iv_start, line_color="rgba(0,0,0,0.45)", line_dash="dash", row=2, col=1)
+            fig.add_vline(x=iv_start, line_color="rgba(0,0,0,0.45)", line_dash="dash", row=3, col=1)
+    if interval_tick_data:
+        tv, tt = _build_axis_ticks(interval_tick_data)
+        for r in (1, 2, 3):
+            fig.update_xaxes(tickvals=tv, ticktext=tt, row=r, col=1)
     fig.update_layout(
         margin=dict(l=20, r=20, t=50, b=30),
         height=1150,
@@ -734,6 +767,7 @@ def render_two_group_columns(
         plane_rows = []
         plane_x_coords = []
         interval_x_ranges = []
+        interval_tick_data = []
         top_has_data = False
         shown_legend = {"group": False, "all": False, "pos": False}
 
@@ -769,6 +803,7 @@ def render_two_group_columns(
             interval_end = float(np.nanmax(x_vals_shifted) + offset)
             interval_x_ranges.append((interval_start, interval_end))
             plane_x_coords.extend((x_vals_shifted + offset).tolist())
+            interval_tick_data.append((interval_start, x_vals_shifted))
 
             pos_traj = _extract_interval_position_trajectories(behavior_aligned, t0_events, interval_name)
             if pos_traj is not None:
@@ -907,7 +942,6 @@ def render_two_group_columns(
 
                 for i in range(len(interval_x_ranges) - 1):
                     boundary = (interval_x_ranges[i][1] + interval_x_ranges[i + 1][0]) / 2
-                    fig.add_vline(x=boundary, line_color="rgba(0,0,0,0.25)", line_dash="dash", row=3, col=col)
                     fig.add_hline(y=boundary, line_color="rgba(0,0,0,0.25)", line_dash="dash", row=3, col=col)
             else:
                 fig.add_annotation(
@@ -929,9 +963,24 @@ def render_two_group_columns(
         fig.update_yaxes(title_text="Fitted planes", row=3, col=col)
         if len(interval_x_ranges) > 0:
             x_max = float(interval_x_ranges[-1][1])
-            fig.update_xaxes(range=[0.0, x_max], row=1, col=col)
-            fig.update_xaxes(range=[0.0, x_max], row=2, col=col)
-            fig.update_xaxes(range=[0.0, x_max], row=3, col=col)
+            for r in (1, 2, 3):
+                fig.update_xaxes(
+                    autorange=False,
+                    range=[0.0, x_max],
+                    constrain="domain",
+                    row=r,
+                    col=col,
+                )
+            # Dashed line at the start of each non-first interval (marks t=0 for that interval)
+            for i in range(1, len(interval_x_ranges)):
+                iv_start = interval_x_ranges[i][0]
+                fig.add_vline(x=iv_start, line_color="rgba(0,0,0,0.45)", line_dash="dash", row=1, col=col)
+                fig.add_vline(x=iv_start, line_color="rgba(0,0,0,0.45)", line_dash="dash", row=2, col=col)
+                fig.add_vline(x=iv_start, line_color="rgba(0,0,0,0.45)", line_dash="dash", row=3, col=col)
+        if interval_tick_data:
+            tv, tt = _build_axis_ticks(interval_tick_data)
+            for r in (1, 2, 3):
+                fig.update_xaxes(tickvals=tv, ticktext=tt, row=r, col=col)
 
     _render_group_column(
         col=1,

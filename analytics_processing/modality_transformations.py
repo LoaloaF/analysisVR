@@ -376,7 +376,7 @@ def calculate_additional_kinematic_features(raw_yaw_pitch, tstamps, r_exponent=5
             raw_yaw_pitch_smoothed[col + '_500msMedian'] = smthd_vel
             
             smthd_abs_acc = np.gradient(smthd_vel.abs().values, tstamps) # convert us to s
-            raw_yaw_pitch_acc_abs_smoothed[col + '_abs_acc_500msMedian'] = np.abs(smthd_abs_acc)
+            raw_yaw_pitch_acc_abs_smoothed[col + '_abs_acc_500msMedian'] = smthd_abs_acc
         
         sum_kinem = pd.DataFrame(index=raw_yaw_pitch.index)
         # sum over all non smoothed vel (reward threshold is based on this)
@@ -552,9 +552,13 @@ def fix_missing_paradigm_variable_names(data):
     if all(True if c in data.columns else False for c in ['trial_id', 'stay_time', 'maximum_reward_number', 'cue', 'DR']):
         renamer['stay_time'] = 'velocity_threshold_at_R1'
         data['ST_2'] = data['stay_time']
-        
-    # if all([True if c in data.columns else False for c in ["ST_2","SR","DR","RF","NP","GF"]]) or \
-    #     renamer['stop_threshold'] = 'velocity_threshold_at_R1'
+
+    # even older, animal 5, 7 - add metadata columns so pipeline runs, but meaningless (ussed lick + staytime)
+    if all(True if c in data.columns else False for c in ['trial_id', 'stay_time', 'maximum_reward_number', 'cue', 'lick_reward']):
+        data['flip_Cue1R1_Cue2R2'] = False
+        data['both_R1_R2_rewarded'] = False
+        data['velocity_threshold_at_R1'] = .3
+        data['velocity_threshold_at_R2'] = .3
         
     Logger().logger.debug(Logger().fmtmsg(("Renaming variables with:\n", renamer)))
     data = data.rename(columns=renamer)

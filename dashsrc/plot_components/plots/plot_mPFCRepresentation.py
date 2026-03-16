@@ -335,6 +335,35 @@ def _build_axis_ticks(interval_tick_data, max_ticks_per_interval=8):
     return tick_vals, tick_texts
 
 
+def _build_poster_axis_ticks(interval_anchor_data):
+    """Build poster-style ticks: per interval, label t=0 and 1s (25 bins)."""
+    tick_vals, tick_texts = [], []
+    for t0_abs, interval_end in interval_anchor_data:
+        if not np.isfinite(t0_abs):
+            continue
+        if t0_abs >= 0:
+            tick_vals.append(float(t0_abs))
+            tick_texts.append("t=0")
+
+        one_sec = float(t0_abs + 25.0)
+        if np.isfinite(interval_end) and one_sec <= float(interval_end) + 1e-9:
+            tick_vals.append(one_sec)
+            tick_texts.append("1s")
+
+    if len(tick_vals) == 0:
+        return [], []
+
+    # Keep deterministic order and de-duplicate nearly identical values.
+    pairs = sorted(zip(tick_vals, tick_texts), key=lambda x: x[0])
+    dedup_vals, dedup_texts = [], []
+    for v, t in pairs:
+        if len(dedup_vals) == 0 or abs(v - dedup_vals[-1]) > 1e-6:
+            dedup_vals.append(v)
+            dedup_texts.append(t)
+
+    return dedup_vals, dedup_texts
+
+
 def render_trial_split_plot(
     svm_data,
     behavior_trialwise,
@@ -416,7 +445,8 @@ def render_trial_split_plot(
     plane_rows = []
     plane_x_coords = []
     interval_x_ranges = []
-    interval_tick_data = []
+    interval_anchor_data = []
+    interval_t0_lines = []
 
     for interval_name in intervals:
         interval_df = df[df["interval_name"].astype(str) == str(interval_name)].sort_values("timebin")
@@ -464,7 +494,15 @@ def render_trial_split_plot(
         interval_end = float(np.nanmax(x_vals_shifted) + offset)
         interval_x_ranges.append((interval_start, interval_end))
         plane_x_coords.extend((x_vals_shifted + offset).tolist())
-        interval_tick_data.append((interval_start, x_vals_shifted))
+        # Match poster convention: mark t=0 within each interval, then 1s at +25 bins.
+        t0_rel = float(-interval_x0)
+        if not (0.0 <= t0_rel <= float(np.nanmax(x_vals_shifted))):
+            fallback_t0 = 3.0 if str(interval_name) == "cue_entry_interval" else 10.0
+            t0_rel = fallback_t0 if 0.0 <= fallback_t0 <= float(np.nanmax(x_vals_shifted)) else np.nan
+        t0_abs = float(offset + t0_rel) if np.isfinite(t0_rel) else np.nan
+        interval_anchor_data.append((t0_abs, interval_end))
+        if np.isfinite(t0_abs):
+            interval_t0_lines.append(t0_abs)
 
         pos_traj = _extract_interval_position_trajectories(behavior_aligned, t0_events, interval_name)
         if pos_traj is not None:
@@ -666,14 +704,13 @@ def render_trial_split_plot(
                 row=r,
                 col=1,
             )
-        # Dashed line at the start of each non-first interval (marks t=0 for that interval)
-        for i in range(1, len(interval_x_ranges)):
-            iv_start = interval_x_ranges[i][0]
-            fig.add_vline(x=iv_start, line_color="rgba(0,0,0,0.45)", line_dash="dash", row=1, col=1)
-            fig.add_vline(x=iv_start, line_color="rgba(0,0,0,0.45)", line_dash="dash", row=2, col=1)
-            fig.add_vline(x=iv_start, line_color="rgba(0,0,0,0.45)", line_dash="dash", row=3, col=1)
-    if interval_tick_data:
-        tv, tt = _build_axis_ticks(interval_tick_data)
+        # Dashed line at t=0 for each interval.
+        for t0_x in interval_t0_lines:
+            fig.add_vline(x=t0_x, line_color="rgba(0,0,0,0.45)", line_dash="dash", row=1, col=1)
+            fig.add_vline(x=t0_x, line_color="rgba(0,0,0,0.45)", line_dash="dash", row=2, col=1)
+            fig.add_vline(x=t0_x, line_color="rgba(0,0,0,0.45)", line_dash="dash", row=3, col=1)
+    if interval_anchor_data:
+        tv, tt = _build_poster_axis_ticks(interval_anchor_data)
         for r in (1, 2, 3):
             fig.update_xaxes(tickvals=tv, ticktext=tt, row=r, col=1)
     fig.update_layout(
@@ -767,7 +804,8 @@ def render_two_group_columns(
         plane_rows = []
         plane_x_coords = []
         interval_x_ranges = []
-        interval_tick_data = []
+        interval_anchor_data = []
+        interval_t0_lines = []
         top_has_data = False
         shown_legend = {"group": False, "all": False, "pos": False}
 
@@ -803,7 +841,15 @@ def render_two_group_columns(
             interval_end = float(np.nanmax(x_vals_shifted) + offset)
             interval_x_ranges.append((interval_start, interval_end))
             plane_x_coords.extend((x_vals_shifted + offset).tolist())
-            interval_tick_data.append((interval_start, x_vals_shifted))
+            # Match poster convention: mark t=0 within each interval, then 1s at +25 bins.
+            t0_rel = float(-interval_x0)
+            if not (0.0 <= t0_rel <= float(np.nanmax(x_vals_shifted))):
+                fallback_t0 = 3.0 if str(interval_name) == "cue_entry_interval" else 10.0
+                t0_rel = fallback_t0 if 0.0 <= fallback_t0 <= float(np.nanmax(x_vals_shifted)) else np.nan
+            t0_abs = float(offset + t0_rel) if np.isfinite(t0_rel) else np.nan
+            interval_anchor_data.append((t0_abs, interval_end))
+            if np.isfinite(t0_abs):
+                interval_t0_lines.append(t0_abs)
 
             pos_traj = _extract_interval_position_trajectories(behavior_aligned, t0_events, interval_name)
             if pos_traj is not None:
@@ -971,14 +1017,13 @@ def render_two_group_columns(
                     row=r,
                     col=col,
                 )
-            # Dashed line at the start of each non-first interval (marks t=0 for that interval)
-            for i in range(1, len(interval_x_ranges)):
-                iv_start = interval_x_ranges[i][0]
-                fig.add_vline(x=iv_start, line_color="rgba(0,0,0,0.45)", line_dash="dash", row=1, col=col)
-                fig.add_vline(x=iv_start, line_color="rgba(0,0,0,0.45)", line_dash="dash", row=2, col=col)
-                fig.add_vline(x=iv_start, line_color="rgba(0,0,0,0.45)", line_dash="dash", row=3, col=col)
-        if interval_tick_data:
-            tv, tt = _build_axis_ticks(interval_tick_data)
+            # Dashed line at t=0 for each interval.
+            for t0_x in interval_t0_lines:
+                fig.add_vline(x=t0_x, line_color="rgba(0,0,0,0.45)", line_dash="dash", row=1, col=col)
+                fig.add_vline(x=t0_x, line_color="rgba(0,0,0,0.45)", line_dash="dash", row=2, col=col)
+                fig.add_vline(x=t0_x, line_color="rgba(0,0,0,0.45)", line_dash="dash", row=3, col=col)
+        if interval_anchor_data:
+            tv, tt = _build_poster_axis_ticks(interval_anchor_data)
             for r in (1, 2, 3):
                 fig.update_xaxes(tickvals=tv, ticktext=tt, row=r, col=col)
 

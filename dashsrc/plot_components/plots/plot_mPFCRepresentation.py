@@ -534,10 +534,7 @@ def render_trial_split_plot(
                         marker=dict(
                             size=8,
                             color=f1_color,
-                            cmin=0.2,
-                            cmax=0.9,
-                            colorscale="Viridis",
-                            colorbar=dict(title="Balanced F1"),
+                            coloraxis="coloraxis",
                         ),
                         line=dict(color="rgba(0,0,0,0.35)", width=1),
                         name="Mean position",
@@ -657,10 +654,7 @@ def render_trial_split_plot(
                     z=angle_matrix,
                     x=heatmap_axis,
                     y=heatmap_axis,
-                    colorscale="RdBu_r",
-                    zmin=0,
-                    zmax=180,
-                    colorbar=dict(title="Angle (deg)"),
+                    coloraxis="coloraxis2",
                 ),
                 row=3,
                 col=1,
@@ -718,6 +712,18 @@ def render_trial_split_plot(
         height=1150,
         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0),
         template="plotly_white",
+        coloraxis=dict(
+            colorscale="Viridis",
+            cmin=0.2,
+            cmax=0.9,
+            colorbar=dict(title="Balanced F1", x=1.02, len=0.35, y=0.82, yanchor="middle"),
+        ),
+        coloraxis2=dict(
+            colorscale=[[0, "red"], [0.5, "white"], [1, "blue"]],
+            cmin=0,
+            cmax=180,
+            colorbar=dict(title="Angle (deg)", x=1.02, len=0.32, y=0.15, yanchor="middle"),
+        ),
     )
     return fig
 
@@ -881,11 +887,7 @@ def render_two_group_columns(
                             marker=dict(
                                 size=8,
                                 color=f1_color,
-                                cmin=0.2,
-                                cmax=0.9,
-                                colorscale="Viridis",
-                                showscale=show_pos_colorbar,
-                                colorbar=dict(title="Balanced F1"),
+                                coloraxis="coloraxis",
                             ),
                             line=dict(color="rgba(0,0,0,0.35)", width=1),
                             name=f"Mean position ({label})",
@@ -976,11 +978,7 @@ def render_two_group_columns(
                         z=angle_matrix,
                         x=heatmap_axis,
                         y=heatmap_axis,
-                        colorscale="RdBu_r",
-                        zmin=0,
-                        zmax=180,
-                        showscale=(col == 2),
-                        colorbar=dict(title="Angle (deg)"),
+                        coloraxis="coloraxis2",
                     ),
                     row=3,
                     col=col,
@@ -1051,5 +1049,17 @@ def render_two_group_columns(
         height=1150,
         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0),
         template="plotly_white",
+        coloraxis=dict(
+            colorscale="Viridis",
+            cmin=0.2,
+            cmax=0.9,
+            colorbar=dict(title="Balanced F1", x=1.02, len=0.35, y=0.82, yanchor="middle"),
+        ),
+        coloraxis2=dict(
+            colorscale=[[0, "red"], [0.5, "white"], [1, "blue"]],
+            cmin=0,
+            cmax=180,
+            colorbar=dict(title="Angle (deg)", x=1.02, len=0.32, y=0.15, yanchor="middle"),
+        ),
     )
     return fig

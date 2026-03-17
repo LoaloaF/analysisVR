@@ -10,6 +10,13 @@ from sklearn.metrics import f1_score
 _ONE_R_OUTCOMES = {1, 11, 21, 31, 41, 51, 10, 20, 30, 40, 50}
 
 
+BASE_FONT_SIZE = 15
+SUBPLOT_TITLE_SIZE = 26
+AXIS_TITLE_SIZE = 17
+TICK_FONT_SIZE = 14
+LEGEND_FONT_SIZE = 14
+
+
 def _to_1d_array(value):
     if value is None:
         return np.array([])
@@ -364,6 +371,29 @@ def _build_poster_axis_ticks(interval_anchor_data):
     return dedup_vals, dedup_texts
 
 
+def _apply_typography(fig):
+    fig.update_layout(
+        font=dict(size=BASE_FONT_SIZE),
+        legend=dict(font=dict(size=LEGEND_FONT_SIZE)),
+    )
+    fig.update_xaxes(title_font=dict(size=AXIS_TITLE_SIZE), tickfont=dict(size=TICK_FONT_SIZE))
+    fig.update_yaxes(title_font=dict(size=AXIS_TITLE_SIZE), tickfont=dict(size=TICK_FONT_SIZE))
+
+    for ann in fig.layout.annotations:
+        text = str(getattr(ann, "text", ""))
+        if (
+            "Position vs Timebin" in text
+            or "F1 over timepoints" in text
+            or "Macro F1 over time" in text
+            or "Angle between fitted SVM planes" in text
+        ):
+            ann.font = dict(size=SUBPLOT_TITLE_SIZE)
+        elif getattr(ann, "font", None) is None:
+            ann.font = dict(size=BASE_FONT_SIZE)
+        else:
+            ann.font.size = max(getattr(ann.font, "size", BASE_FONT_SIZE), BASE_FONT_SIZE)
+
+
 def render_trial_split_plot(
     svm_data,
     behavior_trialwise,
@@ -622,7 +652,7 @@ def render_trial_split_plot(
             xref="x",
             yref="paper",
             showarrow=False,
-            font=dict(size=10, color="gray"),
+            font=dict(size=13, color="gray"),
         )
 
         offset += float(np.nanmax(x_vals_shifted) + 1)
@@ -635,7 +665,7 @@ def render_trial_split_plot(
             xref="paper",
             yref="paper",
             showarrow=False,
-            font=dict(size=11, color="gray"),
+            font=dict(size=14, color="gray"),
         )
 
     if len(plane_rows) > 0:
@@ -674,7 +704,7 @@ def render_trial_split_plot(
                 xref="paper",
                 yref="paper",
                 showarrow=False,
-                font=dict(size=11, color="gray"),
+                font=dict(size=14, color="gray"),
             )
 
     fig.add_hline(y=0.5, line_dash="dash", line_color="black", line_width=1, row=2, col=1)
@@ -721,10 +751,12 @@ def render_trial_split_plot(
         coloraxis2=dict(
             colorscale=[[0, "red"], [0.5, "white"], [1, "blue"]],
             cmin=0,
+            cmid=90,
             cmax=180,
             colorbar=dict(title="Angle (deg)", x=1.02, len=0.32, y=0.15, yanchor="middle"),
         ),
     )
+    _apply_typography(fig)
     return fig
 
 
@@ -788,7 +820,7 @@ def render_two_group_columns(
                 xref="paper",
                 yref="paper",
                 showarrow=False,
-                font=dict(size=11, color="gray"),
+                font=dict(size=14, color="gray"),
             )
             return
 
@@ -801,7 +833,7 @@ def render_two_group_columns(
                 xref="paper",
                 yref="paper",
                 showarrow=False,
-                font=dict(size=11, color="gray"),
+                font=dict(size=14, color="gray"),
             )
             return
         intervals = intervals[:3]
@@ -960,7 +992,7 @@ def render_two_group_columns(
                 xref="paper",
                 yref="paper",
                 showarrow=False,
-                font=dict(size=10, color="gray"),
+                font=dict(size=13, color="gray"),
             )
 
         if len(plane_rows) > 0:
@@ -995,7 +1027,7 @@ def render_two_group_columns(
                     xref="paper",
                     yref="paper",
                     showarrow=False,
-                    font=dict(size=10, color="gray"),
+                    font=dict(size=13, color="gray"),
                 )
 
         fig.add_hline(y=0.5, line_dash="dash", line_color="black", line_width=1, row=2, col=col)
@@ -1058,8 +1090,10 @@ def render_two_group_columns(
         coloraxis2=dict(
             colorscale=[[0, "red"], [0.5, "white"], [1, "blue"]],
             cmin=0,
+            cmid=90,
             cmax=180,
             colorbar=dict(title="Angle (deg)", x=1.02, len=0.32, y=0.15, yanchor="middle"),
         ),
     )
+    _apply_typography(fig)
     return fig

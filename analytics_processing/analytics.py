@@ -443,6 +443,8 @@ def _compute_sess_analytic(analytic, session_fullfname):
                 "trial_id", "cue", "trial_outcome", "choice_R1", "choice_R2",
                 # forward velocity and acc
                'frame_raw_500msMedian', 'frame_raw_abs_acc_500msMedian', 
+               # upcoming choice, reward info and cue info in sparse form, aliged to events/ zones (eg cue_visible 1 or 2 in cuezone, 0 otherwise)
+               'upcoming_choice','reward_window', 'cue_visible',
                # off rotations velocity
                'frame_YawPitch_abs_vel_sum_500msMedian', 'frame_YawPitch_abs_acc_sum_500msMedian', 
                # sum for reward threshold and acc
@@ -453,7 +455,7 @@ def _compute_sess_analytic(analytic, session_fullfname):
                # count based events
                'lick_detected', 'reward-sound_detected', 'reward-valve-open_detected', # 'reward-removed_detected', can be missing TODO, fix
                 # position info
-                "frame_position", "track_zone", "track_zone_int", 'cue_visible',
+                "frame_position", "track_zone", "track_zone_int",
                 # action from camera pose
                 "head_angle",
                 "head_angle_vel",

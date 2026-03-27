@@ -62,16 +62,23 @@ def get_BehaviorFramewise(track_kinematics, trialwise, events, pose_data):
     # merge trialwise data in (big)
     framedata = pd.merge(framedata, trialwise, on='trial_id', how='left')
     
-    # add if a cue is visible, and if yes which one
+    # add if a cue is visible, and if yes which one. So 0 everywhere, except in 
+    # visibleCue and nextToCue zones, where it takes the value of the cue (1 or 2)
     framedata['cue_visible'] = 0
     cue_mask = framedata['track_zone'].isin(['visibleCue', 'nextToCue']) & ~framedata['both_R1_R2_rewarded'].astype(bool)   
     framedata.loc[cue_mask, 'cue_visible'] = framedata.loc[cue_mask, 'cue']
     # flip for reversal sessions
     if 'flip_Cue1R1_Cue2R2' in framedata.columns:
-        # print(framedata['flip_Cue1R1_Cue2R2'].astype(bool).value_counts())
         fl = framedata.loc[cue_mask & (framedata['flip_Cue1R1_Cue2R2']), 'cue_visible'].map({1: 2, 2: 1})
         framedata.loc[cue_mask & (framedata['flip_Cue1R1_Cue2R2']), 'cue_visible'] = fl
-        # print(framedata['cue_visible'].value_counts())
+        
+    # add upcoming choice info: 1 second before reward zone entry, -1 for skip 1 for stop, 0 everywhere else
+    upc_choice = aT.trial_wise_upcoming_choice(framedata)
+    framedata['upcoming_choice'] = upc_choice
+    
+    # add reward window feature: -1 0.5s before reward zone entry, 1 for 1.5 second after, 0 everywhere else 
+    reward_window = aT.in_reward_window(framedata)
+    framedata['reward_window'] = reward_window
     
     return framedata
 
@@ -126,7 +133,7 @@ def get_Behavior40msAligned(fr, behavior):
     behavior['ephys_bin_id'] = frame_bin_assignment
 
     # Group frames by ephys bins and aggregate
-    behavior_aligned = behavior.groupby('ephys_bin_id').agg(aT.column2agg_map(behavior.columns))
+    behavior_aligned = behavior.groupby('ephys_bin_id', observed=False).agg(aT.column2agg_map(behavior.columns))
     
     # Add ephys bin timestamps
     behavior_aligned['from_ephys_timestamp'] = fr['from_ephys_timestamp'].values

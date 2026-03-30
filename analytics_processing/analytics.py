@@ -4,7 +4,6 @@ from time import sleep
 
 import pandas as pd
 import numpy as np
-from pyarrow import parquet as pq
 
 from CustomLogger import CustomLogger as Logger
 
@@ -13,6 +12,7 @@ import analytics_processing.analytics_constants as C
 
 # analytics computations related, allowed to fail for extiernal imports that only read analytics
 try:
+    from pyarrow import parquet as pq
     import analytics_processing.agg_modalities2analytic as m2a
     import analytics_processing.integr_analytics as integr_analytics
     import ephys_preprocessing.postproc_mea1k_ephys as ephys
@@ -260,8 +260,7 @@ def _compute_sess_analytic(analytic, session_fullfname):
                                            'movement_energy_smooth5'],
                                   session_names=[session_name],)
         if pose_data is None:
-            L.logger.warning("Missing lower level analytic")
-            return None
+            L.logger.warning("Missing lower level analytic, but continueing")
     
         data = integr_analytics.get_BehaviorFramewise(track_kinematics, trialwise, 
                                                       events, pose_data)
@@ -444,6 +443,8 @@ def _compute_sess_analytic(analytic, session_fullfname):
                 "trial_id", "cue", "trial_outcome", "choice_R1", "choice_R2",
                 # forward velocity and acc
                'frame_raw_500msMedian', 'frame_raw_abs_acc_500msMedian', 
+               # upcoming choice, reward info and cue info in sparse form, aliged to events/ zones (eg cue_visible 1 or 2 in cuezone, 0 otherwise)
+               'upcoming_choice','reward_window', 'cue_visible',
                # off rotations velocity
                'frame_YawPitch_abs_vel_sum_500msMedian', 'frame_YawPitch_abs_acc_sum_500msMedian', 
                # sum for reward threshold and acc
@@ -454,11 +455,11 @@ def _compute_sess_analytic(analytic, session_fullfname):
                # count based events
                'lick_detected', 'reward-sound_detected', 'reward-valve-open_detected', # 'reward-removed_detected', can be missing TODO, fix
                 # position info
-                "frame_position", "track_zone", "track_zone_int", 'cue_visible',
+                "frame_position", "track_zone", "track_zone_int",
                 # action from camera pose
-                "frame_head_angle",
-                "frame_head_angle_vel",
-                "frame_movement_energy_smooth5",
+                "head_angle",
+                "head_angle_vel",
+                "movement_energy_smooth5",
         ]
         behavior = get_analytics('BehaviorFramewise', session_names=[session_name], 
                                  columns=cols)

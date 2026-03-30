@@ -22,8 +22,9 @@ def async_events_to_framewise(events, which_t_col, track_kinematics):
     
     # count the events per frame, and their mean value within it
     fr_wise_events = events.groupby(['frame_id', 'event_name_full']).apply(
-                                    lambda x: pd.Series({f'{x.event_name_full.iloc[0]}_count': x.shape[0],
-                                                         f'{x.event_name_full.iloc[0]}_mean_value': x['event_value'].mean(),}))
+                                    lambda x: pd.Series({f'{x.name[1]}_count': x.shape[0],
+                                                         f'{x.name[1]}_mean_value': x['event_value'].mean(),}),
+                                    include_groups=False)
     fr_wise_events.index = fr_wise_events.index.droplevel(1)  # drop the event_name_full level
 
     fr_wise_events = fr_wise_events.unstack(level=1) # index from groupby output
@@ -31,6 +32,39 @@ def async_events_to_framewise(events, which_t_col, track_kinematics):
     fr_wise_events.reset_index(inplace=True)
     return fr_wise_events
 
+def trial_wise_upcoming_choice(framedata, nframes_pre=60):
+    def around_r_entries(trial):
+        upcoming_choice = pd.Series(0, index=trial.index)
+        r1_entry = trial[trial['track_zone'] == 'reward1Zone'].index[0]
+        pre_r1_mask = (trial.index >= r1_entry - nframes_pre) & (trial.index < r1_entry)
+        upcoming_choice[pre_r1_mask] = -1 if trial['choice_R1'].iloc[0] == 0 else 1
+
+        r2_entry = trial[trial['track_zone'] == 'reward2Zone'].index[0]
+        pre_r2_mask = (trial.index >= r2_entry - nframes_pre) & (trial.index < r2_entry)
+        upcoming_choice[pre_r2_mask] = -1 if trial['choice_R2'].iloc[0] == 0 else 1
+        return upcoming_choice
+    sess_upcoming_choice = framedata.groupby('trial_id').apply(around_r_entries, include_groups=False)
+    sess_upcoming_choice.index = sess_upcoming_choice.index.droplevel(0)  # drop the trial_id level
+    return sess_upcoming_choice
+
+def in_reward_window(framedata, pre_reward_nframe=30, post_reward_nframe=90):
+    r_event_frames = framedata.index[framedata['reward-sound_detected'].astype(bool)]
+    
+    all_pre_reward_frames = []
+    all_post_reward_frames = []
+    for r_event_f in r_event_frames:
+        post_reward_frames = range(r_event_f, r_event_f + post_reward_nframe)
+        pre_reward_frames = range(r_event_f - pre_reward_nframe, r_event_f)
+        # check if pre is in post, only if not add them
+        if all(f not in post_reward_frames for f in pre_reward_frames):
+            all_pre_reward_frames.extend(pre_reward_frames)
+        all_post_reward_frames.extend(post_reward_frames)
+    
+    reward_window = pd.Series(0, index=framedata.index)
+    reward_window.loc[all_pre_reward_frames] = -1
+    reward_window.loc[all_post_reward_frames] = 1
+    return reward_window
+    
 # def transform_to_position_bin_index(data):
 #     Logger().logger.debug(f"Transforming {data.shape[0]} unity frames to 1cm "
 #                           "position bin-index...")
@@ -205,9 +239,16 @@ def column2agg_map(columns):
     sum_cols = [c for c in columns if any(key in c for key in ['count'])]
     first = [c for c in columns if any(key in c for key in ['frame_pc_timestamp', 'frame_ephys_timestamp'])]
     last_cols = [c for c in columns if any(key in c for key in ['frame_pc_timestamp', 'frame_ephys_timestamp'])]
-    other_cols = [c for c in columns if '_detected' in c or c in ['track_zone', 'track_zone_int', 'trial_outcome', 'cue_visible',
+    other_cols = [c for c in columns if '_detected' in c or c in ['track_zone', 'track_zone_int', 'trial_outcome', 
+                                                                  'upcoming_choice', 'reward_window', 'cue_visible',
                                                                   'cue', 'flip_Cue1R1_Cue2R2','both_R1_R2_rewarded', 
                                                                   'choice_R1', 'choice_R2', 'trial_id']]
+    uncategorized = set(columns) - set(kinem_cols) - set(cam_cols) - set(sum_cols) - set(first) - set(last_cols) - set(other_cols)
+    if uncategorized:
+        Logger().logger.debug(Logger().fmtmsg((f"Some columns were not categorized "
+                                              "into aggregation types, they will"
+                                              " be dropped by after aggregation",
+                                              list(uncategorized))))
     return {**{col: 'mean' for col in kinem_cols},
             **{col: 'mean' for col in cam_cols},
             **{col: 'sum' for col in sum_cols},

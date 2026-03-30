@@ -1676,7 +1676,7 @@ def get_ConcatenatedEnsambles40ms(PCs, all_fr_hz):
     print(f"Calculating assembly templates using FastICA with {n_assemblies} components...")
     ica = FastICA(n_components=n_assemblies, random_state=42, max_iter=500)
     ica.fit(all_fr_z@PCs.values[:, :n_assemblies])  # ICA expects samples x features
-    assembly_templates = PCs.values[:, :n_assemblies]@ica.components_.T # Transpose to neurons x assemblies
+    assembly_templates = PCs.values[:, :n_assemblies]@ica.components_.T  # Transpose to neurons x assemblies
     
     print(f"Computing assembly activity for {n_assemblies} assemblies using JIT...")    
     assembly_activity = _compute_assembly_activity_numba(assembly_templates, all_fr_z.values)

@@ -38,7 +38,13 @@ def get_TrackKinematics(session_fullfname):
     
     if metad['paradigm_id'] in (800, 1100):
         # track_details = json.loads(metad['track_details'])
-        # don't trust the zone definitions from metadata, use hardcoded ones
+        # track_details_json = {
+        #     zone_name: (zone_info['start_pos'], zone_info['end_pos'])
+        #     for zone_name, zone_info in track_details.items()
+        # }
+
+        # TODO move this to metadata postprocessing patching
+        # don't trust the zone definitions from metadata, use hardcoded ones for animal 6,9
         track_details = {
             'startZone': (-169,-120),
             'visibleCue': (-120,-80),
@@ -50,6 +56,18 @@ def get_TrackKinematics(session_fullfname):
             'endZone': (230,260),
             'ITI': (260,265),
         }
+        # # for 10
+        # track_details = {
+        #     'startZone': (-169,-100),
+        #     'visibleCue': (-100,-30),
+        #     'nextToCue': (-30,30),
+        #     'afterCue': (30, 50),
+        #     'reward1Zone': (50,75),
+        #     'bewteenRewardZones': (75,120),
+        #     'reward2Zone': (120,210),
+        #     'endZone': (210,260),
+        #     'ITI': (260,265),
+        # }
         trackzone_int_ordered = {
             "startZone": 0,
             "visibleCue": 1,
@@ -131,6 +149,10 @@ def get_BehaviorTrialwise(session_fullfname, track_kinematics):
     trialdata = session_modality_from_nas(session_fullfname, "unity_trial")
     trials_variable = session_modality_from_nas(session_fullfname, "paradigm_variable")
     trialdata = pd.merge(trialdata, trials_variable, on='trial_id', how='left')
+
+    # fix for that one trial wher cue == 0 in animal 6. TODO remove at some point
+    trialdata.loc[:,'cue'] = trialdata.loc[:,'cue'].clip(1,2)
+    
     # for track paradigms, calculate staytimes and other kinematic metrics 
     # in relevant zones using unity frames
     metad = session_modality_from_nas(session_fullfname, "metadata")

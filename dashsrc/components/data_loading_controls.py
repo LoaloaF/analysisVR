@@ -238,6 +238,23 @@ def _exclude_sessions_with_less_than_n_trials(data, min_trials: int = 10):
     else:
         return data
 
+    if 'unity_trial_n_rows' in data.columns:
+        session_trial_counts = pd.DataFrame({
+            'session_id': np.asarray(session_values),
+            'trial_count': np.asarray(data['unity_trial_n_rows']),
+        }).dropna(subset=['session_id', 'trial_count']).drop_duplicates(subset=['session_id'])
+
+        if session_trial_counts.empty:
+            return data
+
+        valid_sessions = session_trial_counts.loc[
+            session_trial_counts['trial_count'] >= min_trials, 'session_id'
+        ]
+
+        if 'session_id' in index_names:
+            return data[data.index.get_level_values('session_id').isin(valid_sessions)]
+        return data[np.isin(np.asarray(data['session_id']), valid_sessions)]
+
     if 'trial_id' in data.columns:
         trial_values = data['trial_id']
     elif 'trial_id' in index_names:

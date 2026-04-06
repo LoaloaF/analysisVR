@@ -6,7 +6,7 @@ from plotly.colors import convert_colors_to_same_type
 # html ids used across the app
 
 # ANIMALS = 1,2,3, 5,7, 8, 6,9, 10,11,12,13,14,15
-ANIMALS = 6,9, 10,11,12,13,15
+ANIMALS = 5,7, 6,9, 10,11,12,13,15
 PARADIGMS = 800, 1100, 500, 0
 
 SESSION_WISE_VISS = ('SessionKinematics', "RawSpikes", 'SVMPredictions', 'CueCorrelation', 

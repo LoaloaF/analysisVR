@@ -4,6 +4,7 @@ import dash_bootstrap_components as dbc
 from dash import ctx  # Dash >= 2.9
 
 import numpy as np
+import pandas as pd
 
 from CustomLogger import CustomLogger as Logger
 
@@ -166,6 +167,21 @@ def _load_all_data(selected_analytics, loaded_analytics, loaded_raw_traces, sele
                                       paradigm_ids=selected_paradigms,
                                       animal_ids=selected_animals,)
                                     #   session_ids=np.arange(1,4))
+
+        # TODO hacky solution, should be removed and replace by proper non-int session_ids
+        s_ids = dat.index.unique('session_id')
+        if isinstance(s_ids[0], str):
+            print("Session ids are strings, mapping to integers for easier handling in callbacks.")
+            # map str to int if session ids are strings
+            renamer = dict(zip(s_ids, range(len(s_ids))))
+            s_ids_int = dat.index.get_level_values('session_id').map(renamer)
+            # Set new levels for session_id
+            dat['session_id'] = s_ids_int
+            dat.index = dat.index.droplevel('session_id')
+            dat.set_index('session_id', inplace=True, append=True)
+            # reorder levels 
+            dat = dat.reorder_levels(['paradigm_id', 'animal_id', 'session_id', 'entry_id'])
+                                    
         # TODO dirty, should be fixed later, animal level analytics are no good indices
         if analytic == 'Ensemble40msProjEventAligned':
             dat.set_index(['session_id', 't0', 'interval_t'], inplace=True,)

@@ -4,7 +4,6 @@ from time import sleep
 
 import pandas as pd
 import numpy as np
-from pyarrow import parquet as pq
 
 from CustomLogger import CustomLogger as Logger
 
@@ -13,6 +12,7 @@ import analytics_processing.analytics_constants as C
 
 # analytics computations related, allowed to fail for extiernal imports that only read analytics
 try:
+    from pyarrow import parquet as pq
     import analytics_processing.agg_modalities2analytic as m2a
     import analytics_processing.integr_analytics as integr_analytics
     import ephys_preprocessing.postproc_mea1k_ephys as ephys
@@ -227,8 +227,7 @@ def _compute_sess_analytic(analytic, session_fullfname):
                                            'movement_energy_smooth5'],
                                   session_names=[session_name],)
         if pose_data is None:
-            L.logger.warning("Missing lower level analytic")
-            return None
+            L.logger.warning("Missing lower level analytic, but continueing")
     
         data = integr_analytics.get_BehaviorFramewise(track_kinematics, trialwise, 
                                                       events, pose_data)
@@ -407,9 +406,9 @@ def _compute_sess_analytic(analytic, session_fullfname):
                 # position info
                 "frame_position", "track_zone", "track_zone_int", 'cue_visible',
                 # action from camera pose
-                "frame_head_angle",
-                "frame_head_angle_vel",
-                "frame_movement_energy_smooth5",
+                "head_angle",
+                "head_angle_vel",
+                "movement_energy_smooth5",
         ]
         behavior = get_analytics('BehaviorFramewise', session_names=[session_name], 
                                  columns=cols)

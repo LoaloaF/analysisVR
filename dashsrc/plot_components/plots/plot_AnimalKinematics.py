@@ -15,7 +15,7 @@ def _parse_args(metric, metric_max):
         z_axis_range = 0, metric_max
         cmap = px.colors.sequential.Plotly3_r
     elif metric == 'Acceleration':
-        metric_col = 'posbin_acceleration'
+        metric_col = 'posbin_acc'
         y_axis_label = 'Acceleration [cm/s^2]'
         z_axis_range = -metric_max, metric_max
         cmap = px.colors.diverging.Tropic_r
@@ -24,6 +24,31 @@ def _parse_args(metric, metric_max):
         y_axis_label = 'Lick count'
         z_axis_range = 0, metric_max
         cmap = px.colors.sequential.Blues
+        
+    elif metric == 'RawYawPitch Sum Velocity':
+        metric_col = 'posbin_RawYawPitch_abs_vel_sum'
+        y_axis_label = 'RawYawPitch Sum Velocity [cm/s]'
+        z_axis_range = 0, metric_max
+        cmap = px.colors.sequential.Plotly3_r
+    
+    elif metric == 'BallForward Velocity':
+        metric_col = 'posbin_raw'
+        y_axis_label = 'BallForward Velocity [cm/s]'
+        z_axis_range = 0, metric_max
+        cmap = px.colors.sequential.Plotly3_r
+    
+    elif metric == 'BallSide Velocity':
+        metric_col = 'posbin_pitch'
+        y_axis_label = 'BallSide Velocity [cm/s]'
+        z_axis_range = -metric_max/2, metric_max/2
+        cmap = px.colors.sequential.Plotly3_r
+    
+    elif metric == 'BallRotation Velocity':
+        metric_col = 'posbin_yaw'
+        y_axis_label = 'BallRotation Velocity [cm/s]'
+        z_axis_range = -metric_max/2, metric_max/2
+        cmap = px.colors.sequential.Plotly3_r
+        
     return metric_col, y_axis_label, z_axis_range, cmap
 
 def make_kinematics_figure(height):
@@ -214,9 +239,10 @@ def render_plot(all_data, metadata, metric, metric_max, smooth_data, width, heig
         if smooth_data:
             data[metric_col] = data[metric_col].rolling(window=10, center=True, min_periods=1).mean()
         
-        print(data.columns)
+        # print(data.columns)
         # last spatial bins can ba NaN, remove them
         min_max_pos_bin = data['from_position_bin'].min(), data['from_position_bin'].max()
+        print(min_max_pos_bin)
         data = data[(data['from_position_bin'] > min_max_pos_bin[0]) &
                     (data['from_position_bin'] < min_max_pos_bin[1])]
 

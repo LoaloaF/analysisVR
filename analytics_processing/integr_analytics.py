@@ -37,22 +37,28 @@ def get_BehaviorFramewise(track_kinematics, trialwise, events, pose_data):
     
     framedata = pd.concat([framedata, event_detected], axis=1)
 
-     # rat 10 didn't have ephys integrated properly for this camera...
-    if pose_data['image'+which_t_col].isna().sum() > 0: # shounld never happen
-        print(pose_data)
-        Logger().logger.error("Pose data contains NaN timestamps, cannot merge with framedata. Need to use PC timestamps.")
-        pose_data.drop(columns=['image_ephys_timestamp'], inplace=True)
-        which_t_col = '_pc_timestamp'
+    if pose_data is not None:
+        # rat 10 didn't have ephys integrated properly for this camera...
+        if pose_data['image'+which_t_col].isna().sum() > 0: # shounld never happen
+            Logger().logger.error("Pose data contains NaN timestamps, cannot merge with framedata. Need to use PC timestamps.")
+            pose_data.drop(columns=['image_ephys_timestamp'], inplace=True)
+            which_t_col = '_pc_timestamp'
+            # pc timestamps sometimes missing in the begging for rat 9 -.-
+            # interpolate
+            if pose_data['image'+which_t_col].isna().sum() > 0:
+                Logger().logger.error("Even with PC timestamps, NaN timestamps remain.")
+                pose_data['image_pc_timestamp'] = pose_data['image_pc_timestamp'].interpolate(method='linear', limit_direction='both')
+
+        # Nearest-timestamp merge
+        pose_data_matched = pd.merge_asof(
+            framedata[['frame' + which_t_col]].astype('float64'),
+            pose_data.rename(columns={'image' + which_t_col: 'frame' + which_t_col}).astype('float64'),
+            on='frame' + which_t_col,
+            direction='nearest',
+            tolerance=2e5,  # 200ms
+        ).drop(columns=['frame' + which_t_col])
+        framedata = pd.concat([framedata, pose_data_matched], axis=1)
     
-    # Nearest-timestamp merge
-    pose_data_matched = pd.merge_asof(
-        framedata[['frame' + which_t_col]].astype('float64'),
-        pose_data.rename(columns={'image' + which_t_col: 'frame' + which_t_col}).astype('float64'),
-        on='frame' + which_t_col,
-        direction='nearest',
-        tolerance=2e5,  # 200ms
-    ).drop(columns=['frame' + which_t_col])
-    framedata = pd.concat([framedata, pose_data_matched], axis=1)
     # merge trialwise data in (big)
     framedata = pd.merge(framedata, trialwise, on='trial_id', how='left')
     

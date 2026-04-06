@@ -5,10 +5,15 @@ import platform
 
 def device_paths():
     which_os = platform.system()
-    user = os.getlogin()
+    user = "amitsant2000" #os.getlogin()
     # print(f"OS: {which_os}, User: {user}")
+
+    if which_os == "Linux" and user == "amitsant2000":
+        nas_dir = "/mnt/z/BMI/VirtualReality/SpatialSequenceLearning/"
+        local_data_dir = "/home/amitsant2000/local_data/"
+        project_dir = "/home/amitsant2000/ethz/VirtualReality/"
     
-    if which_os == 'Linux' and user == 'houmanjava':
+    elif which_os == 'Linux' and user == 'houmanjava':
         nas_dir = "/mnt/SpatialSequenceLearning/"
         local_data_dir = "/home/houmanjava/local_data/"
         project_dir = "/home/houmanjava/meatesting/"

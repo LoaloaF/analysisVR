@@ -44,6 +44,10 @@ parser.add_argument("--batch_size",    type=int,   default=512,
                     help="Mini-batch size for training (default 512)")
 parser.add_argument("--split_path",    type=str,   default="test_indices_by_session.npy",
                     help="Reuse existing train/test split if found")
+parser.add_argument("--dropout",       type=float, default=0.0,
+                    help="Dropout on LSTM output before FC (default 0.0)")
+parser.add_argument("--weight_decay",  type=float, default=0.0,
+                    help="L2 weight decay for Adam (default 0.0)")
 args = parser.parse_args()
 
 # ── Reproducibility ───────────────────────────────────────────────────────────
@@ -208,10 +212,20 @@ for i, session_id in enumerate(session_ids):
         if std == 1e-8:
             mask[i, j] = True
 
-# ── Result matrices ───────────────────────────────────────────────────────────
-mse_matrix       = np.full((num_sessions, num_neurons), np.nan)
-r2_matrix        = np.full((num_sessions, num_neurons), np.nan)
-pearson_r2_matrix = np.full((num_sessions, num_neurons), np.nan)
+# ── Result matrices (load existing if present) ────────────────────────────────
+mse_path  = os.path.join(args.out_dir, "mse_matrix.npy")
+r2_path   = os.path.join(args.out_dir, "r2_matrix.npy")
+pr2_path  = os.path.join(args.out_dir, "pearson_r2_matrix.npy")
+
+if os.path.exists(mse_path) and os.path.exists(r2_path) and os.path.exists(pr2_path):
+    mse_matrix        = np.load(mse_path)
+    r2_matrix         = np.load(r2_path)
+    pearson_r2_matrix = np.load(pr2_path)
+    print("Loaded existing result matrices — will fill in missing entries only.")
+else:
+    mse_matrix        = np.full((num_sessions, num_neurons), np.nan)
+    r2_matrix         = np.full((num_sessions, num_neurons), np.nan)
+    pearson_r2_matrix = np.full((num_sessions, num_neurons), np.nan)
 
 # ═════════════════════════════════════════════════════════════════════════════
 # LOOP 1 — TRAIN AND SAVE
@@ -243,13 +257,20 @@ for test_idx, test_session in enumerate(session_ids):
         if mask[test_idx, neuron_idx]:
             continue
 
+        model_path = os.path.join(
+            models_dir,
+            f"session_{test_idx:02d}_neuron_{neuron_idx:02d}.pt")
+        if os.path.exists(model_path):
+            continue  # already trained — skip
+
         dataset   = TensorDataset(X_train_t, y_train_t[:, neuron_idx])
         loader    = DataLoader(dataset, batch_size=args.batch_size,
                                shuffle=True, pin_memory=(device.type == "cuda"))
 
         model     = NeuronLSTM(input_size, args.hidden_size,
-                               args.num_layers).to(device)
-        optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
+                               args.num_layers, dropout=args.dropout).to(device)
+        optimizer = torch.optim.Adam(model.parameters(), lr=args.lr,
+                                     weight_decay=args.weight_decay)
         criterion = nn.MSELoss()
 
         epoch_bar = tqdm(range(args.num_epochs),
@@ -305,6 +326,12 @@ for test_idx, test_session in enumerate(session_ids):
         if mask[test_idx, neuron_idx]:
             continue
 
+        pred_path = os.path.join(
+            preds_dir,
+            f"session_{test_idx:02d}_neuron_{neuron_idx:02d}_test.npz")
+        if os.path.exists(pred_path):
+            continue  # already evaluated — skip
+
         model_path = os.path.join(
             models_dir,
             f"session_{test_idx:02d}_neuron_{neuron_idx:02d}.pt")
@@ -312,7 +339,7 @@ for test_idx, test_session in enumerate(session_ids):
             continue
 
         model = NeuronLSTM(input_size, args.hidden_size,
-                           args.num_layers).to(device)
+                           args.num_layers, dropout=args.dropout).to(device)
         model.load_state_dict(torch.load(model_path, map_location=device))
         model.eval()
 
@@ -337,9 +364,6 @@ for test_idx, test_session in enumerate(session_ids):
         pearson_r2_matrix[test_idx, neuron_idx] = pr2
 
         # Save raw predictions for later inspection
-        pred_path = os.path.join(
-            preds_dir,
-            f"session_{test_idx:02d}_neuron_{neuron_idx:02d}_test.npz")
         np.savez_compressed(pred_path,
                             actual=actual,
                             predicted=preds_np,

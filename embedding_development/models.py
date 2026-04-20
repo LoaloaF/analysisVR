@@ -28,7 +28,7 @@ class NeuronLSTM(torch.nn.Module):
     Causal LSTM: given a window of T past behavioural frames,
     predict the firing rate at the final timestep.
     """
-    def __init__(self, input_size, hidden_size, num_layers, output_size=1):
+    def __init__(self, input_size, hidden_size, num_layers, output_size=1, dropout=0.0):
         super().__init__()
         self.lstm = torch.nn.LSTM(
             input_size=input_size,
@@ -36,10 +36,11 @@ class NeuronLSTM(torch.nn.Module):
             num_layers=num_layers,
             batch_first=True,       # (batch, seq, features)
         )
+        self.dropout = torch.nn.Dropout(dropout)
         self.fc = torch.nn.Linear(hidden_size, output_size)
 
     def forward(self, x):
         # x: (batch, window, input_size)
-        out, _ = self.lstm(x)       # out: (batch, window, hidden)
-        last    = out[:, -1, :]     # take the last timestep
-        return self.fc(last).squeeze(-1)  # (batch,)
+        out, _ = self.lstm(x)            # out: (batch, window, hidden)
+        last    = out[:, -1, :]          # take the last timestep
+        return self.fc(self.dropout(last)).squeeze(-1)  # (batch,)

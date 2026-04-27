@@ -27,6 +27,10 @@ class NeuronLSTM(torch.nn.Module):
     """
     Causal LSTM: given a window of T past behavioural frames,
     predict the firing rate at the final timestep.
+
+    The action embedding is the LSTM output at the final timestep
+    (out[:, -1, :], shape hidden_size), extracted via embed().
+    The FC layer maps this embedding to neuron predictions.
     """
     def __init__(self, input_size, hidden_size, num_layers, output_size=1, dropout=0.0):
         super().__init__()
@@ -39,8 +43,12 @@ class NeuronLSTM(torch.nn.Module):
         self.dropout = torch.nn.Dropout(dropout)
         self.fc = torch.nn.Linear(hidden_size, output_size)
 
+    def embed(self, x):
+        """Return the LSTM output at the final timestep: (batch, hidden_size)."""
+        out, _ = self.lstm(x)
+        return out[:, -1, :]
+
     def forward(self, x):
         # x: (batch, window, input_size)
-        out, _ = self.lstm(x)            # out: (batch, window, hidden)
-        last    = out[:, -1, :]          # take the last timestep
-        return self.fc(self.dropout(last)).squeeze(-1)  # (batch,)
+        last = self.embed(x)             # (batch, hidden_size)
+        return self.fc(self.dropout(last)).squeeze(-1)  # (batch,) or (batch, output_size)

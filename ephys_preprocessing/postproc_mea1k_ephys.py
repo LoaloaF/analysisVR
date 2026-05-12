@@ -1567,7 +1567,7 @@ def get_ConcatenatedPCA40ms(fr_hz):
     eigenval_sum = np.sum(eigenvals)
     expl_var = eigenvals / eigenval_sum
     
-    # calculate projection of the data onto the eigenvectors
+    # calculate projection of the data onto the eigenvectors TODO I think this might be wrong: should be Z_pca =  eigenvecs.T @ Z
     Z_pca =  eigenvecs @ Z
     PC_embeddings = pd.DataFrame(Z_pca.T, index=fr_z.index,
                                  columns=[f"PC{i+1}" for i in range(Z_pca.shape[0])])

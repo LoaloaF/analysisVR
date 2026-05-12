@@ -92,7 +92,9 @@ def _build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--min-trials-per-session", type=int, default=20)
     parser.add_argument("--min-class-count", type=int, default=4)
     parser.add_argument("--max-cv-splits", type=int, default=5)
-    parser.add_argument("--shuffle-n", type=int, default=1000)
+    parser.add_argument("--shuffle-n", type=int, default=5000)
+    parser.add_argument("--n-jobs", type=int, default=1)
+    parser.add_argument("--shuffle-chunk-size", type=int, default=50)
     parser.add_argument(
         "--output-root",
         type=str,
@@ -100,6 +102,7 @@ def _build_arg_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--run-name", type=str, default="")
     parser.add_argument("--exclude-session", action="append", default=[])
+    parser.add_argument("--interval-name", action="append", default=[])
     parser.add_argument("--min-session-date", type=str, default="2024-11-27")
     parser.add_argument("--disable-session-date-filter", action="store_true")
     return parser
@@ -179,19 +182,26 @@ def main() -> None:
             shuffle_n=max(0, int(args.shuffle_n)),
             min_session_date=min_session_date,
             drop_unparseable_session_dates=True,
+            n_jobs=max(1, int(args.n_jobs)),
+            shuffle_chunk_size=max(1, int(args.shuffle_chunk_size)),
         )
 
         run_dir_name = run_name if len(assembly_cols) == 1 else f"{run_name}__{assembly_col}"
         run_dir = output_root / run_dir_name
 
         print(f"[train] assembly={assembly_col} output_dir={run_dir}", flush=True)
-        print(f"[train] shuffle_n={int(cfg.shuffle_n)}", flush=True)
+        print(
+            f"[train] shuffle_n={int(cfg.shuffle_n)} n_jobs={int(cfg.n_jobs)} "
+            f"shuffle_chunk_size={int(cfg.shuffle_chunk_size)}",
+            flush=True,
+        )
 
         results_df = run_session_interval_decoding(
             t0_ens,
             cfg=cfg,
             progress=True,
             log_every=25,
+            interval_names=args.interval_name or None,
         )
 
         results_csv = _save_outputs(run_dir, results_df, asdict(cfg))

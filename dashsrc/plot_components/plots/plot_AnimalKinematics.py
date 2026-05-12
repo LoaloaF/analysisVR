@@ -107,7 +107,7 @@ def _configure_axis(fig, session_ids, width, height):
         autorange='reversed',
         tickmode='array',
         tickvals=session_ids,
-        ticktext=[str(s) for s in session_ids],
+        ticktext=[str(s).split('_')[0] for s in session_ids],
         zeroline=False,
         ticks='outside',
         title_text="Session ID",

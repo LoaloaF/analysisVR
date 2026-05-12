@@ -4,8 +4,11 @@ from __future__ import annotations
 
 import hashlib
 import json
+import multiprocessing as mp
+import os
 import time
 import warnings
+from concurrent.futures import ProcessPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, List, Optional, Sequence
@@ -15,6 +18,7 @@ import pandas as pd
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import balanced_accuracy_score
 from sklearn.model_selection import StratifiedKFold
+from threadpoolctl import threadpool_limits
 
 from interval_decoding_pipeline import DEFAULT_TARGETS, prepare_interval_table
 
@@ -54,10 +58,16 @@ class SessionDecodeConfig:
     min_session_date: Optional[str] = "2024-11-27"
     drop_unparseable_session_dates: bool = True
     excluded_intervals: Optional[Sequence[str]] = None
+    n_jobs: int = 1
+    shuffle_chunk_size: int = 50
+
+
+_SHUFFLE_STATE: Dict[str, object] = {}
+_THREADPOOL_LIMITER = None
 
 
 def _target_filter(df: pd.DataFrame, target_col: str) -> pd.DataFrame:
-    # Keep only the binary labels used by the original decoder.
+    # Keep only the binary labels
     out = df.copy()
     allowed = [1, 2] if target_col == "cue" else [0, 1]
     out = out[out[target_col].isin(allowed)]
@@ -140,14 +150,13 @@ def _standardize_train_test(x_train: np.ndarray, x_test: np.ndarray) -> tuple[np
     return xtr, xte
 
 
-def _fit_predict(
-    x_train: np.ndarray,
+def _fit_predict_standardized(
+    xtr: np.ndarray,
     y_train: np.ndarray,
-    x_test: np.ndarray,
+    xte: np.ndarray,
     random_state: int,
 ) -> np.ndarray:
-    # Fit the same balanced logistic regression used by the current pipeline.
-    xtr, xte = _standardize_train_test(x_train, x_test)
+    # Fit the balanced logistic regression
     model = LogisticRegression(
         solver="liblinear",
         penalty="l2",
@@ -157,6 +166,75 @@ def _fit_predict(
     )
     model.fit(xtr, y_train)
     return model.predict(xte).astype(np.int64, copy=False)
+
+
+def _fit_predict(
+    x_train: np.ndarray,
+    y_train: np.ndarray,
+    x_test: np.ndarray,
+    random_state: int,
+) -> np.ndarray:
+    xtr, xte = _standardize_train_test(x_train, x_test)
+    return _fit_predict_standardized(xtr, y_train, xte, random_state)
+
+
+def _build_fold_data(
+    x_all: np.ndarray,
+    splits: Sequence[tuple[np.ndarray, np.ndarray]],
+) -> List[tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]]:
+    return [
+        (train_idx, test_idx, *_standardize_train_test(x_all[train_idx], x_all[test_idx]))
+        for train_idx, test_idx in splits
+    ]
+
+
+def _limit_worker_threads() -> None:
+    for var in ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS", "VECLIB_MAXIMUM_THREADS", "NUMEXPR_NUM_THREADS"):
+        os.environ[var] = "1"
+    global _THREADPOOL_LIMITER
+    _THREADPOOL_LIMITER = threadpool_limits(limits=1)
+
+
+def _init_shuffle_worker(fold_data, random_state: int) -> None:
+    _limit_worker_threads()
+    global _SHUFFLE_STATE
+    _SHUFFLE_STATE = {"fold_data": fold_data, "random_state": int(random_state)}
+
+
+def _score_shuffle_chunk_data(
+    start_idx: int,
+    y_perms: Sequence[np.ndarray],
+    fold_data: Sequence[tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]],
+    random_state: int,
+) -> tuple[int, int, List[float]]:
+    null_scores: List[float] = []
+    fail_count = 0
+    for local_idx, y_perm in enumerate(y_perms):
+        shuffle_idx = int(start_idx + local_idx)
+        fold_scores: List[float] = []
+        failed = False
+        for fold_idx, (train_idx, test_idx, xtr, xte) in enumerate(fold_data):
+            y_tr = y_perm[train_idx]
+            y_te = y_perm[test_idx]
+            if np.unique(y_tr).size != 2 or np.unique(y_te).size != 2:
+                failed = True
+                break
+            y_hat = _fit_predict_standardized(xtr, y_tr, xte, int(random_state + shuffle_idx * 1000 + fold_idx))
+            fold_scores.append(float(balanced_accuracy_score(y_te, y_hat)))
+        if failed or not fold_scores:
+            fail_count += 1
+            continue
+        null_scores.append(float(np.mean(fold_scores)))
+    return int(start_idx), int(fail_count), null_scores
+
+
+def _score_shuffle_chunk(payload: tuple[int, Sequence[np.ndarray]]) -> tuple[int, int, List[float]]:
+    return _score_shuffle_chunk_data(
+        payload[0],
+        payload[1],
+        _SHUFFLE_STATE["fold_data"],
+        _SHUFFLE_STATE["random_state"],
+    )
 
 
 def _stable_seed(*parts: object) -> int:
@@ -186,6 +264,7 @@ def _shuffle_significance_empirical(
     cfg: SessionDecodeConfig,
     observed_metric: float,
     random_state: int,
+    fold_data: Optional[Sequence[tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]]] = None,
 ) -> Dict[str, object]:
     # Reuse the observed folds while shuffling labels to build the null.
     stats = _empty_shuffle_stats(cfg)
@@ -195,35 +274,31 @@ def _shuffle_significance_empirical(
         return stats
 
     rng = np.random.default_rng(int(random_state))
+    fold_data = list(fold_data) if fold_data is not None else _build_fold_data(x_all, splits)
+    y_perms = [rng.permutation(y_true) for _ in range(n_shuffles)]
+    chunk_size = max(1, int(cfg.shuffle_chunk_size))
+    chunks = [(idx, y_perms[idx : idx + chunk_size]) for idx in range(0, n_shuffles, chunk_size)]
+    n_jobs = max(1, int(cfg.n_jobs))
+
+    if n_jobs > 1 and len(chunks) > 1:
+        with ProcessPoolExecutor(
+            max_workers=min(n_jobs, len(chunks)),
+            mp_context=mp.get_context("fork"),
+            initializer=_init_shuffle_worker,
+            initargs=(fold_data, int(random_state)),
+        ) as pool:
+            chunk_results = list(pool.map(_score_shuffle_chunk, chunks))
+    else:
+        chunk_results = [
+            _score_shuffle_chunk_data(idx, y_perm_chunk, fold_data, int(random_state))
+            for idx, y_perm_chunk in chunks
+        ]
+
     null_scores: List[float] = []
     fail_count = 0
-
-    # Skip shuffled splits that collapse to a single class in either fold.
-    for shuffle_idx in range(n_shuffles):
-        y_perm = rng.permutation(y_true)
-        fold_scores: List[float] = []
-        failed = False
-
-        for fold_idx, (train_idx, test_idx) in enumerate(splits):
-            y_tr = y_perm[train_idx]
-            y_te = y_perm[test_idx]
-            if np.unique(y_tr).size != 2 or np.unique(y_te).size != 2:
-                failed = True
-                break
-
-            y_hat = _fit_predict(
-                x_train=x_all[train_idx],
-                y_train=y_tr,
-                x_test=x_all[test_idx],
-                random_state=int(random_state + shuffle_idx * 1000 + fold_idx),
-            )
-            fold_scores.append(float(balanced_accuracy_score(y_te, y_hat)))
-
-        if failed or not fold_scores:
-            fail_count += 1
-            continue
-
-        null_scores.append(float(np.mean(fold_scores)))
+    for _, chunk_fail_count, chunk_scores in sorted(chunk_results, key=lambda item: item[0]):
+        fail_count += int(chunk_fail_count)
+        null_scores.extend(chunk_scores)
 
     stats["shuffle_fail_count"] = int(fail_count)
     if not null_scores:
@@ -355,13 +430,15 @@ def run_session_interval_decoding(
                 n_bins_used = int(sum(session_df[interval_feature_cols].notna().any(axis=0)))
                 splits, n_splits = _build_cv_splits(y01, cfg)
 
+                fold_data = _build_fold_data(x_all, splits)
+
                 # Evaluate balanced accuracy with the original fold-specific seeds.
                 fold_bacc: List[float] = []
-                for fold_idx, (train_idx, test_idx) in enumerate(splits):
-                    y_hat = _fit_predict(
-                        x_train=x_all[train_idx],
+                for fold_idx, (train_idx, test_idx, xtr, xte) in enumerate(fold_data):
+                    y_hat = _fit_predict_standardized(
+                        xtr=xtr,
                         y_train=y01[train_idx],
-                        x_test=x_all[test_idx],
+                        xte=xte,
                         random_state=int(cfg.random_state + fold_idx),
                     )
                     fold_bacc.append(float(balanced_accuracy_score(y01[test_idx], y_hat)))
@@ -377,6 +454,7 @@ def run_session_interval_decoding(
                     cfg=cfg,
                     observed_metric=observed_bacc,
                     random_state=int(cfg.random_state + slice_seed),
+                    fold_data=fold_data,
                 )
 
                 results.append(

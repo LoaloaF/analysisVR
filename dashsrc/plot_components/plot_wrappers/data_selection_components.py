@@ -645,7 +645,8 @@ def register_session_slider_callback(app, vis_name, global_data, analytic,
             style = {'writing-mode': 'vertical-rl', 'white-space': 'nowrap'}
             if mark_label_style is not None:
                 style = mark_label_style
-            return {'label': str(label), 'style': style}
+            label_text = str(label).split("_", 1)[0]
+            return {'label': label_text, 'style': style}
 
         # sessions for the selected animal
         sessions = _get_sessions_for_animal(data, selected_animal)

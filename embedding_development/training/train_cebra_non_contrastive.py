@@ -9,6 +9,8 @@ import random
 import cebra
 import cebra.models
 
+import sys
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "utils"))
 from load_encoder import build_windows
 
 parser = argparse.ArgumentParser()

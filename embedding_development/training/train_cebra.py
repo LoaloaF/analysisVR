@@ -114,8 +114,6 @@ non_nan_rows        = behavior_glm_loaded.index[~behavior_glm_loaded.isna().any(
 behavior_glm_loaded = behavior_glm_loaded.loc[non_nan_rows]
 spikes_loaded       = spikes_loaded.loc[non_nan_rows]
 
-behavior_glm_loaded = behavior_glm_loaded.drop("track_zone", axis=1)
-
 session_ids = behavior_glm_loaded.index.map(lambda x: x[0]).unique()
 print(f"{len(session_ids)} sessions")
 
@@ -127,11 +125,10 @@ non_categorical_cols = [
     'frame_YawPitch_abs_acc_sum_500msMedian',
     'head_angle_vel',
     'head_angle',
-    'movement_energy_smooth5',
+    'frame_position',
 ]
 
 categorical_variables = [
-    'track_zone_int',
     'cue_visible',
     'upcoming_choice',
     'reward_window',

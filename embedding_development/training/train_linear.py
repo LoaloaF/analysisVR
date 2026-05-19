@@ -19,6 +19,9 @@ parser.add_argument("--use_ensembles", action="store_true", default=False,
                     help="Predict ensemble activity instead of single-unit spikes")
 parser.add_argument("--models_dir",    type=str,  default=None,
                     help="Directory to save model checkpoints (default: auto from --use_ensembles)")
+parser.add_argument("--n_epochs",      type=int,  default=100,
+                    help="Training epochs per neuron")
+parser.add_argument("--learning_rate", type=float, default=1e-3)
 args = parser.parse_args()
 
 USE_ENSEMBLES = args.use_ensembles
@@ -66,8 +69,6 @@ non_nan_rows        = behavior_glm_loaded.index[~behavior_glm_loaded.isna().any(
 behavior_glm_loaded = behavior_glm_loaded.loc[non_nan_rows]
 spikes_loaded       = spikes_loaded.loc[non_nan_rows]
 
-behavior_glm_loaded = behavior_glm_loaded.drop("track_zone", axis=1)
-
 session_ids = behavior_glm_loaded.index.map(lambda x: x[0]).unique()
 print(f"{len(session_ids)} sessions")
 
@@ -79,11 +80,10 @@ non_categorical_cols = [
     'frame_YawPitch_abs_acc_sum_500msMedian', # off_rotation_acceleration
     'head_angle_vel',
     'head_angle',
-    'movement_energy_smooth5',                # movement_energy
+    'frame_position',
 ]
 
 categorical_variables = [
-    'track_zone_int',
     'cue_visible',
     'upcoming_choice',
     'reward_window',
@@ -162,14 +162,13 @@ _default_models_dir = "./models/linear/ensembles" if USE_ENSEMBLES else "./model
 models_dir = args.models_dir if args.models_dir is not None else _default_models_dir
 os.makedirs(models_dir, exist_ok=True)
 
-input_size    = len(non_categorical_cols) + len(zone_onehot_cols)
-output_size   = 1
-num_epochs    = 100
-learning_rate = 0.001
-num_sessions  = len(session_ids)
-num_neurons   = ensembles_values.shape[1] if USE_ENSEMBLES else spikes_loaded.shape[1]
+input_size   = len(non_categorical_cols) + len(zone_onehot_cols)
+output_size  = 1
+num_sessions = len(session_ids)
+num_neurons  = ensembles_values.shape[1] if USE_ENSEMBLES else spikes_loaded.shape[1]
 
 print(f"input_size={input_size}, num_sessions={num_sessions}, num_neurons={num_neurons}")
+print(f"n_epochs={args.n_epochs}, learning_rate={args.learning_rate}")
 
 # ── Train and save ──────────────────────────────────────────────────────────
 torch.cuda.empty_cache()
@@ -177,6 +176,7 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 print(f"Using device: {device}")
 np.random.seed(args.seed)
 torch.manual_seed(args.seed)
+torch.cuda.manual_seed_all(args.seed)
 random.seed(args.seed)
 
 for test_idx, test_session in enumerate(session_ids):
@@ -203,10 +203,10 @@ for test_idx, test_session in enumerate(session_ids):
         torch.manual_seed(model_seed)
         np.random.seed(model_seed % (2**32))
         model     = LinearModel(input_size, output_size).to(device)
-        optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
+        optimizer = torch.optim.Adam(model.parameters(), lr=args.learning_rate)
         criterion = nn.MSELoss()
 
-        for epoch in range(num_epochs):
+        for epoch in range(args.n_epochs):
             model.train()
             optimizer.zero_grad()
             _, outputs = model(train_data)

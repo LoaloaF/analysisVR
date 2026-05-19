@@ -1,0 +1,14 @@
+# large video files
+*.mp4
+
+# generated outputs
+*.html
+*.pdf
+
+# data directories
+splits/
+models/
+outputs/
+
+# old split file
+test_indices_by_session.npy

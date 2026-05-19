@@ -72,8 +72,6 @@ args = parser.parse_args()
 BEHAVIOR_FEATURES = [
     "frame_raw_500msMedian",
     "frame_YawPitch_abs_vel_sum_500msMedian",
-    "upcoming_choice",
-    "reward_window",
     "frame_raw_abs_acc_500msMedian",
     "frame_YawPitch_abs_acc_sum_500msMedian",
     "forward_vs_rotation_corr",
@@ -81,13 +79,15 @@ BEHAVIOR_FEATURES = [
     "head_angle_vel",
     "movement_energy_smooth5",
     "lick_detected",
+    "track_zone_int",
+    "cue_visible",
+    "reward-sound_detected",
+    "reward-valve-open_detected",
 ]
 
 PRETTY_NAMES = {
     "frame_raw_500msMedian":                  "Forward Speed (500 ms median)",
     "frame_YawPitch_abs_vel_sum_500msMedian": "Yaw+Pitch Abs. Velocity (500 ms)",
-    "upcoming_choice":                        "Upcoming Choice",
-    "reward_window":                          "Reward Window",
     "frame_raw_abs_acc_500msMedian":          "Forward Abs. Acceleration (500 ms)",
     "frame_YawPitch_abs_acc_sum_500msMedian": "Yaw+Pitch Abs. Acceleration (500 ms)",
     "forward_vs_rotation_corr":               "Forward vs. Rotation Correlation",
@@ -95,10 +95,14 @@ PRETTY_NAMES = {
     "head_angle_vel":                         "Head Angular Velocity",
     "movement_energy_smooth5":                "Movement Energy (smoothed)",
     "lick_detected":                          "Lick Detected",
+    "track_zone_int":                         "Track Zone",
+    "cue_visible":                            "Cue Visible",
+    "reward-sound_detected":                  "Reward Sound",
+    "reward-valve-open_detected":             "Reward Valve Open",
 }
 
 # Binary features get a step-plot style
-BINARY_FEATURES = {"upcoming_choice", "reward_window", "lick_detected"}
+BINARY_FEATURES = {"lick_detected", "cue_visible", "reward-sound_detected", "reward-valve-open_detected"}
 
 # ── Load data ─────────────────────────────────────────────────────────────────
 print("Loading data …")

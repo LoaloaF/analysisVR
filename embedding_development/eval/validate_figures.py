@@ -63,6 +63,9 @@ MANIFEST = {
     'nonlinearity_advantage.png':         (FIG.FULL,       True),
     'mlp_vs_linear_r2.png':              (FIG.FULL,       True),
     'ablation_proof.png':                (FIG.FULL,       True),
+
+    # Section 10 — Cross-model attribution
+    'group_attribution_comparison.png':   (FIG.FULL,       True),
 }
 
 # Raw column name fragments that must NOT appear as text in figure filenames

@@ -22,12 +22,12 @@ import scienceplots
 # Keys: raw column names used in the data files.
 # Values: human-readable labels used on all axes and legends.
 FEATURE_NAMES = {
-    'frame_raw_500msMedian':                   'Forward Speed',
-    'frame_raw_abs_acc_500msMedian':           'Forward Acceleration',
-    'frame_YawPitch_abs_vel_sum_500msMedian':  'Rotational Velocity',
-    'frame_YawPitch_abs_acc_sum_500msMedian':  'Rotational Acceleration',
-    'head_angle_vel':                          'Head Angular Velocity',
-    'head_angle':                              'Head Angle',
+    'frame_raw_500msMedian':                   'Forward Speed (cm/s)',
+    'frame_raw_abs_acc_500msMedian':           'Forward Acceleration (cm/s²)',
+    'frame_YawPitch_abs_vel_sum_500msMedian':  'Rotational Velocity (°/s)',
+    'frame_YawPitch_abs_acc_sum_500msMedian':  'Rotational Acceleration (°/s²)',
+    'head_angle_vel':                          'Head Angular Velocity (°/s)',
+    'head_angle':                              'Head Angle (°)',
     'frame_position':                          'Track Position (cm)',
     'cue_visible':                             'Cue Visible',
     'upcoming_choice':                         'Upcoming Choice',
@@ -75,8 +75,8 @@ AXIS_LABELS = {
     'cohens_d':        "Cohen's d",
     'session':         'Session',
     'ensemble':        'Ensemble (sorted by mean R²)',
-    'head_angle':      'Head Angle (cm)',       # PENDING: confirm cm is correct unit
-    'head_angle_vel':  'Head Angular Velocity', # PENDING: confirm units
+    'head_angle':      'Head Angle (°)',
+    'head_angle_vel':  'Head Angular Velocity (°/s)',
     'position':        'Track Position (cm)',    # confirmed: −169 to 270 cm
     'activity':        'Ensemble activity (z-scored)',
     'trend_r2':        'Slow-component R²',
@@ -222,7 +222,7 @@ def savefig_manifest(fig, filename, out_dirs):
     h_in = fig.get_figheight()
 
     try:
-        fig.tight_layout(rect=[0, 0.04, 1, 1])   # leave bottom 4% for footnote
+        fig.tight_layout(rect=[0, 0.04, 0.99, 0.96])   # 4% bottom for footnote, 4% top for panel labels
     except Exception:
         pass
 

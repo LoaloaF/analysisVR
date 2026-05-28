@@ -81,7 +81,7 @@ n_feat = len(CONT_FEATURES)
 fig = plt.figure(figsize=FIG.FULL, facecolor="white")
 gs  = gridspec.GridSpec(
     n_feat, 1, hspace=0.08,
-    left=0.18, right=0.97, top=0.97, bottom=0.11,
+    left=0.30, right=0.97, top=0.97, bottom=0.11,
 )
 
 palette = plt.cm.tab10(np.linspace(0, 0.9, n_feat))

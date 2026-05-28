@@ -95,6 +95,33 @@ def check_not_blank(path):
         return False
     return True
 
+
+def check_label_clipping(path):
+    """
+    Detect content (text / axes) cut off at the figure border.
+    A 3-pixel strip at each edge is expected to be white background.
+    Dark pixels there indicate that tight_layout + size-restore left labels clipped.
+    """
+    if not PIL_AVAILABLE:
+        return True
+    img = Image.open(path).convert('RGB')
+    arr = np.array(img)
+    h, w = arr.shape[:2]
+    edges = {
+        'top':    arr[:3,    :,    :],
+        'bottom': arr[h-3:,  :,    :],
+        'left':   arr[:,     :3,   :],
+        'right':  arr[:,     w-3:, :],
+    }
+    ok = True
+    for side, strip in edges.items():
+        dark_frac = ((strip < 200).any(axis=2)).mean()
+        if dark_frac > 0.008:
+            print(f"  [FAIL] {os.path.basename(path)}: "
+                  f"dark pixels at {side} edge ({dark_frac:.1%}) — label may be clipped")
+            ok = False
+    return ok
+
 def check_landscape(path):
     if not PIL_AVAILABLE:
         return True
@@ -139,6 +166,7 @@ def run_validation():
 
         ok &= check_no_raw_names_in_filename(fname)
         ok &= check_not_blank(path)
+        ok &= check_label_clipping(path)
 
         if must_landscape:
             ok &= check_landscape(path)

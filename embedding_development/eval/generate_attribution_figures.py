@@ -138,7 +138,7 @@ print("Generated gpv_group_ensemble_heatmap.png")
 _make_attribution_heatmap(
     ig, "IG per ensemble", "ig_per_ensemble_heatmap.png",
     cbar_label=AXIS_LABELS['ig'],
-    cmap='YlOrRd',
+    cmap='Blues',
 )
 print("Generated ig_per_ensemble_heatmap.png")
 

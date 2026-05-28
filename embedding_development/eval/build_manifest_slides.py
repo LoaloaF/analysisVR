@@ -2,8 +2,12 @@
 """
 build_manifest_slides.py
 
-Generate a supplementary PPTX (manifest_slides.pptx) containing one slide per
-manifest figure.  Each figure is placed at its exact native size, centred on the
+Generate a supplementary PPTX (manifest_slides.pptx) containing:
+  - 2 intro slides (title + overview)
+  - One slide per manifest figure, grouped by section
+  - One section-divider slide per section
+
+Each figure is placed at its exact native size, centred on the
 10" × 5.625" slide canvas.
 
 Usage:
@@ -28,10 +32,15 @@ SLIDE_W = Inches(10.0)
 SLIDE_H = Inches(5.625)
 TITLE_H = Inches(0.55)       # height of title band at top
 
-TITLE_FONT_SIZE = Pt(18)
+TITLE_FONT_SIZE   = Pt(18)
 CAPTION_FONT_SIZE = Pt(10)
 
-# ─── MANIFEST: (section, slide title, filename, section heading?) ──────────────
+DARK_BG  = RGBColor(0x1A, 0x23, 0x3A)
+WHITE    = RGBColor(0xFF, 0xFF, 0xFF)
+ACCENT   = RGBColor(0x8A, 0xB4, 0xFF)
+DARK_TXT = RGBColor(0x1A, 0x23, 0x3A)
+
+# ─── MANIFEST: (section, slide title, filename) ───────────────────────────────
 MANIFEST = [
     # ─── Section 2 — Data ──────────────────────────────────────────────────────
     ('Data',
@@ -50,6 +59,10 @@ MANIFEST = [
     ('Models',
      'MLP Cross-Seed Consistency (Pearson r on Held-out Trials)',
      'r2_consistency_bar.png'),
+
+    ('Models',
+     'Embedding Consistency Across Models: MLP, TempConv-Cont, TempConv-Pred',
+     'embedding_consistency_comparison.png'),
 
     ('Models',
      'Grand Mean R² Across All Four Model Architectures',
@@ -125,7 +138,7 @@ MANIFEST = [
      'ablation_proof.png'),
 ]
 
-# ─── Search dirs (same as validate_figures.py) ────────────────────────────────
+# ─── Search dirs ──────────────────────────────────────────────────────────────
 SEARCH_DIRS = [
     './outputs/cebra_comparison',
     './outputs/mlps/ensembles_multiseed',
@@ -150,6 +163,75 @@ prs.slide_height = SLIDE_H
 
 blank_layout = prs.slide_layouts[6]   # blank layout
 
+
+def _add_dark_bg(slide):
+    bg = slide.background
+    fill = bg.fill
+    fill.solid()
+    fill.fore_color.rgb = DARK_BG
+
+
+def _add_textbox(slide, left, top, width, height,
+                 text, font_size, bold=False, color=WHITE,
+                 align=PP_ALIGN.LEFT, wrap=True):
+    txBox = slide.shapes.add_textbox(left, top, width, height)
+    tf = txBox.text_frame
+    tf.word_wrap = wrap
+    p = tf.paragraphs[0]
+    p.alignment = align
+    run = p.add_run()
+    run.text = text
+    run.font.size = font_size
+    run.font.bold = bold
+    run.font.color.rgb = color
+    return txBox
+
+
+# ── Slide 1: Title ────────────────────────────────────────────────────────────
+title_slide = prs.slides.add_slide(blank_layout)
+title_slide.name = "Title"
+_add_dark_bg(title_slide)
+
+_add_textbox(title_slide,
+    Inches(0.5), Inches(1.2), Inches(9.0), Inches(1.4),
+    "Neural Task Representations",
+    Pt(40), bold=True, color=WHITE, align=PP_ALIGN.CENTER)
+
+_add_textbox(title_slide,
+    Inches(0.5), Inches(2.7), Inches(9.0), Inches(0.8),
+    "MLP-based Attribution Analysis of Neural Ensemble Activity in VR Navigation",
+    Pt(20), bold=False, color=ACCENT, align=PP_ALIGN.CENTER)
+
+_add_textbox(title_slide,
+    Inches(0.5), Inches(3.7), Inches(9.0), Inches(0.5),
+    "Supplementary Figures",
+    Pt(14), bold=False, color=RGBColor(0xAA, 0xAA, 0xAA), align=PP_ALIGN.CENTER)
+
+# ── Slide 2: Overview ─────────────────────────────────────────────────────────
+overview_slide = prs.slides.add_slide(blank_layout)
+overview_slide.name = "Overview"
+_add_dark_bg(overview_slide)
+
+_add_textbox(overview_slide,
+    Inches(0.4), Inches(0.2), Inches(9.2), Inches(0.6),
+    "Presentation Overview",
+    Pt(26), bold=True, color=WHITE, align=PP_ALIGN.CENTER)
+
+sections_text = (
+    "1.  Data  —  7 continuous + 4 categorical behavioral features at 40 ms resolution\n"
+    "2.  Models  —  Linear, MLP, TempConv-Cont, TempConv-Pred; R² validation and consistency\n"
+    "3.  Attribution  —  GPV & IG heatmaps; conditional permutation filtering; case studies\n"
+    "4.  Head Angle  —  Scatter, tuning curve stability, 6-panel shape variety, position tuning\n"
+    "5.  Frequency  —  MLP vs TempConv-Pred on slow vs fast neural fluctuations\n"
+    "6.  TempConv / CEBRA  —  Attribution agreement and group-level comparison\n"
+    "7.  ML vs Naive  —  Validation, nonlinearity advantage, GLM comparison, ablation proof"
+)
+_add_textbox(overview_slide,
+    Inches(0.5), Inches(0.9), Inches(9.0), Inches(4.5),
+    sections_text,
+    Pt(14), bold=False, color=RGBColor(0xCC, 0xDD, 0xFF), align=PP_ALIGN.LEFT)
+
+# ── Section figure slides ─────────────────────────────────────────────────────
 current_section = None
 sections_seen = set()
 
@@ -168,26 +250,17 @@ for section, title_text, filename in MANIFEST:
     if section not in sections_seen:
         sections_seen.add(section)
         div_slide = prs.slides.add_slide(blank_layout)
-        # dark background
-        bg = div_slide.background
-        fill = bg.fill
-        fill.solid()
-        fill.fore_color.rgb = RGBColor(0x1A, 0x23, 0x3A)
+        div_slide.name = f"Section — {section}"
+        _add_dark_bg(div_slide)
 
-        txBox = div_slide.shapes.add_textbox(
-            Inches(1), Inches(2.0), Inches(8), Inches(1.5))
-        tf = txBox.text_frame
-        tf.word_wrap = False
-        p = tf.paragraphs[0]
-        p.alignment = PP_ALIGN.CENTER
-        run = p.add_run()
-        run.text = section
-        run.font.size = Pt(36)
-        run.font.bold = True
-        run.font.color.rgb = RGBColor(0xFF, 0xFF, 0xFF)
+        _add_textbox(div_slide,
+            Inches(1), Inches(2.0), Inches(8), Inches(1.5),
+            section,
+            Pt(36), bold=True, color=WHITE, align=PP_ALIGN.CENTER)
 
     # ── add figure slide ──────────────────────────────────────────────────────
     slide = prs.slides.add_slide(blank_layout)
+    slide.name = title_text[:60]
 
     # Title bar
     title_box = slide.shapes.add_textbox(
@@ -199,17 +272,17 @@ for section, title_text, filename in MANIFEST:
     run.text = title_text
     run.font.size = TITLE_FONT_SIZE
     run.font.bold = True
-    run.font.color.rgb = RGBColor(0x1A, 0x23, 0x3A)
+    run.font.color.rgb = DARK_TXT
 
     # Content area: centre figure below title bar
-    content_top = TITLE_H + Inches(0.05)
-    content_h_in = (SLIDE_H - content_top - Inches(0.08)) / 914400.0  # EMU to inches
+    content_top  = TITLE_H + Inches(0.05)
+    content_h_in = (SLIDE_H - content_top - Inches(0.08)) / 914400.0  # EMU → inches
     content_w_in = (SLIDE_W - Inches(0.10)) / 914400.0
 
     # Scale to fit content area while preserving aspect ratio
-    scale = min(content_w_in / fig_w_in, content_h_in / fig_h_in)
-    placed_w = Inches(fig_w_in * scale)
-    placed_h = Inches(fig_h_in * scale)
+    scale     = min(content_w_in / fig_w_in, content_h_in / fig_h_in)
+    placed_w  = Inches(fig_w_in * scale)
+    placed_h  = Inches(fig_h_in * scale)
 
     left = (SLIDE_W - placed_w) // 2
     top  = content_top + Emu(int((content_h_in - fig_h_in * scale) / 2 * 914400))
@@ -237,6 +310,9 @@ out_paths = [
 ]
 for p in out_paths:
     os.makedirs(os.path.dirname(p) if os.path.dirname(p) else '.', exist_ok=True)
-    prs.save(p)
-    n_slides = len(prs.slides)
-    print(f'\nSaved {n_slides}-slide PPTX → {p}')
+    try:
+        prs.save(p)
+        n_slides = len(prs.slides)
+        print(f'\nSaved {n_slides}-slide PPTX → {p}')
+    except PermissionError as e:
+        print(f'\n[SKIP] Cannot write to {p}: {e}')

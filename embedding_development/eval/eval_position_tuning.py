@@ -20,6 +20,7 @@ import numpy as np
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
+from matplotlib.ticker import MaxNLocator
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 from utils.figure_style import (
@@ -130,6 +131,7 @@ for ax, (s_idx, n_idx) in zip(axes, top_pairs):
     if ax == axes[0]:
         ax.set_ylabel(AXIS_LABELS['activity'], fontsize=FONT.LABEL - 2)
     ax.tick_params(labelsize=FONT.TICK - 3)
+    ax.xaxis.set_major_locator(MaxNLocator(nbins=4, prune='both'))
 
     # Mark 0 and 270 positions (supervisor-confirmed landmarks)
     for landmark in [0.0]:

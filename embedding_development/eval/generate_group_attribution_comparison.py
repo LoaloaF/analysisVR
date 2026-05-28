@@ -92,7 +92,7 @@ for ax, mlp_vals, mlp_sems, ceb_vals, ceb_sems, ylabel, panel in [
 
     ax.axhline(0, color='#888', lw=0.7, linestyle='--')
     ax.set_xticks(x)
-    ax.set_xticklabels(short_labels, rotation=45, ha='right',
+    ax.set_xticklabels(short_labels, rotation=90, ha='center',
                        fontsize=max(6, FONT.TICK - 3))
     ax.set_ylabel(ylabel, fontsize=FONT.LABEL - 1)
     if panel == 'A':

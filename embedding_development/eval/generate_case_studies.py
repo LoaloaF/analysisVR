@@ -70,7 +70,7 @@ for ax, (en_name, en_idx), pl in zip(axes, ENSEMBLES.items(), panel_labels):
            color='#ed7d31', alpha=0.85, label='Cond. PV', error_kw=ek)
 
     ax.set_xticks(x)
-    ax.set_xticklabels(ytick_labels, rotation=45, ha='right',
+    ax.set_xticklabels(ytick_labels, rotation=90, ha='center',
                        fontsize=max(6, FONT.TICK - 3))
     ax.set_ylabel(AXIS_LABELS['r2_drop'], fontsize=FONT.LABEL - 1)
     ax.axhline(0, color='#888', lw=0.7, linestyle='--')

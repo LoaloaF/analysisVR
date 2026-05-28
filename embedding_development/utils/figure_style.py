@@ -204,6 +204,96 @@ def label_feature_axis(ax, axis='y', short=False):
                            fontsize=FONT.TICK, rotation=45, ha='right')
 
 
+# ── Overlap / out-of-bounds checks ────────────────────────────────────────────
+
+def _overlaps_1d(a0, a1, b0, b1, tol=1.0):
+    """True if intervals [a0,a1] and [b0,b1] overlap by more than tol pixels."""
+    return (a1 - b0) > tol and (b1 - a0) > tol
+
+
+def _warn_overlaps(fig, filename, renderer):
+    """
+    Check a rendered figure for layout problems and print [OVERLAP] warnings.
+    Called by savefig_manifest after layout is finalised.
+
+    Checks:
+      1. Adjacent x-tick labels whose bounding boxes intersect
+      2. Y-axis label whose bbox extends left of the figure canvas (clipped)
+      3. X-axis label whose bbox extends below the figure canvas (clipped)
+      4. Legend bbox that intersects any ax.texts annotation bbox
+      5. Two axes bboxes that overlap by >10 % of the smaller axis area
+         (catches a colorbar placed on top of a data panel)
+    """
+    found = []
+
+    for ax_i, ax in enumerate(fig.axes):
+        tag = f"{filename} ax[{ax_i}]"
+
+        # 1. x-tick label overlap (sorted left-to-right by x0)
+        xticks = sorted(
+            [t for t in ax.get_xticklabels() if t.get_text().strip()],
+            key=lambda t: t.get_window_extent(renderer).x0,
+        )
+        for k in range(len(xticks) - 1):
+            bb_k  = xticks[k].get_window_extent(renderer)
+            bb_k1 = xticks[k + 1].get_window_extent(renderer)
+            if _overlaps_1d(bb_k.x0, bb_k.x1, bb_k1.x0, bb_k1.x1):
+                px = bb_k.x1 - bb_k1.x0
+                found.append(f"{tag}: x-tick labels overlap by {px:.0f}px "
+                              f"('{xticks[k].get_text()}' ∩ '{xticks[k+1].get_text()}')")
+
+        # 2. y-axis label left-edge clip
+        yl = ax.yaxis.label
+        if yl.get_text().strip():
+            bb = yl.get_window_extent(renderer)
+            if bb.x0 < -1:
+                found.append(f"{tag}: y-label '{yl.get_text()[:30]}' "
+                              f"clips left edge by {-bb.x0:.0f}px")
+
+        # 3. x-axis label bottom-edge clip
+        xl = ax.xaxis.label
+        if xl.get_text().strip():
+            bb = xl.get_window_extent(renderer)
+            if bb.y0 < -1:
+                found.append(f"{tag}: x-label '{xl.get_text()[:30]}' "
+                              f"clips bottom edge by {-bb.y0:.0f}px")
+
+        # 4. legend vs. annotation text overlap
+        leg = ax.get_legend()
+        if leg is not None:
+            try:
+                leg_bb = leg.get_window_extent(renderer)
+                for txt in ax.texts:
+                    if not txt.get_text().strip():
+                        continue
+                    t_bb = txt.get_window_extent(renderer)
+                    if (_overlaps_1d(leg_bb.x0, leg_bb.x1, t_bb.x0, t_bb.x1) and
+                            _overlaps_1d(leg_bb.y0, leg_bb.y1, t_bb.y0, t_bb.y1)):
+                        found.append(f"{tag}: legend overlaps annotation "
+                                     f"'{txt.get_text()[:25]}'")
+            except Exception:
+                pass
+
+    # 5. axes-bbox overlap (in figure-fraction coordinates)
+    positions = [(i, ax.get_position()) for i, ax in enumerate(fig.axes)]
+    for i in range(len(positions)):
+        ai, pi = positions[i]
+        for j in range(i + 1, len(positions)):
+            aj, pj = positions[j]
+            ix0, ix1 = max(pi.x0, pj.x0), min(pi.x1, pj.x1)
+            iy0, iy1 = max(pi.y0, pj.y0), min(pi.y1, pj.y1)
+            if ix1 > ix0 and iy1 > iy0:
+                overlap   = (ix1 - ix0) * (iy1 - iy0)
+                min_area  = min(pi.width * pi.height, pj.width * pj.height)
+                if min_area > 1e-6 and overlap / min_area > 0.10:
+                    found.append(f"{filename}: axes[{ai}] and axes[{aj}] overlap "
+                                 f"({overlap / min_area:.0%} of smaller axis)")
+
+    for msg in found:
+        print(f"  [OVERLAP] {msg}")
+    return found
+
+
 def savefig_manifest(fig, filename, out_dirs, skip_tight_layout=False):
     """
     Save figure to one or more output directories at DPI=200.
@@ -241,6 +331,14 @@ def savefig_manifest(fig, filename, out_dirs, skip_tight_layout=False):
     except Exception:
         pass
     fig.set_size_inches(w_in, h_in)
+
+    # Overlap / out-of-bounds check — runs at the figure's native DPI; best-effort.
+    try:
+        fig.canvas.draw()
+        _warn_overlaps(fig, filename, fig.canvas.get_renderer())
+    except Exception:
+        pass
+
     for d in out_dirs:
         os.makedirs(d, exist_ok=True)
         path = os.path.join(d, filename)

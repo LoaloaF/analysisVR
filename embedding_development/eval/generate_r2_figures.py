@@ -161,7 +161,8 @@ for bar, gm in zip(bars, grand_means):
             fontsize=FONT.TICK - 2, fontweight='bold')
 
 ax.set_xticks(x)
-ax.set_xticklabels(model_order, fontsize=FONT.TICK - 1, rotation=15, ha='right')
+# rotation=90: 'TempConv-Cont'/'TempConv-Pred' are too long for 45° in a 4" figure
+ax.set_xticklabels(model_order, fontsize=FONT.TICK - 1, rotation=90, ha='center')
 ax.set_ylabel(AXIS_LABELS['r2'], fontsize=FONT.LABEL)
 ax.set_ylim(0, max(grand_means) * 1.35)
 
@@ -193,8 +194,8 @@ for ax, thr in zip(axes, [R2_THR_LOW, R2_THR_HIGH]):
                color=MODEL_COLORS.get(name, '#888'),
                label=name, alpha=0.85)
 
-    ax.set_xticks(x[::4])
-    ax.set_xticklabels([f'S{s+1}' for s in x[::4]],
+    ax.set_xticks(x[::5])
+    ax.set_xticklabels([f'S{s+1}' for s in x[::5]],
                        rotation=45, ha='right', fontsize=FONT.TICK - 3)
     ax.set_ylabel(f'# ensembles ≥ {thr}', fontsize=FONT.LABEL - 2)
     ax.set_xlabel(AXIS_LABELS['session'], fontsize=FONT.LABEL - 2)

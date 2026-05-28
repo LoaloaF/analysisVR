@@ -135,6 +135,10 @@ def apply_style(fig=None, axes=None):
         'axes.grid':         True,
         'grid.alpha':        0.3,
         'grid.linewidth':    0.6,
+        # Nature-style sans-serif font. Nimbus Sans is a Helvetica metric clone
+        # available on most Linux systems; DejaVu Sans is the universal fallback.
+        'font.family':       'sans-serif',
+        'font.sans-serif':   ['Nimbus Sans', 'Ubuntu Sans', 'Arial', 'DejaVu Sans'],
         # scienceplots sets savefig.bbox='tight', which crops every savefig call
         # to the content bounding box and breaks the figsize invariant for PPTX
         # placement.  Override to None so the canvas size is preserved exactly.

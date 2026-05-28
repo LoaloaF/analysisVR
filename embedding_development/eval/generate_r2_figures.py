@@ -109,7 +109,7 @@ def _per_ensemble_bar(name, figsize, filename, y_ceil=None):
     step = max(1, n_ensembles // 8)
     ax.set_xticks(x[::step])
     ax.set_xticklabels([f"{PREFIX}{order[i]+1:02d}" for i in range(0, n_ensembles, step)],
-                       rotation=45, ha='right', fontsize=FONT.TICK - 2)
+                       rotation=90, ha='center', fontsize=FONT.TICK - 2)
     ax.set_ylabel(AXIS_LABELS['r2'], fontsize=FONT.LABEL)
     ax.set_xlabel(AXIS_LABELS['ensemble'], fontsize=FONT.LABEL)
     ax.set_ylim(0, ymax)

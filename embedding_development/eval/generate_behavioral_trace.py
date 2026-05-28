@@ -28,7 +28,7 @@ from utils.figure_style import (
 SESSION  = "2025-01-26_21-48"
 TRIAL_ID = 170
 
-# Only continuous features — canonical order from training scripts
+# Continuous features — canonical order from training scripts
 CONT_FEATURES = [
     'frame_raw_500msMedian',
     'frame_raw_abs_acc_500msMedian',
@@ -37,6 +37,14 @@ CONT_FEATURES = [
     'head_angle_vel',
     'head_angle',
     'frame_position',
+]
+
+# Categorical / binary features shown as filled step plots
+CAT_FEATURES = [
+    'cue_visible',
+    'upcoming_choice',
+    'reward_window',
+    'lick_detected',
 ]
 
 base   = os.path.dirname(os.path.abspath(__file__))
@@ -77,32 +85,54 @@ T_total   = rel_times[-1]
 print(f"Session {SESSION}  Trial {TRIAL_ID}: {len(beh_trial)} frames, {T_total:.1f}s")
 
 # ─── FIGURE ───────────────────────────────────────────────────────────────────
-n_feat = len(CONT_FEATURES)
+all_features = CONT_FEATURES + CAT_FEATURES
+n_cont       = len(CONT_FEATURES)
+n_cat        = len(CAT_FEATURES)
+n_feat_total = n_cont + n_cat
+
+# Continuous rows get 2× height vs categorical (binary) rows.
+height_ratios = [2] * n_cont + [1] * n_cat
+
 fig = plt.figure(figsize=FIG.FULL, facecolor="white")
 gs  = gridspec.GridSpec(
-    n_feat, 1, hspace=0.08,
-    left=0.30, right=0.97, top=0.97, bottom=0.11,
+    n_feat_total, 1, hspace=0.06,
+    left=0.30, right=0.97, top=0.96, bottom=0.13,
+    height_ratios=height_ratios,
 )
 
-palette = plt.cm.tab10(np.linspace(0, 0.9, n_feat))
+# Distinct colors: tab10 for continuous, Set2 for categorical.
+cont_palette = plt.cm.tab10(np.linspace(0, 0.7, n_cont))
+cat_palette  = plt.cm.Set2(np.linspace(0, 0.7, n_cat))
+palette      = list(cont_palette) + list(cat_palette)
 
-for i, feat in enumerate(CONT_FEATURES):
-    ax  = fig.add_subplot(gs[i])
+for i, feat in enumerate(all_features):
+    ax         = fig.add_subplot(gs[i])
+    is_last    = (i == n_feat_total - 1)
+    is_cat     = (i >= n_cont)
 
     if feat not in beh_trial.columns:
         ax.set_visible(False)
         continue
 
     arr = beh_trial[feat].astype(float).values
-    ax.plot(rel_times, arr, color=palette[i], linewidth=0.8, alpha=0.95)
 
-    lo, hi = np.nanmin(arr), np.nanmax(arr)
-    pad = (hi - lo) * 0.12 if hi != lo else 0.5
-    ax.set_ylim(lo - pad, hi + pad)
-    ax.set_yticks([lo, hi])
-    ax.set_yticklabels([f"{lo:.2g}", f"{hi:.2g}"], fontsize=max(5, FONT.TICK - 5))
-
-    ax.axhline(0, color="#d0d0d0", linewidth=0.4, zorder=0)
+    if is_cat:
+        # Binary feature — filled step plot with 0/1 y-axis.
+        ax.fill_between(rel_times, arr, step='post',
+                        alpha=0.75, color=palette[i], linewidth=0)
+        ax.plot(rel_times, arr, drawstyle='steps-post',
+                color=palette[i], linewidth=0.7, alpha=0.9)
+        ax.set_ylim(-0.15, 1.4)
+        ax.set_yticks([0, 1])
+        ax.set_yticklabels(['0', '1'], fontsize=max(5, FONT.TICK - 5))
+    else:
+        ax.plot(rel_times, arr, color=palette[i], linewidth=0.8, alpha=0.95)
+        lo, hi = np.nanmin(arr), np.nanmax(arr)
+        pad = (hi - lo) * 0.12 if hi != lo else 0.5
+        ax.set_ylim(lo - pad, hi + pad)
+        ax.set_yticks([lo, hi])
+        ax.set_yticklabels([f"{lo:.2g}", f"{hi:.2g}"], fontsize=max(5, FONT.TICK - 5))
+        ax.axhline(0, color="#d0d0d0", linewidth=0.4, zorder=0)
 
     canonical = FEATURE_NAMES.get(feat, feat)
     ax.set_ylabel(canonical, rotation=0, ha="right", va="center",
@@ -115,7 +145,7 @@ for i, feat in enumerate(CONT_FEATURES):
     ax.spines["left"].set_color("#cccccc")
     ax.spines["bottom"].set_color("#cccccc")
 
-    if i < n_feat - 1:
+    if not is_last:
         ax.set_xticklabels([])
         ax.tick_params(axis="x", length=0)
         ax.spines["bottom"].set_visible(False)
@@ -123,11 +153,13 @@ for i, feat in enumerate(CONT_FEATURES):
         ax.set_xlabel("Time (s)", fontsize=FONT.LABEL - 2)
         ax.tick_params(axis="x", labelsize=FONT.TICK - 3, length=3)
 
-fig.text(0.97, 0.04,
+# Place session/trial label in the top margin (above all panels) to avoid
+# overlapping the x-axis ticks of the bottom panel.
+fig.text(0.97, 0.99,
          f"Session {SESSION[:10]} | Trial {TRIAL_ID}",
-         ha='right', va='bottom',
+         ha='right', va='top',
          fontsize=FONT.FOOTNOTE, color='dimgray',
          transform=fig.transFigure)
 
-savefig_manifest(fig, "behavioral_trace.png", OUT_DIRS)
+savefig_manifest(fig, "behavioral_trace.png", OUT_DIRS, skip_tight_layout=True)
 print("Generated behavioral_trace.png")

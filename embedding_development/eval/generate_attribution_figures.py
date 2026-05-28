@@ -15,6 +15,7 @@ import numpy.ma as ma
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
+import matplotlib.colors as mcolors
 import seaborn as sns
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
@@ -77,41 +78,49 @@ def _make_attribution_heatmap(attr, title_fallback, filename,
     """
     attr: (29, 23, 11) attribution array, NaN for invalid pairs.
     Generates heatmap: (11 groups) × (ensembles sorted by mean R²).
+
+    Both GPV and IG heatmaps use an explicit fixed-position colorbar so the
+    layout is pixel-identical regardless of colorbar label length.
     """
-    # Mean across sessions: (23, 11)
+    import matplotlib.cm as mcm
+
     ens_mean = np.nanmean(attr, axis=0)
 
-    # Sort ensembles by mean R²
-    r2_order    = np.argsort(ensemble_mean_r2)[::-1]
-    ens_sorted  = ens_mean[r2_order, :]          # (23, 11)
-    ens_r2_sorted = ensemble_mean_r2[r2_order]    # (23,)
-
-    hm = ens_sorted.T   # (11, 23) — features × ensembles
-
-    # Column labels: E{n+1:02d} — no multi-line R² annotations to avoid
-    # floating numbers above labels when rotation=45 is applied.
-    xlabels = [f"E{orig_idx+1:02d}" for orig_idx in r2_order]
+    r2_order      = np.argsort(ensemble_mean_r2)[::-1]
+    ens_sorted    = ens_mean[r2_order, :]
+    hm            = ens_sorted.T   # (11, 23) — features × ensembles
+    xlabels       = [f"E{orig_idx+1:02d}" for orig_idx in r2_order]
 
     vmax = float(np.nanpercentile(hm[~np.isnan(hm)], 97)) if np.any(~np.isnan(hm)) else 1.0
 
     fig, ax = plt.subplots(figsize=FIG.FULL)
     apply_style(fig, ax)
 
-    import matplotlib.cm as mcm
-    cmap_obj = mcm.get_cmap(cmap)  # noqa: matplotlib 3.7 deprecation OK here
+    cmap_obj = mcm.get_cmap(cmap)
     cmap_obj.set_bad('#dddddd')
+
+    # cbar=False — colorbar is added manually below at a fixed position so both
+    # GPV and IG heatmaps are layout-identical regardless of label string length.
     sns.heatmap(hm, ax=ax, cmap=cmap_obj,
                 vmin=0, vmax=vmax,
                 xticklabels=xlabels,
                 yticklabels=ytick_labels,
-                cbar_kws={'label': cbar_label, 'shrink': 0.8})
+                cbar=False)
 
     ax.set_xticklabels(ax.get_xticklabels(), fontsize=max(6, FONT.TICK - 4),
                        rotation=45, ha='right')
     ax.set_yticklabels(ax.get_yticklabels(), fontsize=FONT.TICK)
     ax.set_xlabel(AXIS_LABELS['ensemble'], fontsize=FONT.LABEL)
 
-    cbar = ax.collections[0].colorbar
+    # Fixed margins — same for every call to this function.
+    fig.subplots_adjust(left=0.18, right=0.84, top=0.96, bottom=0.22)
+
+    # Colorbar at fixed figure-fraction coordinates.
+    cax  = fig.add_axes([0.86, 0.22, 0.018, 0.72])
+    norm = mcolors.Normalize(vmin=0, vmax=vmax)
+    sm   = plt.cm.ScalarMappable(cmap=cmap_obj, norm=norm)
+    sm.set_array([])
+    cbar = fig.colorbar(sm, cax=cax)
     cbar.ax.tick_params(labelsize=FONT.TICK)
     cbar.set_label(cbar_label, fontsize=FONT.LABEL)
 
@@ -120,7 +129,7 @@ def _make_attribution_heatmap(attr, title_fallback, filename,
         f"{n_valid} valid (session, ensemble) pairs (R² ≥ 0.01, 5 seeds); "
         f"sorted by ensemble mean R²")
 
-    savefig_manifest(fig, filename, OUT_DIRS)
+    savefig_manifest(fig, filename, OUT_DIRS, skip_tight_layout=True)
 
 
 _make_attribution_heatmap(

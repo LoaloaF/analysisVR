@@ -94,10 +94,10 @@ for s_idx, n_idx in top_pairs:
 # and overlap the right-column panels.
 fig, axes = plt.subplots(2, 2, figsize=FIG.FULL)
 apply_style(fig, axes.ravel())
-# Reserve right margin for colorbar; explicit margins prevent tight_layout
-# from misplacing the manually-added colorbar axis.
-fig.subplots_adjust(left=0.08, right=0.86, top=0.92, bottom=0.14,
-                    hspace=0.52, wspace=0.40)
+# Explicit margins: left=0.14 gives enough room for the y-axis label
+# ("Head Angular Velocity (°/s)") even without tight_layout.
+fig.subplots_adjust(left=0.14, right=0.84, top=0.94, bottom=0.14,
+                    hspace=0.54, wspace=0.44)
 
 cmap_act = cm.RdBu_r
 all_act   = np.concatenate([p['act'] for p in panels])
@@ -124,15 +124,14 @@ for ax, p, pl in zip(axes.ravel(), panels, panel_labels):
             transform=ax.transAxes, ha='right', va='top',
             fontsize=FONT.ANNOTATION - 2, color='dimgray')
 
-# Dedicated colorbar axis — width 1.5 %, height 76 % of figure, centred vertically
-cax = fig.add_axes([0.88, 0.14, 0.018, 0.76])
+# Dedicated colorbar axis — adjusted to match new right/bottom margins.
+cax = fig.add_axes([0.86, 0.14, 0.018, 0.78])
 cbar = fig.colorbar(sc, cax=cax)
 cbar.ax.tick_params(labelsize=FONT.TICK - 1)
 cbar.set_label(AXIS_LABELS['activity'], fontsize=FONT.LABEL - 1)
 
 add_footnote(fig,
-    "Top 4 (session, ensemble) pairs by mean MLP R²; "
-    "all trials; color = z-scored ensemble activation (5th–95th percentile clip)")
+    "Top 4 pairs by MLP R²; color = z-scored activation (5th–95th %ile clip)")
 
 # skip_tight_layout: layout is set explicitly above; tight_layout would fight
 # with the manually-positioned colorbar axis.

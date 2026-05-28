@@ -94,9 +94,11 @@ for s_idx, n_idx in top_pairs:
 # and overlap the right-column panels.
 fig, axes = plt.subplots(2, 2, figsize=FIG.FULL)
 apply_style(fig, axes.ravel())
-# Explicit margins: left=0.14 gives enough room for the y-axis label
-# ("Head Angular Velocity (°/s)") even without tight_layout.
-fig.subplots_adjust(left=0.14, right=0.84, top=0.94, bottom=0.14,
+# bottom=0.20: extra room for x-tick labels + x-axis label on bottom panels C
+# and D so they don't overlap with the footnote at y≈0.01.
+# Panel labels are placed INSIDE the axes (top-left corner) to avoid competing
+# with the rotated y-axis label in the narrow left margin.
+fig.subplots_adjust(left=0.14, right=0.84, top=0.94, bottom=0.20,
                     hspace=0.54, wspace=0.44)
 
 cmap_act = cm.RdBu_r
@@ -116,7 +118,14 @@ for ax, p, pl in zip(axes.ravel(), panels, panel_labels):
     ax.set_xlabel('Head Angle (°)', fontsize=FONT.LABEL - 1)
     ax.set_ylabel('Head Ang. Vel. (°/s)', fontsize=FONT.LABEL - 1)
     ax.tick_params(labelsize=FONT.TICK - 2)
-    add_panel_label(ax, pl)
+
+    # Inside placement: the y-axis label "Head Ang. Vel. (°/s)" when rotated
+    # 90° is ~20 chars × ~23 px/char ≈ 460 px, taller than the panel height
+    # (~220 px at hspace=0.54), so its top protrudes above the panel and would
+    # collide with an outside panel label at y=1.05.  Placing the label inside
+    # avoids the margin competition entirely.
+    ax.text(0.03, 0.97, pl, transform=ax.transAxes,
+            fontsize=FONT.PANEL, fontweight='bold', va='top', ha='left')
 
     # Session/ensemble annotation in upper-right corner
     ax.text(0.97, 0.96,
@@ -124,8 +133,8 @@ for ax, p, pl in zip(axes.ravel(), panels, panel_labels):
             transform=ax.transAxes, ha='right', va='top',
             fontsize=FONT.ANNOTATION - 2, color='dimgray')
 
-# Dedicated colorbar axis — adjusted to match new right/bottom margins.
-cax = fig.add_axes([0.86, 0.14, 0.018, 0.78])
+# Dedicated colorbar axis — height adjusted for new bottom=0.20.
+cax = fig.add_axes([0.86, 0.20, 0.018, 0.72])
 cbar = fig.colorbar(sc, cax=cax)
 cbar.ax.tick_params(labelsize=FONT.TICK - 1)
 cbar.set_label(AXIS_LABELS['activity'], fontsize=FONT.LABEL - 1)

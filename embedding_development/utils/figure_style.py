@@ -139,6 +139,15 @@ def apply_style(fig=None, axes=None):
         # available on most Linux systems; DejaVu Sans is the universal fallback.
         'font.family':       'sans-serif',
         'font.sans-serif':   ['Nimbus Sans', 'Ubuntu Sans', 'Arial', 'DejaVu Sans'],
+        # scienceplots sets inward ticks on all 4 sides + minor ticks visible.
+        # Override to outward ticks on bottom/left only — standard for
+        # presentation figures.
+        'xtick.direction':        'out',
+        'ytick.direction':        'out',
+        'xtick.top':              False,
+        'ytick.right':            False,
+        'xtick.minor.visible':    False,
+        'ytick.minor.visible':    False,
         # scienceplots sets savefig.bbox='tight', which crops every savefig call
         # to the content bounding box and breaks the figsize invariant for PPTX
         # placement.  Override to None so the canvas size is preserved exactly.

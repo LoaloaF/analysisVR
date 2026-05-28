@@ -111,18 +111,25 @@ def _make_attribution_heatmap(attr, title_fallback, filename,
     im = ax.imshow(masked_hm, aspect='auto', cmap=cmap_obj, norm=norm,
                    interpolation='nearest')
 
-    # Major ticks at cell centers
+    # Major ticks at cell centers — outward, zero length (labels only; grid
+    # provides the visual structure).  Must be set explicitly here because
+    # scienceplots' rcParams were already overridden in apply_style, but imshow
+    # may reset internal axis state between the first and second call.
+    ax.tick_params(which='major', direction='out', length=0,
+                   top=False, right=False, bottom=True, left=True)
     ax.set_xticks(np.arange(n_cols))
     ax.set_yticks(np.arange(n_rows))
     ax.set_xticklabels(xlabels, fontsize=max(6, FONT.TICK - 4), rotation=45, ha='right')
     ax.set_yticklabels(ytick_labels, fontsize=FONT.TICK)
     ax.set_xlabel(AXIS_LABELS['ensemble'], fontsize=FONT.LABEL)
 
-    # White cell-divider lines via minor ticks (identical for both heatmaps)
+    # White cell-divider lines via minor ticks — zero length on all sides so
+    # only the grid line is drawn, no tick marks inside the cells.
     ax.set_xticks(np.arange(-0.5, n_cols, 1), minor=True)
     ax.set_yticks(np.arange(-0.5, n_rows, 1), minor=True)
     ax.grid(which='minor', color='white', linewidth=0.5)
-    ax.tick_params(which='minor', length=0, bottom=False, left=False)
+    ax.tick_params(which='minor', length=0,
+                   top=False, right=False, bottom=False, left=False)
 
     # Fixed margins and colorbar — same coordinates for GPV and IG.
     fig.subplots_adjust(left=0.18, right=0.84, top=0.96, bottom=0.22)

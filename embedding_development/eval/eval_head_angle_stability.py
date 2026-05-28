@@ -146,9 +146,9 @@ ax_r.axhline(np.mean(pref_angles), color='#1a5fa8', lw=1.5, linestyle='--',
              label=f'mean = {np.mean(pref_angles):.2f}')
 ax_r.set_xlabel(AXIS_LABELS['session'], fontsize=FONT.LABEL)
 ax_r.set_ylabel(FEATURE_NAMES['head_angle'], fontsize=FONT.LABEL)
-ax_r.set_xticks(x[::2])
-ax_r.set_xticklabels([f"S{s+1}" for s in session_indices[::2]],
-                     rotation=45, ha='right', fontsize=FONT.TICK - 2)
+ax_r.set_xticks(x[::3])
+ax_r.set_xticklabels([f"S{s+1}" for s in session_indices[::3]],
+                     rotation=90, ha='center', fontsize=FONT.TICK - 2)
 ax_r.legend(fontsize=FONT.LEGEND, frameon=False)
 add_panel_label(ax_r, 'B')
 

@@ -132,7 +132,7 @@ for ax, (s_idx, n_idx) in zip(axes, top_pairs):
         ax.set_ylabel(AXIS_LABELS['activity'], fontsize=FONT.LABEL - 3)
     ax.xaxis.set_major_locator(MaxNLocator(nbins=3, prune='both'))
     # Rotate x-tick labels to prevent overlap in the narrow (1.5") panels
-    ax.tick_params(axis='x', labelsize=FONT.TICK - 3, labelrotation=30)
+    ax.tick_params(axis='x', labelsize=FONT.TICK - 3, labelrotation=45)
     ax.tick_params(axis='y', labelsize=FONT.TICK - 3)
 
     # Mark 0 and 270 positions (supervisor-confirmed landmarks)

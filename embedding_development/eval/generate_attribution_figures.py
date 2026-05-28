@@ -16,6 +16,7 @@ import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
+import matplotlib.ticker as mticker
 import seaborn as sns
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
@@ -132,11 +133,31 @@ def _make_attribution_heatmap(attr, title_fallback, filename,
                    top=False, right=False, bottom=False, left=False)
 
     # Fixed margins and colorbar — same coordinates for GPV and IG.
-    fig.subplots_adjust(left=0.18, right=0.84, top=0.96, bottom=0.22)
-    cax  = fig.add_axes([0.86, 0.22, 0.018, 0.72])
+    CBAR_L, CBAR_B, CBAR_W, CBAR_H = 0.86, 0.22, 0.018, 0.72
+    fig.subplots_adjust(left=0.18, right=0.84, top=0.96, bottom=CBAR_B)
+    cax  = fig.add_axes([CBAR_L, CBAR_B, CBAR_W, CBAR_H])
     cbar = fig.colorbar(im, cax=cax)
+    # Force exactly 5 equally-spaced ticks (0 … vmax) on both GPV and IG so
+    # the topmost tick lands at the same relative position on both colorbars.
+    # Without this, auto-selected tick counts differ per vmax and the top tick
+    # is at 94.7 % on S13 but 90.1 % on S14 — visibly different spacing.
+    cbar.locator = mticker.LinearLocator(numticks=5)
+    cbar.update_ticks()
     cbar.ax.tick_params(labelsize=FONT.TICK)
-    cbar.set_label(cbar_label, fontsize=FONT.LABEL)
+
+    # Place the colorbar label via fig.text at the exact center of the colorbar
+    # in figure-fraction coordinates.  cbar.set_label() centers each label
+    # individually based on the rendered string width, so longer strings produce
+    # different top/bottom extents than shorter ones — even when both have the
+    # same character count but different char widths (e.g. Δ vs |).  Using
+    # fig.text with va='center' at a fixed y guarantees both GPV and IG labels
+    # share the same center y regardless of string length.
+    cbar_mid_y = CBAR_B + CBAR_H / 2          # 0.58 in figure fraction
+    cbar_label_x = CBAR_L + CBAR_W + 0.030    # right of tick labels (~0.908)
+    fig.text(cbar_label_x, cbar_mid_y, cbar_label,
+             fontsize=FONT.LABEL, rotation=90,
+             ha='center', va='center',
+             transform=fig.transFigure)
 
     n_valid = valid_mask.sum()
     add_footnote(fig,
@@ -146,16 +167,19 @@ def _make_attribution_heatmap(attr, title_fallback, filename,
     savefig_manifest(fig, filename, OUT_DIRS, skip_tight_layout=True)
 
 
+# Use short equal-length colorbar labels so the rotated text spans the same
+# pixel height on both colorbars — a longer label would start higher on the
+# colorbar axis and make S13/S14 look mismatched.
 _make_attribution_heatmap(
     gpv, "GPV per ensemble", "gpv_group_ensemble_heatmap.png",
-    cbar_label=AXIS_LABELS['r2_drop'],
+    cbar_label='GPV (ΔR²)',
     cmap='Blues',
 )
 print("Generated gpv_group_ensemble_heatmap.png")
 
 _make_attribution_heatmap(
     ig, "IG per ensemble", "ig_per_ensemble_heatmap.png",
-    cbar_label=AXIS_LABELS['ig'],
+    cbar_label='Mean |IG|',
     cmap='Blues',
 )
 print("Generated ig_per_ensemble_heatmap.png")
@@ -199,20 +223,47 @@ fig, ax = plt.subplots(figsize=(6.0, 4.2))
 apply_style(fig, ax)
 
 ax.plot([0, lim], [0, lim], 'k--', lw=0.9, zorder=1, label='y = x')
-for i, (gn, gx, gy, gc) in enumerate(zip(group_names, gpv_mean, cpv_mean, colors)):
-    if not (np.isfinite(gx) and np.isfinite(gy)):
-        continue
+valid_pts = [(gn, gx, gy, gc)
+             for gn, gx, gy, gc in zip(group_names, gpv_mean, cpv_mean, colors)
+             if np.isfinite(gx) and np.isfinite(gy)]
+
+for gn, gx, gy, gc in valid_pts:
     ax.scatter(gx, gy, s=70, color=gc, zorder=3, edgecolors='none')
-    # Label with canonical short name; offset to avoid overlap
-    label = FEATURE_NAMES_SHORT.get(gn, gn)
-    ax.annotate(label, (gx, gy), fontsize=8,
-                xytext=(4, 2), textcoords='offset points', color=gc)
 
 ax.set_xlim(0, lim)
 ax.set_ylim(0, lim)
 ax.set_xlabel('GPV — permutation importance (ΔR²)', fontsize=FONT.LABEL - 1)
 ax.set_ylabel('Cond. PV (ΔR²)', fontsize=FONT.LABEL)
 ax.legend(fontsize=FONT.LEGEND, frameon=False)
+
+# Greedy label placement: render each annotation, check its pixel bbox against
+# all previously placed labels, and drop it if they overlap.
+# Points are processed most-isolated-first so densely-packed clusters get
+# fewer labels rather than arbitrarily dropping isolated ones.
+fig.canvas.draw()
+renderer = fig.canvas.get_renderer()
+
+min_sep = {i: min(
+    (np.hypot(gx - gx2, gy - gy2)
+     for j, (_, gx2, gy2, _) in enumerate(valid_pts) if j != i),
+    default=float('inf')
+) for i, (_, gx, gy, _) in enumerate(valid_pts)}
+
+sorted_pts = sorted(enumerate(valid_pts), key=lambda t: min_sep[t[0]], reverse=True)
+
+placed_bboxes = []
+for _, (gn, gx, gy, gc) in sorted_pts:
+    label = FEATURE_NAMES_SHORT.get(gn, gn)
+    ann = ax.annotate(label, (gx, gy), fontsize=8,
+                      xytext=(4, 2), textcoords='offset points', color=gc)
+    fig.canvas.draw()
+    bb = ann.get_window_extent(renderer)
+    # 3-px padding so labels don't just touch
+    padded = bb.expanded(1.06, 1.06)
+    if any(padded.overlaps(prev) for prev in placed_bboxes):
+        ann.remove()
+    else:
+        placed_bboxes.append(bb)
 
 add_footnote(fig,
     f"{valid_mask.sum()} valid pairs; one point per semantic feature group; "

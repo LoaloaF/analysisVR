@@ -72,7 +72,13 @@ for ax, (en_name, en_idx), pl in zip(axes, ENSEMBLES.items(), panel_labels):
     ax.set_xticks(x)
     ax.set_xticklabels(ytick_labels, rotation=90, ha='center',
                        fontsize=max(6, FONT.TICK - 3))
-    ax.set_ylabel(AXIS_LABELS['r2_drop'], fontsize=FONT.LABEL - 1)
+    # Show y-axis label and tick numbers only on panel A to avoid the panel
+    # letter 'B' and the rotated y-label competing in the same left-margin space.
+    if pl == 'A':
+        ax.set_ylabel(AXIS_LABELS['r2_drop'], fontsize=FONT.LABEL - 1)
+    else:
+        ax.set_ylabel('')
+        ax.set_yticklabels([])
     ax.axhline(0, color='#888', lw=0.7, linestyle='--')
 
     ax.text(0.97, 0.97,

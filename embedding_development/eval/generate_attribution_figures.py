@@ -79,8 +79,13 @@ def _make_attribution_heatmap(attr, title_fallback, filename,
     attr: (29, 23, 11) attribution array, NaN for invalid pairs.
     Generates heatmap: (11 groups) × (ensembles sorted by mean R²).
 
-    Both GPV and IG heatmaps use an explicit fixed-position colorbar so the
-    layout is pixel-identical regardless of colorbar label length.
+    Uses ax.imshow(aspect='auto') instead of seaborn.heatmap.  seaborn's
+    internal set_aspect('equal') constraint fights fig.subplots_adjust and
+    resolves differently on the first vs second call (different figure state),
+    producing inconsistent layouts between the GPV and IG slides.  imshow with
+    aspect='auto' gives matplotlib no aspect-ratio constraints to fight, so
+    fig.subplots_adjust is the sole layout authority and the two slides are
+    pixel-identical.
     """
     import matplotlib.cm as mcm
 
@@ -88,39 +93,41 @@ def _make_attribution_heatmap(attr, title_fallback, filename,
 
     r2_order      = np.argsort(ensemble_mean_r2)[::-1]
     ens_sorted    = ens_mean[r2_order, :]
-    hm            = ens_sorted.T   # (11, 23) — features × ensembles
+    hm            = ens_sorted.T   # (n_groups, n_ensembles)
     xlabels       = [f"E{orig_idx+1:02d}" for orig_idx in r2_order]
+    n_rows, n_cols = hm.shape
 
     vmax = float(np.nanpercentile(hm[~np.isnan(hm)], 97)) if np.any(~np.isnan(hm)) else 1.0
+    norm = mcolors.Normalize(vmin=0, vmax=vmax)
 
     fig, ax = plt.subplots(figsize=FIG.FULL)
     apply_style(fig, ax)
+    ax.yaxis.grid(False)   # disable background grid that would show through cells
 
-    cmap_obj = mcm.get_cmap(cmap)
+    cmap_obj = plt.get_cmap(cmap).copy()
     cmap_obj.set_bad('#dddddd')
+    masked_hm = np.ma.array(hm, mask=np.isnan(hm))
 
-    # cbar=False — colorbar is added manually below at a fixed position so both
-    # GPV and IG heatmaps are layout-identical regardless of label string length.
-    sns.heatmap(hm, ax=ax, cmap=cmap_obj,
-                vmin=0, vmax=vmax,
-                xticklabels=xlabels,
-                yticklabels=ytick_labels,
-                cbar=False)
+    im = ax.imshow(masked_hm, aspect='auto', cmap=cmap_obj, norm=norm,
+                   interpolation='nearest')
 
-    ax.set_xticklabels(ax.get_xticklabels(), fontsize=max(6, FONT.TICK - 4),
-                       rotation=45, ha='right')
-    ax.set_yticklabels(ax.get_yticklabels(), fontsize=FONT.TICK)
+    # Major ticks at cell centers
+    ax.set_xticks(np.arange(n_cols))
+    ax.set_yticks(np.arange(n_rows))
+    ax.set_xticklabels(xlabels, fontsize=max(6, FONT.TICK - 4), rotation=45, ha='right')
+    ax.set_yticklabels(ytick_labels, fontsize=FONT.TICK)
     ax.set_xlabel(AXIS_LABELS['ensemble'], fontsize=FONT.LABEL)
 
-    # Fixed margins — same for every call to this function.
-    fig.subplots_adjust(left=0.18, right=0.84, top=0.96, bottom=0.22)
+    # White cell-divider lines via minor ticks (identical for both heatmaps)
+    ax.set_xticks(np.arange(-0.5, n_cols, 1), minor=True)
+    ax.set_yticks(np.arange(-0.5, n_rows, 1), minor=True)
+    ax.grid(which='minor', color='white', linewidth=0.5)
+    ax.tick_params(which='minor', length=0, bottom=False, left=False)
 
-    # Colorbar at fixed figure-fraction coordinates.
+    # Fixed margins and colorbar — same coordinates for GPV and IG.
+    fig.subplots_adjust(left=0.18, right=0.84, top=0.96, bottom=0.22)
     cax  = fig.add_axes([0.86, 0.22, 0.018, 0.72])
-    norm = mcolors.Normalize(vmin=0, vmax=vmax)
-    sm   = plt.cm.ScalarMappable(cmap=cmap_obj, norm=norm)
-    sm.set_array([])
-    cbar = fig.colorbar(sm, cax=cax)
+    cbar = fig.colorbar(im, cax=cax)
     cbar.ax.tick_params(labelsize=FONT.TICK)
     cbar.set_label(cbar_label, fontsize=FONT.LABEL)
 
@@ -196,13 +203,13 @@ for i, (gn, gx, gy, gc) in enumerate(zip(group_names, gpv_mean, cpv_mean, colors
 
 ax.set_xlim(0, lim)
 ax.set_ylim(0, lim)
-ax.set_xlabel(AXIS_LABELS['r2_drop'], fontsize=FONT.LABEL)
-ax.set_ylabel(AXIS_LABELS['cond_r2_drop'], fontsize=FONT.LABEL)
+ax.set_xlabel('GPV — permutation importance (ΔR²)', fontsize=FONT.LABEL - 1)
+ax.set_ylabel('Cond. PV (ΔR²)', fontsize=FONT.LABEL)
 ax.legend(fontsize=FONT.LEGEND, frameon=False)
 
 add_footnote(fig,
     f"{valid_mask.sum()} valid pairs; one point per semantic feature group; "
-    f"points below diagonal → collinearity")
+    f"points below diagonal = collinearity-inflated global score")
 
 savefig_manifest(fig, "global_vs_cond_pv_scatter.png", OUT_DIRS)
 print("Generated global_vs_cond_pv_scatter.png")

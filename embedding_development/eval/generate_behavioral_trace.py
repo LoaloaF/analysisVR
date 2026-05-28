@@ -2,15 +2,18 @@
 """
 generate_behavioral_trace.py
 
-Generate behavioral_trace.png — compact multi-panel trace of all 7 continuous
-behavioral features for one representative trial.
+Generate behavioral_trace.png — multi-panel trace of all 11 behavioral
+features (7 continuous + 4 categorical) for one representative trial.
 
-Picks trial 170 from session 2025-01-26_21-48 (same as plot_trial_traces.py default).
-Layout: 7 rows (one per continuous feature) at FIG.FULL (9.5 × 4.2").
+Y-axes are scaled to the GLOBAL min/max across all sessions so the amplitude
+of each feature is directly interpretable, not just relative to this trial.
 
-Output: behavioral_trace.png  (FIG.FULL = 9.5 × 4.2")
+Categorical features (which can take 3 or more discrete values) are shown as
+step line plots only — no shading — so individual level changes are clear.
+
+Output: behavioral_trace.png  (9.5 × 5.5")
 """
-import os, sys, argparse
+import os, sys
 import numpy as np
 import pandas as pd
 import matplotlib
@@ -39,7 +42,7 @@ CONT_FEATURES = [
     'frame_position',
 ]
 
-# Categorical / binary features shown as filled step plots
+# Categorical features shown as step line plots (no fill)
 CAT_FEATURES = [
     'cue_visible',
     'upcoming_choice',
@@ -47,8 +50,8 @@ CAT_FEATURES = [
     'lick_detected',
 ]
 
-base   = os.path.dirname(os.path.abspath(__file__))
-root   = os.path.join(base, "..")
+base     = os.path.dirname(os.path.abspath(__file__))
+root     = os.path.join(base, "..")
 data_dir = os.path.join(root, "outputs", "glm_input_data")
 OUT_DIRS = [
     os.path.join(root, "outputs", "mlps", "ensembles_multiseed"),
@@ -61,15 +64,31 @@ beh_idx  = np.load(os.path.join(data_dir, "behavior_glm_input_index.npy"),   all
 beh_cols = np.load(os.path.join(data_dir, "behavior_glm_input_columns.npy"), allow_pickle=True)
 beh = pd.DataFrame(beh_vals, index=pd.Index(beh_idx), columns=beh_cols)
 
+# ─── GLOBAL FEATURE RANGES (across all sessions and trials) ───────────────────
+# Using global min/max so y-axes are interpretable regardless of which trial
+# is shown — the scale reflects the full behavioural envelope.
+global_lo, global_hi = {}, {}
+for feat in CONT_FEATURES:
+    if feat in beh.columns:
+        vals = beh[feat].dropna().astype(float).values
+        global_lo[feat] = float(np.nanmin(vals))
+        global_hi[feat] = float(np.nanmax(vals))
+
+# Unique discrete levels for each categorical feature (global, for ytick labels)
+cat_levels = {}
+for feat in CAT_FEATURES:
+    if feat in beh.columns:
+        cat_levels[feat] = sorted(beh[feat].dropna().unique().astype(float))
+
+# ─── SELECT TRIAL ─────────────────────────────────────────────────────────────
 sess_mask  = beh.index.map(lambda t: t[0]) == SESSION
 beh_sess   = beh[sess_mask]
 trial_mask = beh_sess["trial_id"].astype(float) == float(TRIAL_ID)
 beh_trial  = beh_sess[trial_mask].copy()
 
 if len(beh_trial) == 0:
-    # Fallback: pick any session and trial
-    sess_ids = beh.index.map(lambda t: t[0]).unique()
-    SESSION  = sess_ids[0]
+    sess_ids  = beh.index.map(lambda t: t[0]).unique()
+    SESSION   = sess_ids[0]
     sess_mask = beh.index.map(lambda t: t[0]) == SESSION
     beh_sess  = beh[sess_mask]
     TRIAL_ID  = int(beh_sess["trial_id"].iloc[100])
@@ -90,25 +109,26 @@ n_cont       = len(CONT_FEATURES)
 n_cat        = len(CAT_FEATURES)
 n_feat_total = n_cont + n_cat
 
-# Continuous rows get 2× height vs categorical (binary) rows.
+# Continuous rows taller than categorical rows; taller overall canvas (5.5")
+# to accommodate all 11 features without crowding.
 height_ratios = [2] * n_cont + [1] * n_cat
 
-fig = plt.figure(figsize=FIG.FULL, facecolor="white")
+fig = plt.figure(figsize=(FIG.FULL[0], 5.5), facecolor="white")
 gs  = gridspec.GridSpec(
-    n_feat_total, 1, hspace=0.06,
-    left=0.30, right=0.97, top=0.96, bottom=0.13,
+    n_feat_total, 1, hspace=0.05,
+    left=0.30, right=0.97, top=0.96, bottom=0.09,
     height_ratios=height_ratios,
 )
 
-# Distinct colors: tab10 for continuous, Set2 for categorical.
+# Distinct palettes: tab10 for continuous features, Set2 for categorical.
 cont_palette = plt.cm.tab10(np.linspace(0, 0.7, n_cont))
 cat_palette  = plt.cm.Set2(np.linspace(0, 0.7, n_cat))
 palette      = list(cont_palette) + list(cat_palette)
 
 for i, feat in enumerate(all_features):
-    ax         = fig.add_subplot(gs[i])
-    is_last    = (i == n_feat_total - 1)
-    is_cat     = (i >= n_cont)
+    ax      = fig.add_subplot(gs[i])
+    is_last = (i == n_feat_total - 1)
+    is_cat  = (i >= n_cont)
 
     if feat not in beh_trial.columns:
         ax.set_visible(False)
@@ -117,21 +137,30 @@ for i, feat in enumerate(all_features):
     arr = beh_trial[feat].astype(float).values
 
     if is_cat:
-        # Binary feature — filled step plot with 0/1 y-axis.
-        ax.fill_between(rel_times, arr, step='post',
-                        alpha=0.75, color=palette[i], linewidth=0)
+        # Step line only — no shading.  Categorical features can have 3 levels
+        # (e.g. upcoming_choice ∈ {−1, 0, 1}) so a fill from 0 would be
+        # ambiguous.
+        levels = cat_levels.get(feat, sorted(set(arr)))
         ax.plot(rel_times, arr, drawstyle='steps-post',
-                color=palette[i], linewidth=0.7, alpha=0.9)
-        ax.set_ylim(-0.15, 1.4)
-        ax.set_yticks([0, 1])
-        ax.set_yticklabels(['0', '1'], fontsize=max(5, FONT.TICK - 5))
+                color=palette[i], linewidth=1.0)
+        lo_c = min(levels) - 0.3
+        hi_c = max(levels) + 0.3
+        ax.set_ylim(lo_c, hi_c)
+        # Show every distinct level as a tick
+        tick_vals = [v for v in levels if lo_c <= v <= hi_c]
+        ax.set_yticks(tick_vals)
+        ax.set_yticklabels([f"{int(v)}" if v == int(v) else f"{v:.1f}"
+                            for v in tick_vals],
+                           fontsize=max(5, FONT.TICK - 5))
     else:
         ax.plot(rel_times, arr, color=palette[i], linewidth=0.8, alpha=0.95)
-        lo, hi = np.nanmin(arr), np.nanmax(arr)
-        pad = (hi - lo) * 0.12 if hi != lo else 0.5
+        lo = global_lo.get(feat, np.nanmin(arr))
+        hi = global_hi.get(feat, np.nanmax(arr))
+        pad = (hi - lo) * 0.06 if hi != lo else 0.5
         ax.set_ylim(lo - pad, hi + pad)
         ax.set_yticks([lo, hi])
-        ax.set_yticklabels([f"{lo:.2g}", f"{hi:.2g}"], fontsize=max(5, FONT.TICK - 5))
+        ax.set_yticklabels([f"{lo:.2g}", f"{hi:.2g}"],
+                           fontsize=max(5, FONT.TICK - 5))
         ax.axhline(0, color="#d0d0d0", linewidth=0.4, zorder=0)
 
     canonical = FEATURE_NAMES.get(feat, feat)
@@ -153,8 +182,7 @@ for i, feat in enumerate(all_features):
         ax.set_xlabel("Time (s)", fontsize=FONT.LABEL - 2)
         ax.tick_params(axis="x", labelsize=FONT.TICK - 3, length=3)
 
-# Place session/trial label in the top margin (above all panels) to avoid
-# overlapping the x-axis ticks of the bottom panel.
+# Session/trial label in the top margin — clear of the bottom-panel x-ticks.
 fig.text(0.97, 0.99,
          f"Session {SESSION[:10]} | Trial {TRIAL_ID}",
          ha='right', va='top',

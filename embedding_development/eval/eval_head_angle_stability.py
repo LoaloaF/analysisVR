@@ -189,7 +189,9 @@ for ax, s_idx, pl in zip(axes6.ravel(), show_sessions, panel_labels):
     ax.axhline(0, color='#888', lw=0.6, linestyle='--')
     ax.set_xlabel(FEATURE_NAMES['head_angle'], fontsize=FONT.LABEL - 2)
     if pl in ['A', 'D']:
-        ax.set_ylabel(AXIS_LABELS['activity'], fontsize=FONT.LABEL - 2)
+        # Use short label: full 'Ensemble activity (z-scored)' rotated 90° is
+        # ~28 chars × ~8 pt/char ≈ 224 pt > available height in a 2-row figure.
+        ax.set_ylabel('Activity (z-sc.)', fontsize=FONT.LABEL - 2)
     ax.tick_params(labelsize=FONT.TICK - 2)
     add_panel_label(ax, pl)
     ax.text(0.98, 0.97, f"S{s_idx+1:02d}",

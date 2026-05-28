@@ -88,14 +88,9 @@ def _make_attribution_heatmap(attr, title_fallback, filename,
 
     hm = ens_sorted.T   # (11, 23) — features × ensembles
 
-    # Column labels: E{n+1:02d} with R² annotation for top-5
-    TOP = 5
-    xlabels = []
-    for rank, orig_idx in enumerate(r2_order):
-        label = f"E{orig_idx+1:02d}"
-        if rank < TOP and np.isfinite(ens_r2_sorted[rank]):
-            label += f"\n{ens_r2_sorted[rank]:.2f}"
-        xlabels.append(label)
+    # Column labels: E{n+1:02d} — no multi-line R² annotations to avoid
+    # floating numbers above labels when rotation=45 is applied.
+    xlabels = [f"E{orig_idx+1:02d}" for orig_idx in r2_order]
 
     vmax = float(np.nanpercentile(hm[~np.isnan(hm)], 97)) if np.any(~np.isnan(hm)) else 1.0
 

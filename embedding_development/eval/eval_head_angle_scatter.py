@@ -89,13 +89,21 @@ for s_idx, n_idx in top_pairs:
     })
 
 # ─── FIGURE ───────────────────────────────────────────────────────────────────
+# Explicit subplots_adjust + manually-placed colorbar axis to avoid the
+# fig.colorbar(ax=all_axes) approach which can steal too much horizontal space
+# and overlap the right-column panels.
 fig, axes = plt.subplots(2, 2, figsize=FIG.FULL)
 apply_style(fig, axes.ravel())
+# Reserve right margin for colorbar; explicit margins prevent tight_layout
+# from misplacing the manually-added colorbar axis.
+fig.subplots_adjust(left=0.08, right=0.86, top=0.92, bottom=0.14,
+                    hspace=0.52, wspace=0.40)
 
 cmap_act = cm.RdBu_r
 all_act   = np.concatenate([p['act'] for p in panels])
 vmax_clim = float(np.percentile(np.abs(all_act), 95))
 
+sc = None   # will be set in loop
 panel_labels = ['A', 'B', 'C', 'D']
 for ax, p, pl in zip(axes.ravel(), panels, panel_labels):
     sc = ax.scatter(
@@ -110,16 +118,15 @@ for ax, p, pl in zip(axes.ravel(), panels, panel_labels):
     ax.tick_params(labelsize=FONT.TICK - 2)
     add_panel_label(ax, pl)
 
-    # Session/ensemble annotation in upper-right
-    ax.text(0.98, 0.97,
+    # Session/ensemble annotation in upper-right corner
+    ax.text(0.97, 0.96,
             f"S{p['s_idx']+1:02d} E{p['n_idx']+1:02d}  R²={p['r2']:.2f}",
             transform=ax.transAxes, ha='right', va='top',
-            fontsize=FONT.ANNOTATION - 1, color='dimgray')
+            fontsize=FONT.ANNOTATION - 2, color='dimgray')
 
-# Shared colorbar
-cbar = fig.colorbar(sc, ax=axes.ravel().tolist(),
-                    label=AXIS_LABELS['activity'],
-                    shrink=0.7, pad=0.02)
+# Dedicated colorbar axis — width 1.5 %, height 76 % of figure, centred vertically
+cax = fig.add_axes([0.88, 0.14, 0.018, 0.76])
+cbar = fig.colorbar(sc, cax=cax)
 cbar.ax.tick_params(labelsize=FONT.TICK - 1)
 cbar.set_label(AXIS_LABELS['activity'], fontsize=FONT.LABEL - 1)
 
@@ -127,5 +134,7 @@ add_footnote(fig,
     "Top 4 (session, ensemble) pairs by mean MLP R²; "
     "all trials; color = z-scored ensemble activation (5th–95th percentile clip)")
 
-savefig_manifest(fig, "head_angle_scatter_2x2.png", OUT_DIRS)
+# skip_tight_layout: layout is set explicitly above; tight_layout would fight
+# with the manually-positioned colorbar axis.
+savefig_manifest(fig, "head_angle_scatter_2x2.png", OUT_DIRS, skip_tight_layout=True)
 print("Generated head_angle_scatter_2x2.png")

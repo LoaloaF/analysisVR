@@ -204,13 +204,16 @@ def label_feature_axis(ax, axis='y', short=False):
                            fontsize=FONT.TICK, rotation=45, ha='right')
 
 
-def savefig_manifest(fig, filename, out_dirs):
+def savefig_manifest(fig, filename, out_dirs, skip_tight_layout=False):
     """
     Save figure to one or more output directories at DPI=200.
     Enforces that no rescaling happens: figure is saved at its native figsize.
 
     filename: e.g. 'r2_bar_mlp.png'
     out_dirs: list of directory paths (e.g. ['outputs/cebra_comparison', '/mnt/c/Users/amits/Desktop'])
+    skip_tight_layout: set True for figures with manually-positioned axes (e.g. GridSpec
+        with explicit margins or a manually-placed colorbar), so tight_layout does not
+        interfere with the pre-set layout.
 
     After saving, prints the native size in inches so it can be verified against
     the manifest's expected figsize.
@@ -221,10 +224,15 @@ def savefig_manifest(fig, filename, out_dirs):
     w_in = fig.get_figwidth()
     h_in = fig.get_figheight()
 
-    try:
-        fig.tight_layout(rect=[0, 0.04, 0.99, 0.96])   # 4% bottom for footnote, 4% top for panel labels
-    except Exception:
-        pass
+    if not skip_tight_layout:
+        try:
+            # rect=[0.04, …] provides a 4 % left margin so that rotated y-axis
+            # labels (which read bottom-to-top) cannot be clipped by the left
+            # canvas edge, while the 4 % bottom/top reserves space for footnotes
+            # and panel labels respectively.
+            fig.tight_layout(rect=[0.04, 0.04, 0.99, 0.96])
+        except Exception:
+            pass
 
     # Disable constrained_layout so it cannot override our size during savefig,
     # then restore canvas to the intended figsize.

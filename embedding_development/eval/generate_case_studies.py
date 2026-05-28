@@ -81,7 +81,7 @@ for ax, (en_name, en_idx), pl in zip(axes, ENSEMBLES.items(), panel_labels):
             fontsize=FONT.ANNOTATION, color='dimgray')
 
     if pl == 'A':
-        ax.legend(fontsize=FONT.LEGEND - 1, frameon=False)
+        ax.legend(fontsize=FONT.LEGEND - 1, frameon=False, loc='upper left')
 
     add_panel_label(ax, pl)
 

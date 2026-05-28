@@ -84,13 +84,15 @@ apply_style(fig, [ax_l, ax_r])
 for (ax, x_vals, y_vals, x_lab, y_lab, rho, panel_label) in [
     (ax_l,
      gpv_mlp_mean, gpv_cont_mean,
-     f"MLP {AXIS_LABELS['r2_drop']}",
-     f"TempConv-Cont {AXIS_LABELS['r2_drop']}",
+     # Short labels: full strings like 'TempConv-Cont Permutation importance (ΔR²)'
+     # are ~44 chars; rotated 90° they exceed the 4.2" figure height.
+     "MLP GPV (ΔR²)",
+     "TempConv-Cont GPV (ΔR²)",
      rho_gpv, 'A'),
     (ax_r,
      ig_mlp_mean, ig_cont_mean,
-     f"MLP {AXIS_LABELS['ig']}",
-     f"TempConv-Cont {AXIS_LABELS['ig']}",
+     "MLP |IG| attribution",
+     "TempConv-Cont |IG| attribution",
      rho_ig, 'B'),
 ]:
     lim = max(np.nanmax(x_vals), np.nanmax(y_vals)) * 1.18

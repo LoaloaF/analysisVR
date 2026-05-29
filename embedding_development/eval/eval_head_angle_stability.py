@@ -167,39 +167,39 @@ print(f"\nResolved pending question: {chosen} wins (pref_angle_std={best_stabili
 print(f"Other candidate(s): {other}")
 
 
-# ─── 6-PANEL TUNING CURVES FIGURE ────────────────────────────────────────────
-# Pick 6 pairs from the best ensemble showing varied tuning shapes
-# (mix of sessions with distinct tuning curve profiles)
+# ─── 4-PANEL TUNING CURVES FIGURE (2×2) ─────────────────────────────────────
+# Pick 4 pairs showing varied tuning shapes; 2×2 grid gives larger panels
+# and readable fonts on a slide.
 all_s = list(curves.keys())
-n_show = min(6, len(all_s))
-# Sort by shape diversity: use variance of tuning curve as proxy
+n_show = min(4, len(all_s))
 curve_var = [(s, np.var(curves[s][1])) for s in all_s]
 curve_var_sorted = sorted(curve_var, key=lambda x: x[1], reverse=True)
 show_sessions = [s for s, _ in curve_var_sorted[:n_show]]
 
-fig6, axes6 = plt.subplots(2, 3, figsize=FIG.FULL)
+fig6, axes6 = plt.subplots(2, 2, figsize=FIG.FULL)
 apply_style(fig6, axes6.ravel())
 
-panel_labels = ['A', 'B', 'C', 'D', 'E', 'F']
-for ax, s_idx, pl in zip(axes6.ravel(), show_sessions, panel_labels):
+panel_labels = ['A', 'B', 'C', 'D']
+for i, (ax, s_idx, pl) in enumerate(zip(axes6.ravel(), show_sessions, panel_labels)):
     centers, means, sems = curves[s_idx]
-    ax.plot(centers, means, color='#2ca02c', linewidth=1.8)
+    ax.plot(centers, means, color='#2ca02c', linewidth=2.0)
     ax.fill_between(centers, means - sems, means + sems,
                     color='#2ca02c', alpha=0.25)
     ax.axhline(0, color='#888', lw=0.6, linestyle='--')
-    ax.set_xlabel(FEATURE_NAMES['head_angle'], fontsize=FONT.LABEL - 2)
-    if pl in ['A', 'D']:
-        # Use short label: full 'Ensemble activity (z-scored)' rotated 90° is
-        # ~28 chars × ~8 pt/char ≈ 224 pt > available height in a 2-row figure.
-        ax.set_ylabel('Activity (z-sc.)', fontsize=FONT.LABEL - 2)
-    ax.tick_params(labelsize=FONT.TICK - 2)
+    ax.set_xlabel(FEATURE_NAMES['head_angle'], fontsize=FONT.LABEL - 1)
+    # Only left column (A=0, C=2) gets y-axis label to avoid center overlap.
+    if i % 2 == 0:
+        ax.set_ylabel('Activity (z-scored)', fontsize=FONT.LABEL - 1)
+    else:
+        ax.set_ylabel('')
+    ax.tick_params(labelsize=FONT.TICK - 1)
     add_panel_label(ax, pl)
     ax.text(0.98, 0.97, f"S{s_idx+1:02d}",
             transform=ax.transAxes, ha='right', va='top',
-            fontsize=FONT.ANNOTATION - 1, color='dimgray')
+            fontsize=FONT.ANNOTATION, color='dimgray')
 
 add_footnote(fig6,
-    f"E{best_ensemble+1:02d}; 6 sessions selected for shape diversity; "
+    f"E{best_ensemble+1:02d}; 4 sessions selected for shape diversity; "
     f"mean ± SEM across timepoints in each decile bin")
 
 savefig_manifest(fig6, "head_angle_tuning_6panel.png", OUT_DIRS)

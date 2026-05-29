@@ -74,7 +74,7 @@ print(f"Ensemble mean R²: min={np.nanmin(ensemble_mean_r2):.3f}  "
 # y-axis: semantic feature groups (canonical short names)
 # cell: mean GPV across sessions (NaN = no valid sessions)
 # ═══════════════════════════════════════════════════════════════════════════════
-def _make_attribution_heatmap(attr, title_fallback, filename,
+def _make_attribution_heatmap(attr, title_text, filename,
                               cbar_label, cmap='Blues'):
     """
     attr: (29, 23, 11) attribution array, NaN for invalid pairs.
@@ -133,14 +133,10 @@ def _make_attribution_heatmap(attr, title_fallback, filename,
                    top=False, right=False, bottom=False, left=False)
 
     # Fixed margins and colorbar — same coordinates for GPV and IG.
-    CBAR_L, CBAR_B, CBAR_W, CBAR_H = 0.86, 0.22, 0.018, 0.72
-    fig.subplots_adjust(left=0.18, right=0.84, top=0.96, bottom=CBAR_B)
+    CBAR_L, CBAR_B, CBAR_W, CBAR_H = 0.86, 0.22, 0.018, 0.68
+    fig.subplots_adjust(left=0.18, right=0.84, top=0.93, bottom=CBAR_B)
     cax  = fig.add_axes([CBAR_L, CBAR_B, CBAR_W, CBAR_H])
     cbar = fig.colorbar(im, cax=cax)
-    # Force exactly 5 equally-spaced ticks (0 … vmax) on both GPV and IG so
-    # the topmost tick lands at the same relative position on both colorbars.
-    # Without this, auto-selected tick counts differ per vmax and the top tick
-    # is at 94.7 % on S13 but 90.1 % on S14 — visibly different spacing.
     # MaxNLocator gives round-number ticks (e.g. 0, 0.005, 0.010) rather than
     # the non-round values from LinearLocator on an arbitrary vmax.
     cbar.locator = mticker.MaxNLocator(nbins=4, steps=[1, 2, 2.5, 5, 10])
@@ -148,8 +144,13 @@ def _make_attribution_heatmap(attr, title_fallback, filename,
     cbar.ax.tick_params(labelsize=FONT.TICK)
 
     # Place the label as a title above the colorbar — avoids overlap with tick
-    # numbers on the right side of the colorbar axis.
-    cbar.ax.set_title(cbar_label, fontsize=FONT.LABEL, pad=5)
+    # numbers. pad=10 clears it above the colorbar axis top edge.
+    cbar.ax.set_title(cbar_label, fontsize=FONT.LABEL, pad=10)
+
+    # Architecture label — specifies which model the heatmap is for
+    if title_text:
+        ax.set_title(title_text, fontsize=FONT.LABEL, fontweight='bold',
+                     pad=4, loc='left')
 
     n_valid = valid_mask.sum()
     add_footnote(fig,
@@ -163,14 +164,14 @@ def _make_attribution_heatmap(attr, title_fallback, filename,
 # pixel height on both colorbars — a longer label would start higher on the
 # colorbar axis and make S13/S14 look mismatched.
 _make_attribution_heatmap(
-    gpv, "GPV per ensemble", "gpv_group_ensemble_heatmap.png",
+    gpv, "MLP — Global Permutation Variance per ensemble", "gpv_group_ensemble_heatmap.png",
     cbar_label='GPV (ΔR²)',
     cmap='Blues',
 )
 print("Generated gpv_group_ensemble_heatmap.png")
 
 _make_attribution_heatmap(
-    ig, "IG per ensemble", "ig_per_ensemble_heatmap.png",
+    ig, "MLP — Integrated Gradients per ensemble", "ig_per_ensemble_heatmap.png",
     cbar_label='Mean |IG|',
     cmap='Blues',
 )

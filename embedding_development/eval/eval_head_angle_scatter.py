@@ -107,7 +107,7 @@ vmax_clim = float(np.percentile(np.abs(all_act), 95))
 
 sc = None   # will be set in loop
 panel_labels = ['A', 'B', 'C', 'D']
-for ax, p, pl in zip(axes.ravel(), panels, panel_labels):
+for i, (ax, p, pl) in enumerate(zip(axes.ravel(), panels, panel_labels)):
     sc = ax.scatter(
         p['ha'], p['hav'],
         c=p['act'],
@@ -116,7 +116,12 @@ for ax, p, pl in zip(axes.ravel(), panels, panel_labels):
         s=4, alpha=0.4, linewidths=0, rasterized=True,
     )
     ax.set_xlabel('Head Angle (z-scored)', fontsize=FONT.LABEL - 1)
-    ax.set_ylabel('Head Ang. Vel. (z-scored)', fontsize=FONT.LABEL - 1)
+    # Only set y-axis label on the left column (panels A=0, C=2); right-column
+    # labels appear in the centre of the figure and overlap the left panels.
+    if i % 2 == 0:
+        ax.set_ylabel('Head Ang. Vel. (z-scored)', fontsize=FONT.LABEL - 1)
+    else:
+        ax.set_ylabel('')
     ax.tick_params(labelsize=FONT.TICK - 2)
 
     # Inside placement: the y-axis label "Head Ang. Vel. (°/s)" when rotated

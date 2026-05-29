@@ -17,6 +17,16 @@ import os
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 import scienceplots
+import matplotlib.font_manager as _mpl_fm
+
+# Register Arial from Windows fonts (WSL path) so it's available to all scripts
+for _fp in [
+    '/mnt/c/Windows/Fonts/arial.ttf',
+    '/mnt/c/Windows/Fonts/arialbd.ttf',
+    '/mnt/c/Windows/Fonts/ariali.ttf',
+]:
+    if os.path.exists(_fp):
+        _mpl_fm.fontManager.addfont(_fp)
 
 # ── Canonical feature names ────────────────────────────────────────────────────
 # Keys: raw column names used in the data files.
@@ -138,7 +148,7 @@ def apply_style(fig=None, axes=None):
         # Nature-style sans-serif font. Nimbus Sans is a Helvetica metric clone
         # available on most Linux systems; DejaVu Sans is the universal fallback.
         'font.family':       'sans-serif',
-        'font.sans-serif':   ['Nimbus Sans', 'Ubuntu Sans', 'Arial', 'DejaVu Sans'],
+        'font.sans-serif':   ['Arial', 'Nimbus Sans', 'Ubuntu Sans', 'DejaVu Sans'],
         # scienceplots sets inward ticks on all 4 sides + minor ticks visible.
         # Override to outward ticks on bottom/left only — standard for
         # presentation figures.
@@ -301,6 +311,28 @@ def _warn_overlaps(fig, filename, renderer):
                 if min_area > 1e-6 and overlap / min_area > 0.10:
                     found.append(f"{filename}: axes[{ai}] and axes[{aj}] overlap "
                                  f"({overlap / min_area:.0%} of smaller axis)")
+
+    # 6. Y-axis label pixel-bbox overlaps with a sibling axes window extent.
+    #    Catches non-leftmost-column axes whose rotated y-label intrudes into the
+    #    previous column's data area (a recurring issue in multi-column grids).
+    try:
+        for ax_i, ax in enumerate(fig.axes):
+            yl = ax.yaxis.label
+            if not yl.get_text().strip():
+                continue
+            yl_bb = yl.get_window_extent(renderer)
+            for ax_j, ax2 in enumerate(fig.axes):
+                if ax_i == ax_j:
+                    continue
+                ax2_bb = ax2.get_window_extent(renderer)
+                if yl_bb.overlaps(ax2_bb):
+                    found.append(
+                        f"{filename}: ax[{ax_i}] y-label '{yl.get_text()[:20]}' "
+                        f"overlaps ax[{ax_j}] data area — "
+                        f"suppress ylabel on non-leftmost column panels"
+                    )
+    except Exception:
+        pass
 
     for msg in found:
         print(f"  [OVERLAP] {msg}")

@@ -141,23 +141,15 @@ def _make_attribution_heatmap(attr, title_fallback, filename,
     # the topmost tick lands at the same relative position on both colorbars.
     # Without this, auto-selected tick counts differ per vmax and the top tick
     # is at 94.7 % on S13 but 90.1 % on S14 — visibly different spacing.
-    cbar.locator = mticker.LinearLocator(numticks=5)
+    # MaxNLocator gives round-number ticks (e.g. 0, 0.005, 0.010) rather than
+    # the non-round values from LinearLocator on an arbitrary vmax.
+    cbar.locator = mticker.MaxNLocator(nbins=4, steps=[1, 2, 2.5, 5, 10])
     cbar.update_ticks()
     cbar.ax.tick_params(labelsize=FONT.TICK)
 
-    # Place the colorbar label via fig.text at the exact center of the colorbar
-    # in figure-fraction coordinates.  cbar.set_label() centers each label
-    # individually based on the rendered string width, so longer strings produce
-    # different top/bottom extents than shorter ones — even when both have the
-    # same character count but different char widths (e.g. Δ vs |).  Using
-    # fig.text with va='center' at a fixed y guarantees both GPV and IG labels
-    # share the same center y regardless of string length.
-    cbar_mid_y = CBAR_B + CBAR_H / 2          # 0.58 in figure fraction
-    cbar_label_x = CBAR_L + CBAR_W + 0.030    # right of tick labels (~0.908)
-    fig.text(cbar_label_x, cbar_mid_y, cbar_label,
-             fontsize=FONT.LABEL, rotation=90,
-             ha='center', va='center',
-             transform=fig.transFigure)
+    # Place the label as a title above the colorbar — avoids overlap with tick
+    # numbers on the right side of the colorbar axis.
+    cbar.ax.set_title(cbar_label, fontsize=FONT.LABEL, pad=5)
 
     n_valid = valid_mask.sum()
     add_footnote(fig,

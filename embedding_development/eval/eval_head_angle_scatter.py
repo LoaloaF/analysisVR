@@ -115,8 +115,8 @@ for ax, p, pl in zip(axes.ravel(), panels, panel_labels):
         vmin=-vmax_clim, vmax=vmax_clim,
         s=4, alpha=0.4, linewidths=0, rasterized=True,
     )
-    ax.set_xlabel('Head Angle (°)', fontsize=FONT.LABEL - 1)
-    ax.set_ylabel('Head Ang. Vel. (°/s)', fontsize=FONT.LABEL - 1)
+    ax.set_xlabel('Head Angle (z-scored)', fontsize=FONT.LABEL - 1)
+    ax.set_ylabel('Head Ang. Vel. (z-scored)', fontsize=FONT.LABEL - 1)
     ax.tick_params(labelsize=FONT.TICK - 2)
 
     # Inside placement: the y-axis label "Head Ang. Vel. (°/s)" when rotated

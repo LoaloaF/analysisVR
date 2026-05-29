@@ -149,9 +149,8 @@ apply_style(fig, ax)
 
 x     = np.arange(len(model_order))
 colors = [MODEL_COLORS.get(n, '#888') for n in model_order]
-ek    = dict(ecolor='k', lw=0.8, capsize=5)
-bars  = ax.bar(x, grand_means, yerr=grand_sds,
-               color=colors, width=0.55, alpha=0.9, error_kw=ek)
+bars  = ax.bar(x, grand_means,
+               color=colors, width=0.55, alpha=0.9)
 
 for bar, gm in zip(bars, grand_means):
     ax.text(bar.get_x() + bar.get_width() / 2,
@@ -167,42 +166,94 @@ ax.set_ylabel(AXIS_LABELS['r2'], fontsize=FONT.LABEL)
 ax.set_ylim(0, max(grand_means) * 1.35)
 
 n_valid_mlp = int((~stats['MLP'][1]).sum()) if 'MLP' in data else 0
-add_footnote(fig, f"Mean ± SD across valid session-ensemble pairs (R²≥0.01, {len(SEEDS)} seeds)")
+add_footnote(fig, f"Grand mean R² across valid session-ensemble pairs (R²≥0.01, {len(SEEDS)} seeds)")
 
 savefig_manifest(fig, "r2_grand_mean_bars.png", OUT_DIRS)
 print("Generated r2_grand_mean_bars.png")
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# Two-threshold bar (count of ensembles exceeding threshold per session)
+# Valid-pair count per session (R²≥0.05) — single panel
 # ═══════════════════════════════════════════════════════════════════════════════
-fig, axes = plt.subplots(1, 2, figsize=(5.0, 4.0))
-apply_style(fig, list(axes))
+fig, ax = plt.subplots(figsize=(5.0, 4.0))
+apply_style(fig, ax)
 
-for ax, thr in zip(axes, [R2_THR_LOW, R2_THR_HIGH]):
-    w_bar  = 0.8 / len(model_order)
-    offsets = np.linspace(-(len(model_order)-1)/2,
-                           (len(model_order)-1)/2,
-                           len(model_order)) * w_bar
-    x = np.arange(n_sessions)
-    for name, off in zip(model_order, offsets):
-        mean_r2, invalid = stats[name]
-        vals = np.clip(mean_r2, 0, 1)
-        vals[invalid] = np.nan
-        counts = np.nansum(vals >= thr, axis=1)   # (n_sessions,)
-        ax.bar(x + off, counts, width=w_bar,
-               color=MODEL_COLORS.get(name, '#888'),
-               label=name, alpha=0.85)
+thr   = R2_THR_LOW     # 0.05 is the primary threshold used throughout analysis
+w_bar = 0.8 / len(model_order)
+offsets = np.linspace(-(len(model_order)-1)/2,
+                       (len(model_order)-1)/2,
+                       len(model_order)) * w_bar
+x = np.arange(n_sessions)
+for name, off in zip(model_order, offsets):
+    mean_r2_m, invalid = stats[name]
+    vals = np.clip(mean_r2_m, 0, 1)
+    vals[invalid] = np.nan
+    counts = np.nansum(vals >= thr, axis=1)   # (n_sessions,)
+    ax.bar(x + off, counts, width=w_bar,
+           color=MODEL_COLORS.get(name, '#888'),
+           label=name, alpha=0.85)
 
-    ax.set_xticks(x[::5])
-    ax.set_xticklabels([f'S{s+1}' for s in x[::5]],
-                       rotation=45, ha='right', fontsize=FONT.TICK - 3)
-    ax.set_ylabel(f'# ensembles ≥ {thr}', fontsize=FONT.LABEL - 2)
-    ax.set_xlabel(AXIS_LABELS['session'], fontsize=FONT.LABEL - 2)
-
-axes[0].legend(fontsize=FONT.LEGEND - 2, frameon=False, loc='upper right')
-add_footnote(fig, f"Left: R²≥{R2_THR_LOW}; right: R²≥{R2_THR_HIGH}; per-session count across {n_ensembles} ensembles")
+ax.set_xticks(x[::5])
+ax.set_xticklabels([f'S{s+1}' for s in x[::5]],
+                   rotation=45, ha='right', fontsize=FONT.TICK - 3)
+ax.set_ylabel(f'# ensembles with R² ≥ {thr}', fontsize=FONT.LABEL - 2)
+ax.set_xlabel(AXIS_LABELS['session'], fontsize=FONT.LABEL - 2)
+ax.legend(fontsize=FONT.LEGEND - 2, frameon=False, loc='upper right')
+add_footnote(fig, f"R²≥{thr}; per-session count across {n_ensembles} ensembles × {len(SEEDS)} seeds")
 fig.tight_layout()
 savefig_manifest(fig, "two_thresholds_scatter.png", OUT_DIRS)
 print("Generated two_thresholds_scatter.png")
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# TempConv comparison bar — both variants in one figure (2 rows)
+# ═══════════════════════════════════════════════════════════════════════════════
+tempconv_names = [n for n in ['TempConv-Cont', 'TempConv-Pred'] if n in data]
+if len(tempconv_names) >= 1:
+    fig, axes = plt.subplots(len(tempconv_names), 1,
+                              figsize=(FIG.FULL[0], 4.0 * len(tempconv_names)),
+                              sharex=True, squeeze=False)
+    apply_style(fig, list(axes.ravel()))
+    pal = sns.color_palette("mako_r", as_cmap=True)(np.linspace(0.15, 0.85, n_ensembles))
+    mlp_mean = ma.array(np.clip(stats['MLP'][0], 0, 1), mask=stats['MLP'][1]).mean(axis=0).filled(np.nan) if 'MLP' in data else None
+    mlp_order = np.argsort(mlp_mean) if mlp_mean is not None else np.arange(n_ensembles)  # sort by MLP R²
+
+    for row, name in enumerate(tempconv_names):
+        ax = axes[row, 0]
+        mean_r2_m, invalid = stats[name]
+        masked  = ma.array(np.clip(mean_r2_m, 0, 1), mask=invalid)
+        n_mean  = masked.mean(axis=0).filled(np.nan)    # (23,) across sessions
+        ordered = n_mean[mlp_order]                     # sort by MLP order
+        grand_mean = float(np.nanmean(n_mean))
+
+        xpos = np.arange(n_ensembles)
+        ax.bar(xpos, ordered, width=0.7, color=pal, zorder=3, linewidth=0)
+        ax.axhline(grand_mean, color='#888888', linestyle='--', linewidth=0.9,
+                   label=f'Grand mean: {grand_mean:.3f}')
+        ax.set_ylabel(AXIS_LABELS['r2'], fontsize=FONT.LABEL)
+        ax.set_title(name, fontsize=FONT.LABEL, fontweight='bold', pad=4)
+        ax.legend(fontsize=FONT.LEGEND, frameon=False, loc='upper left')
+        ymax = float(np.nanmax(ordered)) * 1.25 if np.any(np.isfinite(ordered)) else 0.20
+        ax.set_ylim(0, max(ymax, 0.05))
+
+        # Label top-5
+        for pos in range(n_ensembles - TOP_LABEL, n_ensembles):
+            ens_orig = mlp_order[pos]
+            if np.isfinite(ordered[pos]):
+                ax.text(pos, ordered[pos] + ymax * 0.025,
+                        f"{PREFIX}{ens_orig+1:02d}",
+                        ha='center', va='bottom',
+                        fontsize=max(6, FONT.TICK - 3), fontweight='bold', rotation=90)
+
+    ax_bot = axes[-1, 0]
+    step = max(1, n_ensembles // 8)
+    ax_bot.set_xticks(xpos[::step])
+    ax_bot.set_xticklabels([f"{PREFIX}{mlp_order[i]+1:02d}" for i in range(0, n_ensembles, step)],
+                            rotation=90, ha='center', fontsize=FONT.TICK - 2)
+    ax_bot.set_xlabel(AXIS_LABELS['ensemble'] + ' (sorted by MLP R²)', fontsize=FONT.LABEL)
+
+    add_footnote(fig, f"TempConv variants; {len(SEEDS)} seeds × {n_sessions} sessions; x-axis sorted by MLP R²")
+    savefig_manifest(fig, "r2_bar_tempconv_comparison.png", OUT_DIRS)
+    print("Generated r2_bar_tempconv_comparison.png")
+
 print("All R² manifest figures done.")

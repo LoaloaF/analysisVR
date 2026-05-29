@@ -37,18 +37,45 @@ with open(os.path.join(mdir, 'semantic_groups.pkl'), 'rb') as f:
 pred_r2 = np.nanmean(np.load(os.path.join(root, 'outputs', 'cebra_pred_eval',
                                             'ensembles', 'all_r2.npy')), axis=0)
 
-# ── Pre-compute max univariate |ρ| per pair ───────────────────────────────────
+
+def _eta_sq_binned(x, y, n_bins=10):
+    """η² from binned one-way ANOVA — captures linear and non-linear associations."""
+    mask = np.isfinite(x) & np.isfinite(y)
+    if mask.sum() < n_bins * 3:
+        return np.nan
+    x_m, y_m = x[mask], y[mask]
+    boundaries = np.quantile(x_m, np.linspace(0, 1, n_bins + 1))
+    boundaries[-1] += 1e-10
+    labels = np.searchsorted(boundaries[1:], x_m).clip(0, n_bins - 1)
+    grand_mean = y_m.mean()
+    ss_total = float(np.sum((y_m - grand_mean) ** 2))
+    if ss_total < 1e-12:
+        return 0.0
+    ss_between = sum(
+        len(y_m[labels == k]) * (float(y_m[labels == k].mean()) - grand_mean) ** 2
+        for k in np.unique(labels) if len(y_m[labels == k]) > 0
+    )
+    return ss_between / ss_total
+
+
+# ── Pre-compute max univariate η² and |ρ| per pair ────────────────────────────
+max_eta_path = '/tmp/max_eta_sq.npy'
 max_rho_path = '/tmp/max_rho.npy'
-if os.path.exists(max_rho_path):
-    max_rho = np.load(max_rho_path)
-    print("Loaded cached max_rho")
+
+need_compute = not os.path.exists(max_eta_path) or not os.path.exists(max_rho_path)
+
+if not need_compute:
+    max_eta_sq = np.load(max_eta_path)
+    max_rho    = np.load(max_rho_path)
+    print("Loaded cached max_eta_sq and max_rho")
 else:
     with open(os.path.join(root, 'outputs', 'session_dataset_ensembles.pkl'), 'rb') as f:
         ds = pickle.load(f)
     session_ids = list(ds.keys())
     n_s, n_e = mean_r2.shape
-    max_rho = np.full((n_s, n_e), np.nan)
-    print("Computing max univariate |rho|...")
+    max_eta_sq = np.full((n_s, n_e), np.nan)
+    max_rho    = np.full((n_s, n_e), np.nan)
+    print("Computing max univariate η² and |ρ|...")
     for s_idx, sid in enumerate(session_ids):
         sd = ds[sid]; all_t = list(sd['data'].keys())
         if not all_t: continue
@@ -57,10 +84,17 @@ else:
         for e_idx in range(n_e):
             if not valid[s_idx, e_idx]: continue
             y = Ys[:, e_idx]
-            rhos = [abs(spearmanr(Xs[:, cols[0]], y, nan_policy='omit')[0])
-                    for _, cols in sg]
-            max_rho[s_idx, e_idx] = max(rhos)
+            etas, rhos = [], []
+            for _, cols in sg:
+                x = Xs[:, cols[0]]
+                etas.append(_eta_sq_binned(x, y))
+                rhos.append(abs(spearmanr(x, y, nan_policy='omit')[0]))
+            max_eta_sq[s_idx, e_idx] = np.nanmax(etas)
+            max_rho[s_idx, e_idx]    = max(rhos)
+        print(f"  session {s_idx+1}/{n_s} done")
+    np.save(max_eta_path, max_eta_sq)
     np.save(max_rho_path, max_rho)
+    print("Saved max_eta_sq and max_rho caches")
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Figure 1 — Joint-effect scatter
@@ -68,33 +102,34 @@ else:
 fig, ax = plt.subplots(figsize=(5.5, 4.2))
 apply_style(fig, ax)
 
-v_mask = valid & np.isfinite(max_rho)
+ETA_THRESH = 0.05   # same as MLP R² threshold — stricter than ρ<0.15
+v_mask = valid & np.isfinite(max_eta_sq)
 r2_v   = mean_r2[v_mask]
-rho_v  = max_rho[v_mask]
+eta_v  = max_eta_sq[v_mask]
 
-# Colour by zone
-ml_excl = (r2_v >= 0.05) & (rho_v < 0.15)
-ax.scatter(rho_v[~ml_excl], r2_v[~ml_excl], s=6, color='#aaaaaa',
+# Colour by zone: ML-exclusive = MLP R²≥0.05 but max η²<threshold
+ml_excl = (r2_v >= 0.05) & (eta_v < ETA_THRESH)
+ax.scatter(eta_v[~ml_excl], r2_v[~ml_excl], s=6, color='#aaaaaa',
            alpha=0.4, linewidths=0, rasterized=True, label='Other valid pairs')
-ax.scatter(rho_v[ml_excl],  r2_v[ml_excl],  s=10, color='#d62728',
+ax.scatter(eta_v[ml_excl],  r2_v[ml_excl],  s=10, color='#d62728',
            alpha=0.75, linewidths=0, rasterized=True,
            label=f'ML-exclusive ({ml_excl.sum()} pairs)')
 
-ax.axvline(0.15, color='#d62728', lw=0.9, linestyle='--', alpha=0.6)
+ax.axvline(ETA_THRESH, color='#d62728', lw=0.9, linestyle='--', alpha=0.6)
 ax.axhline(0.05, color='#d62728', lw=0.9, linestyle='--', alpha=0.6)
 
-pct = 100 * ml_excl.sum() / (r2_v >= 0.05).sum()
+pct = 100 * ml_excl.sum() / max((r2_v >= 0.05).sum(), 1)
 ax.text(0.02, 0.92,
         f"{ml_excl.sum()} pairs ({pct:.0f}% of R²≥0.05)\n"
-        f"MLP captures joint effects\nno single feature predicts",
+        f"MLP captures interaction effects\nno single feature explains ≥5% variance",
         transform=ax.transAxes, fontsize=FONT.ANNOTATION,
         color='#d62728', va='top')
 
-ax.set_xlabel('Max univariate |ρ| across all features', fontsize=FONT.LABEL)
+ax.set_xlabel('Max univariate η² (binned ANOVA, 10 bins)', fontsize=FONT.LABEL)
 ax.set_ylabel('MLP mean R²', fontsize=FONT.LABEL)
 ax.legend(fontsize=FONT.LEGEND, frameon=False, loc='lower right')
 add_footnote(fig, f"Valid pairs (R²≥0.01): {v_mask.sum()}; "
-             f"ML-exclusive zone: R²≥0.05 and max|ρ|<0.15")
+             f"η² = binned-ANOVA variance explained; ML-exclusive: R²≥0.05 and η²<{ETA_THRESH}")
 savefig_manifest(fig, 'joint_effect_scatter.png', OUTS)
 print("Generated joint_effect_scatter.png")
 

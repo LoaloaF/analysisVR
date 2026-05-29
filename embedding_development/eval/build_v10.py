@@ -97,14 +97,33 @@ def move_slide(prs, from_idx, to_idx):
 
 def remove_slide(prs, idx):
     """
-    Remove a slide from _sldIdLst only.  The orphaned XML part will not be
-    written to the output PPTX because it has no relationship; this avoids the
-    'Duplicate name' collision that occurs when a new slide is added AFTER the
-    removal (python-pptx names new slides slide{N+1}.xml where N = current
-    _sldIdLst count, which would match the previously-highest existing file).
-    Always add new slides BEFORE calling remove_slide so the new slide gets a
-    number above the current maximum.
+    Fully remove a slide: drop it from _sldIdLst (ordering) AND pop its
+    relationship from presentation.xml.rels (so the backing slide XML part
+    is not written to the saved zip).
+
+    IMPORTANT: always call add_slide BEFORE remove_slide.  python-pptx names
+    new slide parts slide{N+1}.xml where N = len(_sldIdLst).  If we remove
+    first, N drops by 1 and the new slide gets the same number as an existing
+    part → duplicate name in the zip.  Adding first (N still includes the to-
+    be-removed slide) gives the new slide a truly new number.
     """
+    slide      = prs.slides[idx]
+    slide_part = slide.part
+    prs_part   = prs.slides.part   # the PresentationPart
+
+    # 1. Remove the relationship so the slide part won't be written to the zip
+    rId = None
+    for rel_id, rel in prs_part.rels.items():
+        try:
+            if rel.target_part is slide_part:
+                rId = rel_id
+                break
+        except Exception:
+            pass
+    if rId is not None:
+        prs_part.rels.pop(rId)
+
+    # 2. Remove from _sldIdLst (slide ordering)
     xml_slides = prs.slides._sldIdLst
     el = list(xml_slides)[idx]
     xml_slides.remove(el)
@@ -214,6 +233,8 @@ print(f'Opened v9: {n_orig} slides')
 # STEP 1 — Figure replacements (all before any index-shifting operations)
 # ══════════════════════════════════════════════════════════════════════════════
 
+abl_dir = os.path.join(root, 'outputs', 'ablation_vs_attribution')
+
 REPLACEMENTS = {
     33: (os.path.join(mdir, 'gpv_group_ensemble_heatmap.png'),
          'GPV heatmap (MLP arch label)'),
@@ -227,6 +248,10 @@ REPLACEMENTS = {
          'stability (regenerated)'),
     53: (os.path.join(mdir, 'head_angle_tuning_6panel.png'),
          '6-panel → redesigned 2×2 with larger fonts'),
+    # S60 in v9 (idx 59) = case study E07/E23 — replace with readable version
+    # (old figure was 12×10" and unreadable at slide scale; new is FIG.FULL)
+    59: (os.path.join(mdir, 'combined_attribution_vs_ablation_r2.png'),
+         'E07/E23 case study (FIG.FULL, readable fonts)'),
 }
 
 for idx, (img_path, desc) in REPLACEMENTS.items():
@@ -307,11 +332,78 @@ print(f'  Removed S{MLPONLY_IDX+1:02d} (MLP-only cross-seed consistency slide)')
 move_slide(prs, 63, 60)
 print(f'  Moved conclusion slide to S61 (before hidden reference slides)')
 
-# ── FINAL ─────────────────────────────────────────────────────────────────────
+# ── SAVE + STRIP ORPHANED PARTS ───────────────────────────────────────────────
+# python-pptx writes ALL parts it loaded (including unreferenced ones) to the
+# zip, which can produce duplicate entries or orphaned slide XML files that make
+# PowerPoint show a "hard to repair" dialog.  After saving, rewrite the zip
+# keeping only parts that are reachable from presentation.xml.rels.
+
+import zipfile, shutil, xml.etree.ElementTree as ET
+
 print(f'\nFinal slide count: {len(prs.slides)}  (was {n_orig})')
+
+def _clean_orphaned_parts(pptx_path):
+    """Rewrite the PPTX zip removing unreferenced slide parts."""
+    REL_NS = 'http://schemas.openxmlformats.org/package/2006/relationships'
+    SLIDE_RELTYPE = ('http://schemas.openxmlformats.org/officeDocument/2006/'
+                     'relationships/slide')
+
+    with zipfile.ZipFile(pptx_path, 'r') as z:
+        rels_data = z.read('ppt/_rels/presentation.xml.rels')
+        root = ET.fromstring(rels_data)
+        # Collect the set of slide filenames that are actually referenced
+        referenced = set()
+        for rel in root.findall(f'{{{REL_NS}}}Relationship'):
+            if rel.get('Type') == SLIDE_RELTYPE:
+                target = rel.get('Target', '')   # e.g. 'slides/slide3.xml'
+                referenced.add('ppt/' + target.lstrip('/'))
+
+        # Find all slide XML entries in the zip (not layouts/masters)
+        slide_entries = [n for n in z.namelist()
+                         if 'ppt/slides/slide' in n
+                         and 'slideLayout' not in n
+                         and 'slideMaster' not in n]
+
+        # Unreferenced entries (orphans) and their .rels companions
+        orphans = set()
+        for name in slide_entries:
+            bare = name.replace('.rels', '').replace('/slides/_rels/', '/slides/')
+            if bare not in referenced:
+                orphans.add(name)
+                orphans.add(name.replace('/slides/', '/slides/_rels/').replace('.xml', '.xml.rels'))
+
+        # Also deduplicate: if any name appears more than once, keep only first
+        seen  = set()
+        skip  = set()
+        for info in z.infolist():
+            if info.filename in seen:
+                skip.add(info.filename)
+            seen.add(info.filename)
+        to_remove = orphans | skip
+
+        if not to_remove:
+            print('  No orphaned or duplicate parts — zip is clean.')
+            return
+
+        print(f'  Removing {len(to_remove)} orphaned/duplicate parts: '
+              f'{sorted(to_remove)}')
+
+        tmp = pptx_path + '.clean.tmp'
+        with zipfile.ZipFile(pptx_path, 'r') as zin, \
+             zipfile.ZipFile(tmp, 'w', zipfile.ZIP_DEFLATED) as zout:
+            written = set()
+            for item in zin.infolist():
+                if item.filename in to_remove or item.filename in written:
+                    continue
+                zout.writestr(item, zin.read(item.filename))
+                written.add(item.filename)
+        shutil.move(tmp, pptx_path)
 
 for out in OUTS:
     os.makedirs(os.path.dirname(out) or '.', exist_ok=True)
     prs.save(out)
-    print(f'Saved → {out}')
+    print(f'Saved  → {out}')
+    _clean_orphaned_parts(out)
+    print(f'Cleaned → {out}')
+
 print('Done.')

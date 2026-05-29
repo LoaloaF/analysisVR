@@ -12,6 +12,8 @@
 #     skipped by the Python script's own skip logic.
 #
 # Usage (from embedding_development/):
+#   bash training/retrain_tempconv_64d.sh                     # all seeds
+#   bash training/retrain_tempconv_64d.sh 44 46               # specific seeds only
 #   bash training/retrain_tempconv_64d.sh 2>&1 | tee logs/retrain_64d_master.log
 
 set -euo pipefail
@@ -25,7 +27,12 @@ DONE_DIR="${ROOT}/logs/retrain_64d/.done"
 mkdir -p "${LOG_DIR}" "${DONE_DIR}"
 cd "${ROOT}"                                    # scripts load ./outputs relative to here
 
-SEEDS=(42 43 44 45 46)
+# Seeds can be overridden via positional args: bash retrain_tempconv_64d.sh 44 46
+if [[ $# -gt 0 ]]; then
+    SEEDS=("$@")
+else
+    SEEDS=(42 43 44 45 46)
+fi
 EMBED_DIM=64
 NUM_UNITS=32
 

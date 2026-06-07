@@ -24,39 +24,37 @@ parser.add_argument("--out",      type=str,   default=None)
 parser.add_argument("--dpi",      type=int,   default=150)
 args = parser.parse_args()
 
+# action_enc_cols then state_enc_cols, matching training scripts
 BEHAVIOR_FEATURES = [
     "frame_raw_500msMedian",
-    "frame_YawPitch_abs_vel_sum_500msMedian",
     "frame_raw_abs_acc_500msMedian",
+    "frame_YawPitch_abs_vel_sum_500msMedian",
     "frame_YawPitch_abs_acc_sum_500msMedian",
-    "forward_vs_rotation_corr",
-    "head_angle",
     "head_angle_vel",
-    "movement_energy_smooth5",
-    "lick_detected",
-    "track_zone_int",
+    "head_angle",
+    "frame_position",
     "cue_visible",
-    "reward-sound_detected",
-    "reward-valve-open_detected",
+    "upcoming_choice",
+    "reward_window",
+    "lick_detected",
 ]
 
 PRETTY_NAMES = {
-    "frame_raw_500msMedian":                  "Forward Speed",
-    "frame_YawPitch_abs_vel_sum_500msMedian": "Yaw+Pitch Abs. Velocity",
-    "frame_raw_abs_acc_500msMedian":          "Forward Abs. Acceleration",
-    "frame_YawPitch_abs_acc_sum_500msMedian": "Yaw+Pitch Abs. Acceleration",
-    "forward_vs_rotation_corr":               "Forward vs. Rotation Corr.",
+    "frame_raw_500msMedian":                  "Forward Velocity",
+    "frame_raw_abs_acc_500msMedian":          "Forward Acceleration",
+    "frame_YawPitch_abs_vel_sum_500msMedian": "Off-Rotation Velocity",
+    "frame_YawPitch_abs_acc_sum_500msMedian": "Off-Rotation Acceleration",
+    "head_angle_vel":                         "Head Angle Velocity",
     "head_angle":                             "Head Angle",
-    "head_angle_vel":                         "Head Angular Velocity",
-    "movement_energy_smooth5":                "Movement Energy",
-    "lick_detected":                          "Lick Detected",
-    "track_zone_int":                         "Track Zone",
+    "frame_position":                         "Position",
     "cue_visible":                            "Cue Visible",
-    "reward-sound_detected":                  "Reward Sound",
-    "reward-valve-open_detected":             "Reward Valve Open",
+    "upcoming_choice":                        "Upcoming Choice",
+    "reward_window":                          "Reward Window",
+    "lick_detected":                          "Lick Detected",
 }
 
-BINARY_FEATURES = {"lick_detected", "cue_visible", "reward-sound_detected", "reward-valve-open_detected"}
+BINARY_FEATURES = {"lick_detected"}
+STEP_FEATURES   = {"cue_visible", "upcoming_choice", "reward_window"}
 
 # ── Load ──────────────────────────────────────────────────────────────────────
 print("Loading data …")
@@ -79,13 +77,23 @@ rel_times = (beh_trial["frame_pc_timestamp"].values.astype(np.float64) - t0) / 1
 T_total   = rel_times[-1]
 print(f"Trial {args.trial_id}: {len(beh_trial)} frames, {T_total:.1f}s")
 
+# Pre-compute global levels for categorical features from the full dataset
+GLOBAL_LEVELS = {}
+for feat in STEP_FEATURES | BINARY_FEATURES:
+    if feat in beh.columns:
+        vals = beh[feat].dropna()
+        if vals.dtype == object or str(vals.dtype) == "category":
+            GLOBAL_LEVELS[feat] = sorted(vals.unique())
+        else:
+            GLOBAL_LEVELS[feat] = sorted(vals.astype(float).unique())
+
 # ── Figure ────────────────────────────────────────────────────────────────────
 n_feat = len(BEHAVIOR_FEATURES)
-fig = plt.figure(figsize=(10, 9), facecolor="white")
+fig = plt.figure(figsize=(10, n_feat * 0.8), facecolor="white")
 gs  = gridspec.GridSpec(
     n_feat, 1,
-    hspace=0.08,
-    left=0.22, right=0.97, top=0.93, bottom=0.07,
+    hspace=0.35,
+    left=0.22, right=0.97, top=0.95, bottom=0.05,
 )
 
 # Color cycle — use a perceptually distinct, print-friendly palette
@@ -94,15 +102,38 @@ colors = plt.cm.tab10(np.linspace(0, 1, n_feat))
 axes = []
 for i, feat in enumerate(BEHAVIOR_FEATURES):
     ax  = fig.add_subplot(gs[i])
-    arr = beh_trial[feat].astype(float).values
+    raw = beh_trial[feat]
     color = colors[i]
 
+    # label-encode string columns so they can be plotted numerically;
+    # use global levels so the encoding is consistent with the full dataset
+    if raw.dtype == object or str(raw.dtype) == "category":
+        global_cats = GLOBAL_LEVELS.get(feat, sorted(raw.dropna().unique()))
+        cat_map    = {c: idx for idx, c in enumerate(global_cats)}
+        arr        = raw.map(cat_map).values.astype(float)
+        tick_labels = {idx: c for c, idx in cat_map.items()}
+    else:
+        arr = raw.astype(float).values
+        tick_labels = None
+
     if feat in BINARY_FEATURES:
-        ax.fill_between(rel_times, arr.astype(float), step="post",
-                        color=color, alpha=0.75, linewidth=0)
-        ax.set_ylim(-0.15, 1.35)
-        ax.set_yticks([0, 1])
-        ax.set_yticklabels(["0", "1"], fontsize=6)
+        ax.step(rel_times, arr, color=color, linewidth=0.9, alpha=0.9, where="post")
+        levels = GLOBAL_LEVELS.get(feat, [0, 1])
+        ax.set_yticks(levels)
+        ax.set_yticklabels([str(int(v)) for v in levels], fontsize=6)
+        ax.set_ylim(min(levels) - 0.2, max(levels) + 0.2)
+    elif feat in STEP_FEATURES:
+        ax.step(rel_times, arr, color=color, linewidth=0.9, alpha=0.9, where="post")
+        levels = GLOBAL_LEVELS.get(feat, sorted(np.unique(arr[~np.isnan(arr)]).tolist()))
+        if tick_labels:
+            numeric_levels = [cat_map[c] for c in levels]
+            ax.set_yticks(numeric_levels)
+            ax.set_yticklabels([str(c) for c in levels], fontsize=6)
+            ax.set_ylim(min(numeric_levels) - 0.3, max(numeric_levels) + 0.3)
+        else:
+            ax.set_yticks(levels)
+            ax.set_yticklabels([str(int(v)) for v in levels], fontsize=6)
+            ax.set_ylim(min(levels) - 0.3, max(levels) + 0.3)
     else:
         ax.plot(rel_times, arr, color=color, linewidth=0.9, alpha=0.9)
         lo, hi = np.nanmin(arr), np.nanmax(arr)

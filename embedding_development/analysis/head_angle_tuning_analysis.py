@@ -18,7 +18,7 @@ Tests:
      (c) GPV vs IG: does GPV handle non-monotonic tuning differently?
   5. Deliver a summary figure with clear hypothesis support/refute
 """
-import os, pickle
+import os, pickle, shutil
 import numpy as np
 import pandas as pd
 import torch
@@ -27,8 +27,15 @@ matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import seaborn as sns
 from scipy.stats import spearmanr, pearsonr
+
+import sys as _sys
+_sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'utils'))
+from figure_style import (
+    FIG, DPI, FONT, LINE, MARKER,
+    MODEL_COLORS, FEATURE_NAMES_SHORT,
+    apply_style, add_footnote, add_panel_label, savefig_manifest,
+)
 from sklearn.metrics import r2_score
-from datetime import datetime
 
 # ═══════════════════════════════════ CONFIG ═══════════════════════════════════
 USE_ENSEMBLES = True
@@ -41,22 +48,20 @@ NONLIN_THR    = 0.05     # eta² threshold for calling it "nonlinearly tuned"
 mode_str    = "ensembles" if USE_ENSEMBLES else "spikes"
 prefix_name = "E"         if USE_ENSEMBLES else "U"
 attr_dir    = f"./outputs/mlps/{mode_str}_multiseed"
-corr_dir    = "./outputs/mlps/feature_correspondence_20260517_1528"
 
-ts          = datetime.now().strftime('%Y%m%d_%H%M')
-output_dir  = f"./outputs/mlps/head_angle_tuning_{ts}"
-desktop_dir = f"/mnt/c/Users/amits/Desktop/head_angle_tuning_{ts}"
-os.makedirs(output_dir, exist_ok=True)
-os.makedirs(desktop_dir, exist_ok=True)
+output_dir  = "./outputs/mlps/head_angle_tuning"
+desktop_dir = "/mnt/c/Users/amits/Desktop/head_angle_tuning"
+for d in (output_dir, desktop_dir):
+    if os.path.exists(d):
+        shutil.rmtree(d)
+    os.makedirs(d)
 
 print(f"Output: {output_dir}")
 print(f"Desktop: {desktop_dir}")
 
 
 def savefig(name):
-    for d in (output_dir, desktop_dir):
-        plt.savefig(os.path.join(d, name), dpi=150, bbox_inches='tight')
-    plt.close()
+    savefig_manifest(plt.gcf(), name, [output_dir, desktop_dir])
     print(f"  Saved {name}")
 
 
@@ -65,8 +70,6 @@ attr_r2  = np.load(os.path.join(attr_dir, "all_r2.npy"))
 ig_mat   = np.load(os.path.join(attr_dir, "importance_ig_semantic.npy"))
 gpv_mat  = np.load(os.path.join(attr_dir, "importance_global_pv_semantic.npy"))
 cpv_mat  = np.load(os.path.join(attr_dir, "importance_cond_pv_semantic.npy"))
-corr_mat = np.load(os.path.join(corr_dir, "correspondence_matrix.npy"))
-
 with open(os.path.join(attr_dir, "semantic_groups.pkl"), 'rb') as f:
     semantic_groups = pickle.load(f)
 group_names = [g[0] for g in semantic_groups]
@@ -132,14 +135,17 @@ for s_idx, sess in enumerate(session_ids):
         bin_edges[-1] += 1e-9  # include max
         bin_means = []
         bin_centers = []
+        bin_sems = []
         within_vars = []
         for b in range(N_BINS):
             in_bin = (ha >= bin_edges[b]) & (ha < bin_edges[b + 1])
             if in_bin.sum() >= MIN_BIN_PTS:
-                bm = float(y[in_bin].mean())
+                vals = y[in_bin]
+                bm = float(vals.mean())
                 bin_means.append(bm)
                 bin_centers.append(float((bin_edges[b] + bin_edges[b+1]) / 2))
-                within_vars.append(float(np.var(y[in_bin])))
+                bin_sems.append(float(vals.std() / np.sqrt(len(vals))))
+                within_vars.append(float(np.var(vals)))
 
         if len(bin_means) < 4:
             continue
@@ -151,7 +157,7 @@ for s_idx, sess in enumerate(session_ids):
         eta2 = max(0.0, 1.0 - mean_within / total_var)
         eta2_mat[s_idx, n_idx] = eta2
 
-        tuning_curves[(s_idx, n_idx)] = (np.array(bin_centers), np.array(bin_means))
+        tuning_curves[(s_idx, n_idx)] = (np.array(bin_centers), np.array(bin_means), np.array(bin_sems))
 
 n_valid = np.sum(valid_mask)
 valid_eta2 = eta2_mat[valid_mask]
@@ -270,6 +276,7 @@ def _get_pair(local_ok_idx):
 
 # Figure 3a: tuning curves for each category
 fig, axes = plt.subplots(4, 3, figsize=(15, 14))
+apply_style(fig, axes.flatten() if hasattr(axes, "__iter__") else [axes])
 categories = [
     ('Monotonic + IG correct\n(high Spearman, high IG, high η²)', top_mono,    'steelblue'),
     ('Non-monotonic + IG correct\n(low Spearman!, high IG, high η²)', top_nonmono, 'forestgreen'),
@@ -282,8 +289,9 @@ for row, (cat_name, examples, col) in enumerate(categories):
         ax = axes[row][col_i]
         s_i, n_i = _get_pair(ex_i)
         if (s_i, n_i) in tuning_curves:
-            centers, means = tuning_curves[(s_i, n_i)]
-            ax.plot(centers, means, '-o', color=col, markersize=5, lw=1.8)
+            centers, means, sems = tuning_curves[(s_i, n_i)]
+            ax.errorbar(centers, means, yerr=sems, fmt='-o', color=col,
+                        markersize=5, lw=1.8, elinewidth=1.2, capsize=3, capthick=1.2)
             ax.axhline(0, color='grey', lw=0.7, linestyle='--')
             rho_v = valid_rho[ok][ex_i]
             eta2_v = valid_eta2[ok][ex_i]
@@ -309,6 +317,7 @@ savefig('tuning_curves_by_category.png')
 # ══════════════════════════════════════════════════════════════════════════════
 
 fig, axes = plt.subplots(1, 3, figsize=(16, 5))
+apply_style(fig, axes.flatten() if hasattr(axes, "__iter__") else [axes])
 
 # 4a: Spearman ρ vs IG (original "alignment" analysis)
 ax = axes[0]
@@ -437,6 +446,7 @@ print(f"  ρ(η²,         GPV) = {rho_gpv_eta2b:.3f}")
 
 # Figure 5: confound scatter panels
 fig, axes = plt.subplots(2, 4, figsize=(18, 8))
+apply_style(fig, axes.flatten() if hasattr(axes, "__iter__") else [axes])
 for _ci, (name, cv) in enumerate(confounds):
     _ok2 = ~np.isnan(cv)
     # Raw
@@ -530,6 +540,7 @@ print(f"→ head_angle_vel η² ≈ Spearman²: {eta2_vs_rho_hav:.3f} vs head_an
 # ══════════════════════════════════════════════════════════════════════════════
 
 fig, axes = plt.subplots(1, 3, figsize=(16, 5.5))
+apply_style(fig, axes.flatten() if hasattr(axes, "__iter__") else [axes])
 
 # Panel 1: head_angle — ρ vs η² (shows nonlinear gap)
 ax = axes[0]

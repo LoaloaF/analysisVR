@@ -2,7 +2,7 @@
 """
 eval_cebra_seeds.py
 
-Evaluates CEBRA contrastive or CEBRA predictive encoders using a Ridge linear
+Evaluates TempConv contrastive or TempConv predictive encoders using a Ridge linear
 probe on learned embeddings. Mirrors eval_mlp_attribution.py structure.
 
 Methods:
@@ -30,12 +30,21 @@ from sklearn.metrics import mean_squared_error, r2_score
 import sys
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "utils"))
 from load_encoder import build_windows, load_encoder
+from figure_style import (
+    FIG, DPI, FONT, LINE, MARKER,
+    MODEL_COLORS, FEATURE_NAMES_SHORT,
+    apply_style, add_footnote, add_panel_label, savefig_manifest,
+)
 
 # ═══════════════════════════════════ CONFIG ═══════════════════════════════════
 parser = argparse.ArgumentParser()
 parser.add_argument("--arm",   type=str, default="cebra",
                     choices=["cebra", "cebra_pred"],
                     help="Which model arm to evaluate")
+parser.add_argument("--models_dir", type=str, default=None,
+                    help="Override model checkpoint directory (default: ./models/{arm}/ensembles)")
+parser.add_argument("--output_dir", type=str, default=None,
+                    help="Override output directory (default: ./outputs/{arm}_eval/ensembles)")
 parser.add_argument("--no_eval",   action="store_true", help="Skip R² eval (load from disk)")
 parser.add_argument("--no_imp",    action="store_true", help="Skip importance (load from disk)")
 args = parser.parse_args()
@@ -51,21 +60,19 @@ RUN_GLOBAL_PV    = not args.no_imp
 
 mode_str    = "ensembles"
 prefix_name = "E"
-models_root = f"./models/{ARM}/ensembles"
+models_root = args.models_dir if args.models_dir else f"./models/{ARM}/ensembles"
 splits_dir  = "./splits"
-output_dir  = f"./outputs/{ARM}_eval/ensembles"
+output_dir  = args.output_dir if args.output_dir else f"./outputs/{ARM}_eval/ensembles"
 cache_path  = "./outputs/session_dataset_ensembles.pkl"
 os.makedirs(output_dir, exist_ok=True)
 
 unit_label    = "ensemble"
 unit_label_pl = "ensembles"
-arm_label     = "CEBRA-Contrastive" if ARM == "cebra" else "CEBRA-Predictive"
+arm_label     = "TempConv-Cont" if ARM == "cebra" else "TempConv-Pred"
 
 def savefig(name):
-    path = os.path.join(output_dir, name)
-    plt.savefig(path, dpi=150, bbox_inches='tight')
-    plt.close()
-    print(f"  Saved {path}")
+    savefig_manifest(plt.gcf(), name, [output_dir])
+    print(f"  Saved {os.path.join(output_dir, name)}")
 
 print(f"ARM={ARM} ({arm_label})  seeds={SEEDS}")
 print(f"RUN_EVAL={RUN_EVAL}  RUN_GLOBAL_PV={RUN_GLOBAL_PV}")
@@ -253,6 +260,10 @@ if RUN_EVAL:
                 y_tr = Ytr[:, n_idx]
                 y_te = Yte[:, n_idx]
 
+                if np.isnan(emb_tr).any() or np.isnan(emb_te).any():
+                    print(f"    NaN in embedding s={s_idx} n={n_idx} seed={seed} — skip")
+                    continue
+
                 ridge = Ridge(alpha=RIDGE_ALPHA)
                 ridge.fit(emb_tr, y_tr)
                 y_pred = ridge.predict(emb_te)
@@ -279,7 +290,7 @@ all_mse = np.load(all_mse_path)
 
 # ═══════════════════════ MASKS & AGGREGATION ════════════════════════════════
 mask_3d = np.isnan(all_r2)
-mask    = np.any(mask_3d, axis=0)   # (sessions, neurons)
+mask    = np.all(mask_3d, axis=0)   # (sessions, neurons) — mask only if ALL seeds are NaN
 
 with np.errstate(all='ignore'):
     mean_r2  = np.nanmean(all_r2,  axis=0)
@@ -309,13 +320,22 @@ n_order   = np.argsort(masked_r2.mean(axis=0).filled(np.nan))[::-1]
 r2_plot = r2_c[:, n_order].astype(float)
 r2_plot[mask[:, n_order]] = np.nan
 
-cell_h = 0.45
-fig, ax = plt.subplots(figsize=(14, max(8, num_neurons * cell_h)))
-sns.heatmap(r2_plot.T, cmap=cmap_r2, vmin=0, vmax=1, ax=ax,
+cell_h, cell_w = 0.25, 0.40
+r2_plot_hm = r2_plot.T.astype(float)
+mask_hm    = mask[:, n_order].T
+r2_plot_hm[mask_hm] = np.nan
+fig, ax = plt.subplots(figsize=(max(10, num_sessions * cell_w), max(4, num_neurons * cell_h)))
+apply_style(fig, ax)
+sns.heatmap(r2_plot_hm, cmap=cmap_r2, vmin=0, vmax=1, ax=ax,
             xticklabels=[f"S{j+1}" for j in range(num_sessions)],
             yticklabels=[f"{prefix_name}{n_order[i]+1:02d}" for i in range(num_neurons)])
+for (i, j) in zip(*np.where(mask_hm)):
+    ax.add_patch(plt.Rectangle([j, i], 1, 1, fill=True, facecolor=NO_DATA_COLOR,
+                                hatch='////', edgecolor='#888888', lw=0.5, zorder=2))
+ax.set_xticklabels(ax.get_xticklabels(), rotation=45, ha='right', fontsize=8)
+ax.set_yticklabels(ax.get_yticklabels(), fontsize=8)
 ax.set_title(f'{arm_label} Ridge Probe — Mean R² ({len(SEEDS)} seeds)',
-             fontsize=14, pad=10)
+             fontsize=9, pad=8)
 ax.set_xlabel('Session')
 ax.set_ylabel(f'{unit_label_pl.capitalize()} (sorted by mean R²)')
 plt.tight_layout()
@@ -329,11 +349,17 @@ mse_c    = np.clip(mean_mse, 0, 2.0)
 mse_plot = mse_c[:, n_order].astype(float)
 mse_plot[mask[:, n_order]] = np.nan
 
-fig, ax = plt.subplots(figsize=(14, max(8, num_neurons * cell_h)))
+fig, ax = plt.subplots(figsize=(max(10, num_sessions * cell_w), max(4, num_neurons * cell_h)))
+apply_style(fig, ax)
 sns.heatmap(mse_plot.T, cmap=cmap_m, ax=ax,
             xticklabels=[f"S{j+1}" for j in range(num_sessions)],
             yticklabels=[f"{prefix_name}{n_order[i]+1:02d}" for i in range(num_neurons)])
-ax.set_title(f'{arm_label} Ridge Probe — Mean MSE ({len(SEEDS)} seeds)', fontsize=14, pad=10)
+for (i, j) in zip(*np.where(np.isnan(mse_plot.T))):
+    ax.add_patch(plt.Rectangle([j, i], 1, 1, fill=True, facecolor=NO_DATA_COLOR,
+                                hatch='////', edgecolor='#888888', lw=0.5, zorder=2))
+ax.set_xticklabels(ax.get_xticklabels(), rotation=45, ha='right', fontsize=8)
+ax.set_yticklabels(ax.get_yticklabels(), fontsize=8)
+ax.set_title(f'{arm_label} Ridge Probe — Mean MSE ({len(SEEDS)} seeds)', fontsize=9, pad=10)
 ax.set_xlabel('Session')
 ax.set_ylabel(f'{unit_label_pl.capitalize()} (sorted by mean R²)')
 plt.tight_layout()
@@ -346,19 +372,25 @@ order_bar      = np.argsort(neuron_mean_r2)
 x              = np.arange(num_neurons)
 pal            = sns.color_palette("mako_r", as_cmap=True)(np.linspace(0.15, 0.85, num_neurons))
 
+TOP_LABEL = 5
+means_bar_sorted = neuron_mean_r2[order_bar]
+labels_bar       = [f"{prefix_name}{order_bar[i]+1:02d}" for i in range(num_neurons)]
+ymax_bar         = 0.2
+
 fig, ax = plt.subplots(figsize=(16, 5))
-ax.bar(x, neuron_mean_r2[order_bar], width=0.7, color=pal, zorder=3, linewidth=0)
-ax.errorbar(x, neuron_mean_r2[order_bar], yerr=neuron_std_r2[order_bar],
-            fmt='none', ecolor='gray', elinewidth=0.8, capsize=3, alpha=0.7)
+apply_style(fig, ax)
+ax.bar(x, means_bar_sorted, width=0.7, color=pal, zorder=3, linewidth=0)
 ax.axhline(0, color='firebrick', linestyle='--', linewidth=1)
+for pos in range(num_neurons - TOP_LABEL, num_neurons):
+    ax.text(pos, means_bar_sorted[pos] + ymax_bar * 0.02, labels_bar[pos],
+            ha='center', va='bottom', fontsize=9, fontweight='bold', rotation=90)
 ax.set_xticks(x[::3])
-ax.set_xticklabels([f"{prefix_name}{order_bar[i]+1:02d}" for i in range(0, num_neurons, 3)],
-                   rotation=45, ha='right', fontsize=8)
+ax.set_xticklabels(labels_bar[::3], rotation=45, ha='right', fontsize=8)
+ax.set_ylim(0, ymax_bar)
 ax.set_ylabel("Mean R²")
 ax.set_xlabel(f"{unit_label.capitalize()} (sorted by mean R²)")
 ax.set_title(f"Per-{unit_label.capitalize()} Ridge Probe R² — {arm_label}\n"
-             f"(mean ± SD across {len(SEEDS)} seeds × {num_sessions} sessions)",
-             fontsize=13, fontweight='bold')
+             f"(mean ± SD across {len(SEEDS)} seeds × {num_sessions} sessions)")
 ax.spines[['top', 'right']].set_visible(False)
 valid_counts = (~mask).sum(axis=0)
 ax.annotate(
@@ -378,6 +410,7 @@ neuron_std_mse  = masked_mse.std(axis=0).filled(np.nan)
 order_mse       = np.argsort(neuron_mean_mse)
 
 fig, ax = plt.subplots(figsize=(16, 5))
+apply_style(fig, ax)
 ax.bar(x, neuron_mean_mse[order_mse], width=0.7, color=pal, zorder=3, linewidth=0)
 ax.errorbar(x, neuron_mean_mse[order_mse], yerr=neuron_std_mse[order_mse],
             fmt='none', ecolor='gray', elinewidth=0.8, capsize=3, alpha=0.7)
@@ -428,6 +461,7 @@ for metric, vals, ylabel, fname in [
         continue
     r_corr = np.corrcoef(variance_vals, vals)[0, 1]
     fig, ax = plt.subplots(figsize=(7, 5))
+    apply_style(fig, ax)
     ax.scatter(variance_vals, vals, alpha=0.15, s=8, color='steelblue')
     m, b = np.polyfit(variance_vals, vals, 1)
     xl   = np.linspace(variance_vals.min(), variance_vals.max(), 200)
@@ -473,6 +507,7 @@ for s_idx, session_id in enumerate(session_ids):
         continue
 
     fig, axes = plt.subplots(len(top_ens), 1, figsize=(14, 3 * len(top_ens)))
+    apply_style(fig, axes if hasattr(axes, '__iter__') else [axes])
     if len(top_ens) == 1:
         axes = [axes]
 
@@ -599,6 +634,7 @@ feat_std  = np.nanstd( global_pv_sem_m.reshape(-1, n_groups), axis=0)
 order_imp = np.argsort(feat_mean)[::-1]
 
 fig, ax = plt.subplots(figsize=(10, 5))
+apply_style(fig, ax)
 x_imp = np.arange(n_groups)
 ax.bar(x_imp, feat_mean[order_imp], yerr=feat_std[order_imp],
        color='steelblue', capsize=4, alpha=0.8)
@@ -621,6 +657,7 @@ hm_data        = hm_data[:, order_ens]
 ens_labels     = [ens_labels[i] for i in order_ens]
 
 fig, ax = plt.subplots(figsize=(max(8, len(ens_labels) * 0.55), 5))
+apply_style(fig, ax)
 sns.heatmap(hm_data, xticklabels=ens_labels, yticklabels=group_names,
             cmap='YlOrRd', ax=ax, cbar_kws={'label': 'Mean R² drop'})
 ax.set_xticklabels(ax.get_xticklabels(), rotation=45, ha='right', fontsize=8)
@@ -646,6 +683,7 @@ if pair_rows:
     plabels2 = [pair_labels[i] for i in ord2]
 
     fig, ax = plt.subplots(figsize=(max(12, len(plabels2) * 0.3), 5))
+    apply_style(fig, ax)
     sns.heatmap(hm2, xticklabels=plabels2, yticklabels=group_names,
                 cmap='YlOrRd', ax=ax, cbar_kws={'label': 'R² drop'})
     ax.set_xticklabels(ax.get_xticklabels(), rotation=90, fontsize=5)

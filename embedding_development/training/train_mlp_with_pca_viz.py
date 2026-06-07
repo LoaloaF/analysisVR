@@ -67,9 +67,14 @@ parser.add_argument("--make_gif", action="store_true", default=False,
                     help="Create animated GIF from visualization frames")
 parser.add_argument("--gif_fps", type=int, default=3,
                     help="Frames per second for GIF animation (default: 3)")
+parser.add_argument("--focus_var", type=str, default=None,
+                    help="Focus on a single input variable: X-axis = that variable, "
+                         "Y-axis = PC1 of all remaining inputs. "
+                         "Must match a column name in action_enc_cols / state_enc_cols / zone_onehot_cols.")
 args = parser.parse_args()
 
 USE_ENSEMBLES = args.use_ensembles
+unit_label = "Ensemble" if USE_ENSEMBLES else "Neuron"
 os.makedirs(args.output_dir, exist_ok=True)
 
 # ============================================================================
@@ -341,7 +346,7 @@ def _create_scatter_viz(args, epoch, pca_embed, embeddings, train_labels_np,
     cbar = fig.colorbar(sc, ax=fig.axes, shrink=0.5, aspect=20, pad=0.1)
     cbar.set_label('True Activity (z-scored)', fontweight='bold')
     fig.suptitle(
-        f'3D Embedding PCA | Session {session_idx} | Neuron {neuron_idx} | Epoch {epoch + 1}',
+        f'3D Embedding PCA | Session {session_idx} | {unit_label} {neuron_idx} | Epoch {epoch + 1}',
         fontsize=13, fontweight='bold'
     )
 
@@ -354,17 +359,11 @@ def _create_scatter_viz(args, epoch, pca_embed, embeddings, train_labels_np,
         gif_frames_scatter.append(fig_path)
 
 
-def _create_heatmap_viz(args, epoch, pca_input, input_pca_coords, predictions,
-                        train_labels_np, neuron_idx, session_idx, vmin, vmax):
-    """2D PCA of the raw input space: side-by-side heatmaps of true vs predicted activity.
-
-    The axes are fixed (input PCA doesn't change), so across epochs you see the
-    model's prediction surface evolving to match the true activity map.
-    Finer bins (40×40) give more spatial granularity than the scatter view.
-    """
+def _create_ground_truth_heatmap(args, input_pca_coords, xlabel, ylabel,
+                                  train_labels_np, neuron_idx, session_idx, vmin, vmax):
+    """Static ground truth activity heatmap over the 2D input projection (no epoch counter)."""
     targets = train_labels_np[:, neuron_idx]
     bins = 40
-    ev = pca_input.explained_variance_ratio_
 
     count, xedges, yedges = np.histogram2d(
         input_pca_coords[:, 0], input_pca_coords[:, 1], bins=bins
@@ -373,32 +372,66 @@ def _create_heatmap_viz(args, epoch, pca_input, input_pca_coords, predictions,
         input_pca_coords[:, 0], input_pca_coords[:, 1],
         bins=bins, weights=targets
     )
+    h_target = np.divide(h_target, count, where=count > 0, out=np.zeros_like(h_target))
+    h_target = gaussian_filter(h_target, sigma=1.5)
+
+    extent = [xedges[0], xedges[-1], yedges[0], yedges[-1]]
+    fig, ax = plt.subplots(figsize=(8, 6))
+
+    im = ax.imshow(h_target.T, extent=extent, origin='lower', aspect='auto',
+                   cmap='RdYlBu_r', interpolation='bilinear', vmin=vmin, vmax=vmax)
+    ax.set_xlabel(xlabel, fontsize=12, fontweight='bold')
+    ax.set_ylabel(ylabel, fontsize=12, fontweight='bold')
+    ax.set_title(f'True Activity | Input Space\nSession {session_idx} | {unit_label} {neuron_idx}',
+                 fontsize=13, fontweight='bold', pad=12)
+    cbar = plt.colorbar(im, ax=ax)
+    cbar.set_label('Mean True Activity (z-scored)', fontweight='bold')
+
+    plt.tight_layout()
+
+    png_path = os.path.join(args.output_dir,
+                            f"heatmap_groundtruth_s{session_idx:02d}_n{neuron_idx:02d}.png")
+    plt.savefig(png_path, dpi=150)
+    plt.close()
+
+    # Re-encode through imageio so the ground truth GIF uses the same
+    # 256-color palette quantization as the prediction animation frames.
+    if IMAGEIO_AVAILABLE:
+        import imageio.v2 as iio
+        gif_path = os.path.join(args.output_dir,
+                                f"heatmap_groundtruth_s{session_idx:02d}_n{neuron_idx:02d}.gif")
+        iio.mimsave(gif_path, [iio.imread(png_path)], fps=1, loop=0)
+        print(f"Ground truth heatmap saved: {gif_path}")
+    else:
+        print(f"Ground truth heatmap saved: {png_path}")
+
+    return xedges, yedges, count
+
+
+def _create_heatmap_viz(args, epoch, input_pca_coords, predictions, xlabel, ylabel,
+                        neuron_idx, session_idx, vmin, vmax,
+                        xedges, yedges, count):
+    """Predicted activity heatmap over the 2D input projection for one epoch."""
+    bins = 40
+
     h_pred, _, _ = np.histogram2d(
         input_pca_coords[:, 0], input_pca_coords[:, 1],
         bins=bins, weights=predictions
     )
-    h_target = np.divide(h_target, count, where=count > 0, out=np.zeros_like(h_target))
-    h_pred   = np.divide(h_pred,   count, where=count > 0, out=np.zeros_like(h_pred))
-
-    # Smooth before plotting; sigma=1.5 blurs across ~1-2 bins without destroying structure
-    h_target = gaussian_filter(h_target, sigma=1.5)
-    h_pred   = gaussian_filter(h_pred,   sigma=1.5)
+    h_pred = np.divide(h_pred, count, where=count > 0, out=np.zeros_like(h_pred))
+    h_pred = gaussian_filter(h_pred, sigma=1.5)
 
     extent = [xedges[0], xedges[-1], yedges[0], yedges[-1]]
-    fig, axes = plt.subplots(1, 2, figsize=(16, 6))
+    fig, ax = plt.subplots(figsize=(8, 6))
 
-    for ax, h, title, label in [
-        (axes[0], h_target, 'True Activity',     'Mean True Activity (z-scored)'),
-        (axes[1], h_pred,   'MLP Predictions',   'Mean Prediction (z-scored)'),
-    ]:
-        im = ax.imshow(h.T, extent=extent, origin='lower', aspect='auto',
-                       cmap='RdYlBu_r', interpolation='bilinear', vmin=vmin, vmax=vmax)
-        ax.set_xlabel(f'PC1 ({ev[0]:.1%} var. explained)', fontsize=12, fontweight='bold')
-        ax.set_ylabel(f'PC2 ({ev[1]:.1%} var. explained)', fontsize=12, fontweight='bold')
-        ax.set_title(f'{title} | Input PCA\nSession {session_idx} | Neuron {neuron_idx} | Epoch {epoch + 1}',
-                     fontsize=13, fontweight='bold', pad=12)
-        cbar = plt.colorbar(im, ax=ax)
-        cbar.set_label(label, fontweight='bold')
+    im = ax.imshow(h_pred.T, extent=extent, origin='lower', aspect='auto',
+                   cmap='RdYlBu_r', interpolation='bilinear', vmin=vmin, vmax=vmax)
+    ax.set_xlabel(xlabel, fontsize=12, fontweight='bold')
+    ax.set_ylabel(ylabel, fontsize=12, fontweight='bold')
+    ax.set_title(f'MLP Predictions | Input Space\nSession {session_idx} | {unit_label} {neuron_idx} | Epoch {epoch + 1}',
+                 fontsize=13, fontweight='bold', pad=12)
+    cbar = plt.colorbar(im, ax=ax)
+    cbar.set_label('Mean Prediction (z-scored)', fontweight='bold')
 
     plt.tight_layout()
 
@@ -426,22 +459,52 @@ pca_embed = PCA(n_components=3)
 pca_embed.fit(initial_embeddings)
 print(f"Embedding PCA explained variance: {pca_embed.explained_variance_ratio_}")
 
-# 2-component PCA of the raw inputs — fixed axes for the heatmap
+# 2D projection of the raw inputs — fixed axes for the heatmap
 train_data_np = train_data.cpu().numpy()
-pca_input = PCA(n_components=2)
-pca_input.fit(train_data_np)
-input_pca_coords = pca_input.transform(train_data_np)
-print(f"Input PCA explained variance: {pca_input.explained_variance_ratio_}")
+all_feature_cols = action_enc_cols + state_enc_cols + zone_onehot_cols
+
+if args.focus_var is not None:
+    if args.focus_var not in all_feature_cols:
+        raise ValueError(
+            f"--focus_var '{args.focus_var}' not found in feature columns.\n"
+            f"Available: {all_feature_cols}"
+        )
+    focus_idx = all_feature_cols.index(args.focus_var)
+    remainder_idx = [i for i in range(train_data_np.shape[1]) if i != focus_idx]
+    pca_remainder = PCA(n_components=1)
+    pca_remainder.fit(train_data_np[:, remainder_idx])
+    focus_vals    = train_data_np[:, focus_idx]
+    remainder_pc1 = pca_remainder.transform(train_data_np[:, remainder_idx])[:, 0]
+    input_pca_coords = np.stack([focus_vals, remainder_pc1], axis=1)
+    ev_rem = pca_remainder.explained_variance_ratio_[0]
+    heatmap_xlabel = args.focus_var
+    heatmap_ylabel = f'PC1 of remaining {len(remainder_idx)} vars ({ev_rem:.1%} var. explained)'
+    print(f"Focus mode: X = '{args.focus_var}', Y = PC1 of {len(remainder_idx)} remaining vars "
+          f"({ev_rem:.1%} var. explained)")
+else:
+    pca_input = PCA(n_components=2)
+    pca_input.fit(train_data_np)
+    input_pca_coords = pca_input.transform(train_data_np)
+    ev = pca_input.explained_variance_ratio_
+    heatmap_xlabel = f'PC1 ({ev[0]:.1%} var. explained)'
+    heatmap_ylabel = f'PC2 ({ev[1]:.1%} var. explained)'
+    print(f"Input PCA explained variance: {ev}")
 
 # Fixed color scale from the true labels so all frames are comparable
 color_vmin = float(train_labels_np[:, neuron_idx].min())
 color_vmax = float(train_labels_np[:, neuron_idx].max())
 
+# Generate ground truth heatmap once (no epoch counter)
+gt_xedges, gt_yedges, gt_count = _create_ground_truth_heatmap(
+    args, input_pca_coords, heatmap_xlabel, heatmap_ylabel,
+    train_labels_np, neuron_idx, best_session_idx, color_vmin, color_vmax
+)
+
 # Store training history
 train_losses = []
 epoch_visualizations = []
 gif_frames_scatter = []  # For scatter plot GIF
-gif_frames_heatmap = []   # For heatmap GIF
+gif_frames_heatmap = []  # For predictions heatmap GIF
 
 for epoch in range(args.num_epochs):
     model.train()
@@ -466,9 +529,10 @@ for epoch in range(args.num_epochs):
                             train_labels_np, neuron_idx, best_session_idx,
                             color_vmin, color_vmax)
 
-        _create_heatmap_viz(args, epoch, pca_input, input_pca_coords, predictions,
-                            train_labels_np, neuron_idx, best_session_idx,
-                            color_vmin, color_vmax)
+        _create_heatmap_viz(args, epoch, input_pca_coords, predictions,
+                            heatmap_xlabel, heatmap_ylabel,
+                            neuron_idx, best_session_idx, color_vmin, color_vmax,
+                            gt_xedges, gt_yedges, gt_count)
         
         epoch_visualizations.append({
             'epoch': epoch + 1,
@@ -497,8 +561,9 @@ metadata = {
     'losses': train_losses,
     'pca_embed_components': pca_embed.components_,
     'pca_embed_explained_variance': pca_embed.explained_variance_ratio_,
-    'pca_input_components': pca_input.components_,
-    'pca_input_explained_variance': pca_input.explained_variance_ratio_,
+    'focus_var': args.focus_var,
+    'heatmap_xlabel': heatmap_xlabel,
+    'heatmap_ylabel': heatmap_ylabel,
 }
 
 metadata_path = os.path.join(args.output_dir, 
@@ -519,13 +584,13 @@ fig, ax = plt.subplots(figsize=(10, 5))
 ax.plot(train_losses, linewidth=2.5, color='steelblue', label='Training MSE Loss')
 ax.set_xlabel('Epoch', fontsize=12, fontweight='bold')
 ax.set_ylabel('Mean Squared Error (MSE)', fontsize=12, fontweight='bold')
-ax.set_title(f'MLP Training Convergence: MSE Loss Trajectory\nSession {best_session_id} (Index {best_session_idx}) | Neuron {neuron_idx} | Seed {seed}', 
+ax.set_title(f'MLP Training Convergence: MSE Loss Trajectory\nSession {best_session_id} (Index {best_session_idx}) | {unit_label} {neuron_idx} | Seed {seed}',
              fontsize=13, fontweight='bold', pad=12)
 ax.grid(True, alpha=0.3, linestyle='--')
 ax.legend(loc='upper right', fontsize=11, framealpha=0.95)
 plt.tight_layout()
 
-summary_path = os.path.join(args.output_dir, 
+summary_path = os.path.join(args.output_dir,
                            f"loss_curve_s{best_session_idx:02d}_n{neuron_idx:02d}.png")
 plt.savefig(summary_path, dpi=150, bbox_inches='tight')
 plt.close()
@@ -537,14 +602,15 @@ print(f"Summary plot saved to {summary_path}")
 # ============================================================================
 
 if args.make_gif and IMAGEIO_AVAILABLE:
+    import imageio.v2 as iio
     print("\nCreating animated GIFs...")
 
     if gif_frames_scatter:
         try:
             scatter_gif_path = os.path.join(args.output_dir,
                                             f"scatter_animation_s{best_session_idx:02d}_n{neuron_idx:02d}.gif")
-            frames_scatter = [imageio.imread(f) for f in gif_frames_scatter]
-            imageio.mimsave(scatter_gif_path, frames_scatter, fps=args.gif_fps, loop=0)
+            frames_scatter = [iio.imread(f) for f in gif_frames_scatter]
+            iio.mimsave(scatter_gif_path, frames_scatter, fps=args.gif_fps, loop=0)
             print(f"✓ Scatter GIF saved: {scatter_gif_path}")
             print(f"  ({len(gif_frames_scatter)} frames, {args.gif_fps} fps)")
         except Exception as e:
@@ -554,12 +620,28 @@ if args.make_gif and IMAGEIO_AVAILABLE:
         try:
             heatmap_gif_path = os.path.join(args.output_dir,
                                             f"heatmap_animation_s{best_session_idx:02d}_n{neuron_idx:02d}.gif")
-            frames_heatmap = [imageio.imread(f) for f in gif_frames_heatmap]
-            imageio.mimsave(heatmap_gif_path, frames_heatmap, fps=args.gif_fps, loop=0)
+            frames_heatmap = [iio.imread(f) for f in gif_frames_heatmap]
+            iio.mimsave(heatmap_gif_path, frames_heatmap, fps=args.gif_fps, loop=0)
             print(f"✓ Heatmap GIF saved: {heatmap_gif_path}")
             print(f"  ({len(gif_frames_heatmap)} frames, {args.gif_fps} fps)")
         except Exception as e:
             print(f"✗ Failed to create heatmap GIF: {e}")
+    # Delete intermediate per-epoch PNGs and the raw ground truth PNG now
+    # that everything has been encoded into GIFs.
+    intermediate = gif_frames_scatter + gif_frames_heatmap
+    gt_png = os.path.join(args.output_dir,
+                          f"heatmap_groundtruth_s{best_session_idx:02d}_n{neuron_idx:02d}.png")
+    if os.path.exists(gt_png):
+        intermediate.append(gt_png)
+    removed, failed = 0, 0
+    for p in intermediate:
+        try:
+            os.remove(p)
+            removed += 1
+        except OSError:
+            failed += 1
+    print(f"Cleaned up {removed} intermediate PNG(s)" +
+          (f" ({failed} could not be removed)" if failed else ""))
 elif args.make_gif and not IMAGEIO_AVAILABLE:
     print("\nWARNING: GIF creation requested but imageio not installed.")
     print("Install with: pip install imageio")

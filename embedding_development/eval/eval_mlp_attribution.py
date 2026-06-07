@@ -33,6 +33,11 @@ from scipy.stats import spearmanr
 import sys
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "utils"))
 from models import MLP
+from figure_style import (
+    FIG, DPI, FONT, LINE, MARKER,
+    MODEL_COLORS, FEATURE_NAMES_SHORT,
+    apply_style, add_footnote, add_panel_label, savefig_manifest,
+)
 
 # ═══════════════════════════════════ CONFIG ═══════════════════════════════════
 USE_ENSEMBLES    = True
@@ -40,7 +45,7 @@ SEEDS            = [42, 43, 44, 45, 46]
 N_PERM_REPEATS   = 5
 R2_THRESHOLD     = 0.01
 
-RUN_EVAL         = False   # recompute R² metrics
+RUN_EVAL         = True    # recompute R² metrics
 RUN_GLOBAL_PV    = True    # method 1 — semantic groups
 RUN_COND_PV      = True    # method 2 — semantic groups
 RUN_IG           = True    # method 3 — semantic + signed
@@ -71,11 +76,12 @@ unit_label_pl = unit_label + "s"
 
 
 def savefig(name):
-    if SAVE_PLOTS:
-        plt.savefig(os.path.join(output_dir, name), dpi=150, bbox_inches='tight')
     if SHOW_PLOTS:
         plt.show()
-    plt.close()
+    if SAVE_PLOTS:
+        savefig_manifest(plt.gcf(), name, [output_dir])
+    else:
+        plt.close()
 
 
 print(f"mode={mode_str}  seeds={SEEDS}")
@@ -124,10 +130,10 @@ non_categorical_cols = [
     'frame_YawPitch_abs_acc_sum_500msMedian',
     'head_angle_vel',
     'head_angle',
-    'movement_energy_smooth5',
+    'frame_position',
 ]
 categorical_variables = [
-    'track_zone_int', 'cue_visible', 'upcoming_choice', 'reward_window', 'lick_detected',
+    'cue_visible', 'upcoming_choice', 'reward_window', 'lick_detected',
 ]
 zone_onehot_cols = []
 for col in categorical_variables:
@@ -462,8 +468,9 @@ r2_plot[m_show] = np.nan
 NO_DATA_COLOR = '#bbbbbb'
 cmap_r2 = plt.cm.Blues.copy(); cmap_r2.set_bad(color=NO_DATA_COLOR)
 
-cell_h, cell_w = 0.45, 0.50
-fig, ax = plt.subplots(figsize=(max(14, n_vs * cell_w), max(8, N_SHOW * cell_h)))
+cell_h, cell_w = 0.25, 0.40
+fig, ax = plt.subplots(figsize=(max(10, n_vs * cell_w), max(4, N_SHOW * cell_h)))
+apply_style(fig, ax)
 sns.heatmap(r2_plot, cmap=cmap_r2, vmin=0, vmax=1,
             xticklabels=[f"S{j+1}" for j in valid_s_idx],
             yticklabels=[f"{prefix_name}{sorted_n[i]+1:02d}" for i in range(N_SHOW)],
@@ -471,10 +478,10 @@ sns.heatmap(r2_plot, cmap=cmap_r2, vmin=0, vmax=1,
 for (i, j) in zip(*np.where(m_show)):
     ax.add_patch(plt.Rectangle([j, i], 1, 1, fill=True, facecolor=NO_DATA_COLOR,
                                 hatch='////', edgecolor='#888888', lw=0.5, zorder=2))
-ax.set_xticklabels(ax.get_xticklabels(), rotation=45, ha='right', fontsize=11)
-ax.set_yticklabels(ax.get_yticklabels(), fontsize=13)
+ax.set_xticklabels(ax.get_xticklabels(), rotation=45, ha='right', fontsize=8)
+ax.set_yticklabels(ax.get_yticklabels(), fontsize=8)
 ax.set_title(f'MLP Mean R² Across {len(SEEDS)} Seeds\n'
-             f'(Top {N_SHOW} {unit_label_pl.capitalize()} sorted by mean R²)', fontsize=16, pad=12)
+             f'(Top {N_SHOW} {unit_label_pl.capitalize()} sorted by mean R²)', fontsize=9, pad=8)
 plt.tight_layout()
 savefig("r2_heatmap.png")
 
@@ -487,6 +494,7 @@ means_bar      = neuron_mean_r2[order_bar]
 pal            = sns.color_palette("mako_r", as_cmap=True)(np.linspace(0.15, 0.85, num_neurons))
 
 fig, ax = plt.subplots(figsize=(16, 5))
+apply_style(fig, ax)
 ax.bar(x, means_bar, width=0.7, color=pal, zorder=3, linewidth=0)
 ax.axhline(0, color='firebrick', linestyle='--', linewidth=1)
 for pos in range(num_neurons - 5, num_neurons):
@@ -495,6 +503,7 @@ for pos in range(num_neurons - 5, num_neurons):
 ax.set_xticks(x[::3])
 ax.set_xticklabels(labels_bar[::3], rotation=45, ha='right', fontsize=8)
 ax.set_ylabel("Mean R²")
+ax.set_ylim(0, 0.2)
 ax.set_title(f"Per-{unit_label.capitalize()} Mean R² Across {len(SEEDS)} Seeds × {num_sessions} Sessions")
 ax.spines[['top', 'right']].set_visible(False)
 plt.tight_layout()
@@ -913,6 +922,7 @@ def _imp_bar(imp_flat, feat_labels, title, fname, ylabel='Mean R² drop'):
     feat_order = np.argsort(feat_mean)[::-1]
     x = np.arange(len(feat_labels))
     fig, ax = plt.subplots(figsize=(max(8, len(feat_labels) * 0.5), 5))
+    apply_style(fig, ax)
     ax.bar(x, feat_mean[feat_order], yerr=feat_std[feat_order],
            color='steelblue', capsize=4, alpha=0.8)
     ax.set_xticks(x)
@@ -936,12 +946,14 @@ def _imp_heatmap(imp_masked, feat_labels, title, fname, cbar_label='importance')
     valid_vals = hm[~np.isnan(hm)]
     vmax = float(np.nanpercentile(valid_vals, 98)) if len(valid_vals) > 0 else 1.0
     n_cols = len(sorted_orig)
-    fig, ax = plt.subplots(figsize=(max(8, n_cols * 0.65), max(4, len(feat_labels) * 0.45)))
+    fig, ax = plt.subplots(figsize=(max(10, n_cols * 0.40), max(4, len(feat_labels) * 0.25)))
+    apply_style(fig, ax)
     sns.heatmap(hm, xticklabels=xtick_lab, yticklabels=feat_labels,
                 cmap='Blues', ax=ax, vmin=0, vmax=vmax,
                 cbar_kws={'label': f'{cbar_label} (max={vmax:.3f})'})
-    ax.set_xticklabels(ax.get_xticklabels(), rotation=45, ha='right', fontsize=9)
-    ax.set_title(title, fontsize=13)
+    ax.set_xticklabels(ax.get_xticklabels(), rotation=45, ha='right', fontsize=8)
+    ax.set_yticklabels(ax.get_yticklabels(), fontsize=8)
+    ax.set_title(title, fontsize=9)
     plt.tight_layout()
     savefig(fname)
 
@@ -1018,6 +1030,7 @@ for li, (v, l, ci) in enumerate(multilevel_cat_info):
     _var_to_levels.setdefault(v, []).append((l, li))
 
 fig, ax = plt.subplots(figsize=(max(10, n_level_cols * 0.6 + 2), 5))
+apply_style(fig, ax)
 _x      = 0
 _xticks, _xlabels = [], []
 _cluster_gap = 0.4
@@ -1061,6 +1074,7 @@ r2_lvl_std  = np.nanstd(r2_lvl_flat,  axis=0)
 cnt_mean    = np.nanmean(counts_per_lvl.reshape(-1, n_level_cols), axis=0).astype(int)
 
 fig, ax = plt.subplots(figsize=(max(10, n_level_cols * 0.6 + 2), 5))
+apply_style(fig, ax)
 _x = 0
 _xticks, _xlabels = [], []
 for var in _lvl_vars:
@@ -1098,6 +1112,7 @@ print("Saved r2_per_level.png")
 # ══════════════════════════════════════════════════════════════════════════════
 # Feature correlation dendrogram over semantic variables
 fig, ax = plt.subplots(figsize=(max(10, n_groups * 0.6), 4))
+apply_style(fig, ax)
 _dg(Z_sem, labels=group_names, ax=ax, leaf_rotation=45,
     color_threshold=CLUSTER_DIST_THR, above_threshold_color='grey')
 ax.axhline(CLUSTER_DIST_THR, color='firebrick', linestyle='--', lw=1.2,
@@ -1122,6 +1137,7 @@ ig_mean_s  = np.nanmean(flat_ig_s[valid_rows],  axis=0)
 
 # ── Global PV vs Cond-PV scatter (semantic) ─────────────────────────────────
 fig, ax = plt.subplots(figsize=(7, 7))
+apply_style(fig, ax)
 ax.scatter(gpv_mean_s, cpv_mean_s, s=80,
            c=np.arange(n_groups), cmap='tab20', zorder=3)
 for i, name in enumerate(group_names):
@@ -1142,6 +1158,7 @@ print("Saved global_vs_cond_pv_scatter.png")
 
 # ── Global PV vs IG scatter (semantic) ──────────────────────────────────────
 fig, ax = plt.subplots(figsize=(7, 7))
+apply_style(fig, ax)
 ax.scatter(gpv_mean_s, ig_mean_s, s=80,
            c=np.arange(n_groups), cmap='tab20', zorder=3)
 for i, name in enumerate(group_names):
@@ -1166,6 +1183,7 @@ sg_ig_mean = np.array([
 sg_pv_mean = np.nanmean(supergrouped_pv_m.reshape(-1, n_supergroups), axis=0)
 
 fig, ax = plt.subplots(figsize=(7, 7))
+apply_style(fig, ax)
 ax.scatter(sg_pv_mean, sg_ig_mean, s=80, c=np.arange(n_supergroups), cmap='tab20', zorder=3)
 for i, name in enumerate(supergroup_names):
     ax.annotate(name[:22], (sg_pv_mean[i], sg_ig_mean[i]),
@@ -1194,6 +1212,7 @@ for i, mi in enumerate(method_names_s):
             rho_m[i, j] = spearmanr(_vectors_s[mi], _vectors_s[mj]).statistic
 
 fig, ax = plt.subplots(figsize=(5, 4))
+apply_style(fig, ax)
 sns.heatmap(rho_m, annot=True, fmt='.2f', xticklabels=method_names_s,
             yticklabels=method_names_s, cmap='RdBu_r', center=0, vmin=-1, vmax=1,
             ax=ax, cbar_kws={'label': 'Spearman ρ'})
@@ -1205,6 +1224,7 @@ print("Saved method_rank_correlation.png")
 
 # ── Side-by-side ranking bars (semantic) ─────────────────────────────────────
 fig, axes = plt.subplots(1, 3, figsize=(18, 5), sharey=True)
+apply_style(fig, axes)
 for ax, (mname, mvec) in zip(axes, _vectors_s.items()):
     order_m = np.argsort(mvec)[::-1]
     ax.barh(np.arange(n_groups), mvec[order_m], color='steelblue', alpha=0.8)
@@ -1230,6 +1250,7 @@ sg_sum_ind  = np.array([
 sg_grp = np.nanmean(flat_sgpv, axis=0)
 
 fig, ax = plt.subplots(figsize=(max(8, n_supergroups * 0.9), 5))
+apply_style(fig, ax)
 x = np.arange(n_supergroups)
 w = 0.35
 ax.bar(x - w/2, sg_sum_ind, w, label='Sum of semantic-group PV', color='steelblue', alpha=0.8)
@@ -1277,6 +1298,7 @@ if _old_gpv_avail:
                      for i in _order_old]
 
     fig, ax = plt.subplots(figsize=(13, 5))
+    apply_style(fig, ax)
     x = np.arange(n_feats)
     ax.bar(x, _old_mean[_order_old], yerr=_old_std[_order_old],
            color=_bar_colors, capsize=3, alpha=0.85)
@@ -1439,6 +1461,7 @@ if RUN_EVOLUTION:
         _hm_top[_hm_top < 0] = np.nan
         fig, ax = plt.subplots(
             figsize=(max(8, num_sessions * 0.45), max(4, len(_vn_top) * 0.38)))
+        apply_style(fig, ax)
         _cmap_top = plt.cm.get_cmap('tab20', n_groups)
         _cmap_top.set_bad(NO_DATA_COLOR)
         _im = ax.imshow(_hm_top, aspect='auto', cmap=_cmap_top,
@@ -1459,6 +1482,7 @@ if RUN_EVOLUTION:
     if _vn_stab:
         _order_stab = sorted(_vn_stab, key=lambda n: _evo_stab_gpv[n], reverse=True)
         fig, ax = plt.subplots(figsize=(max(8, len(_vn_stab) * 0.42), 4))
+        apply_style(fig, ax)
         _xs = np.arange(len(_vn_stab))
         ax.bar(_xs - 0.2, [_evo_stab_gpv[n] for n in _order_stab], 0.38,
                label='Global PV', color='steelblue', alpha=0.82)
@@ -1481,6 +1505,7 @@ if RUN_EVOLUTION:
     _mean_sim_gpv = np.nanmean(_evo_sim_gpv[valid_neurons], axis=0)
     _mean_sim_ig  = np.nanmean(_evo_sim_ig[valid_neurons],  axis=0)
     fig, axes = plt.subplots(1, 2, figsize=(14, 5))
+    apply_style(fig, axes)
     for _ax, _mat, _title in zip(axes,
                                   [_mean_sim_gpv, _mean_sim_ig],
                                   ['Global PV',  'IG']):
@@ -1508,6 +1533,7 @@ if RUN_EVOLUTION:
         ]
         fig, ax = plt.subplots(
             figsize=(max(8, len(_vn_sig_idx) * 0.45), max(4, n_groups * 0.42)))
+        apply_style(fig, ax)
         sns.heatmap(_sig_hm.T, xticklabels=_xlabels_cl, yticklabels=group_names,
                     cmap='Blues', ax=ax, cbar_kws={'label': 'Mean importance'},
                     linewidths=0.3)
@@ -1521,6 +1547,7 @@ if RUN_EVOLUTION:
     # Fig A5 (optional): behavioral performance vs encoding quality
     if _sess_reward is not None:
         fig, ax = plt.subplots(figsize=(5, 4))
+        apply_style(fig, ax)
         _sess_mean_r2_plot = np.nanmean(np.where(mask, np.nan, mean_r2), axis=1)
         ax.scatter(_sess_reward, _sess_mean_r2_plot, alpha=0.75, color='steelblue', s=55)
         ax.set_xlabel('Mean reward rate (session)')
@@ -1614,6 +1641,7 @@ if RUN_EVOLUTION:
         fig, axes = plt.subplots(_nrows, _ncols,
                                  figsize=(_ncols * 5.5, _nrows * 3.8),
                                  sharey=True, squeeze=False)
+        apply_style(fig, axes.flatten())
         for _pi, _ni in enumerate(_neurons):
             _ax = axes[_pi // _ncols][_pi % _ncols]
             for _li, _gi in enumerate(_by_neuron[_ni]):
@@ -1707,6 +1735,7 @@ if RUN_EVOLUTION:
             _nrows, _ncols,
             figsize=(_ncols * 7, _nrows * max(3.5, n_groups * 0.35)),
             squeeze=False)
+        apply_style(fig, axes.flatten())
         _af    = axes.flatten()
         _cmap  = plt.cm.Blues.copy()
         _cmap.set_bad(NO_DATA_COLOR)
@@ -1736,11 +1765,11 @@ if RUN_EVOLUTION:
                         hatch='////', edgecolor='#888888', lw=0.5, zorder=2))
             _ax.set_xticklabels(_ax.get_xticklabels(),
                                 rotation=45, ha='right', fontsize=8)
-            _ax.set_yticklabels(_ax.get_yticklabels(), fontsize=9)
+            _ax.set_yticklabels(_ax.get_yticklabels(), fontsize=8)
             _ax.set_title(
                 f"{prefix_name}{_n_idx+1:02d} — max R²={_nm_max[_n_idx]:.3f}",
-                fontsize=12)
-            _ax.set_xlabel('Session', fontsize=10)
+                fontsize=9)
+            _ax.set_xlabel('Session', fontsize=8)
 
         for _k in range(len(top_neurons), len(_af)):
             _af[_k].set_visible(False)
@@ -1916,6 +1945,7 @@ if RUN_DISCOVERY:
 
         # Trend
         fig, ax = plt.subplots(figsize=(_fw, _fh))
+        apply_style(fig, ax)
         sns.heatmap(_trend.T, xticklabels=_hm_xticks, yticklabels=group_names,
                     cmap='RdBu_r', center=0, ax=ax,
                     cbar_kws={'label': 'Spearman ρ'},
@@ -1928,6 +1958,7 @@ if RUN_DISCOVERY:
 
         # Max step
         fig, ax = plt.subplots(figsize=(_fw, _fh))
+        apply_style(fig, ax)
         sns.heatmap(_step.T, xticklabels=_hm_xticks, yticklabels=group_names,
                     cmap='YlOrRd', ax=ax,
                     cbar_kws={'label': 'Max consecutive step'},
@@ -1939,6 +1970,7 @@ if RUN_DISCOVERY:
 
         # Composite score
         fig, ax = plt.subplots(figsize=(_fw, _fh))
+        apply_style(fig, ax)
         sns.heatmap(_comp.T, xticklabels=_hm_xticks, yticklabels=group_names,
                     cmap='viridis', ax=ax,
                     cbar_kws={'label': 'Composite score'},
@@ -1953,6 +1985,7 @@ if RUN_DISCOVERY:
 
     # Cross-method disagreement panel
     fig, ax = plt.subplots(figsize=(max(8, num_neurons * 0.42), max(4, n_groups * 0.42)))
+    apply_style(fig, ax)
     sns.heatmap(_disc_disagree.T, xticklabels=_hm_xticks, yticklabels=group_names,
                 cmap='Oranges', ax=ax,
                 cbar_kws={'label': '|z(GPV) − z(IG)|'},

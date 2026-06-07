@@ -18,7 +18,7 @@ Sections:
   6. Confound analysis — partial correlation: does head_angle's strength
      survive partialling out movement_energy and track_zone?
 """
-import os, pickle
+import os, pickle, shutil
 import numpy as np
 import pandas as pd
 import torch
@@ -28,8 +28,15 @@ matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import seaborn as sns
 from scipy.stats import spearmanr, pearsonr
+
+import sys as _sys
+_sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'utils'))
+from figure_style import (
+    FIG, DPI, FONT, LINE, MARKER,
+    MODEL_COLORS, FEATURE_NAMES_SHORT,
+    apply_style, add_footnote, add_panel_label, savefig_manifest,
+)
 from sklearn.metrics import r2_score
-from datetime import datetime
 
 import sys
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "utils"))
@@ -58,20 +65,19 @@ models_root  = f"./models/mlps/{mode_str}"
 splits_dir   = "./splits"
 attr_dir     = f"./outputs/mlps/{mode_str}_multiseed"
 
-ts           = datetime.now().strftime('%Y%m%d_%H%M')
-output_dir   = f"./outputs/mlps/head_angle_analysis_{ts}"
-desktop_dir  = f"/mnt/c/Users/amits/Desktop/head_angle_analysis_{ts}"
-os.makedirs(output_dir, exist_ok=True)
-os.makedirs(desktop_dir, exist_ok=True)
+output_dir   = "./outputs/mlps/head_angle_analysis"
+desktop_dir  = "/mnt/c/Users/amits/Desktop/head_angle_analysis"
+for d in (output_dir, desktop_dir):
+    if os.path.exists(d):
+        shutil.rmtree(d)
+    os.makedirs(d)
 
 print(f"Output: {output_dir}")
 print(f"Desktop: {desktop_dir}")
 
 
 def savefig(name):
-    for d in (output_dir, desktop_dir):
-        plt.savefig(os.path.join(d, name), dpi=150, bbox_inches='tight')
-    plt.close()
+    savefig_manifest(plt.gcf(), name, [output_dir, desktop_dir])
     print(f"  Saved {name}")
 
 
@@ -202,8 +208,10 @@ def _load_model(s_idx, n_idx, seed=42):
                          f"session_{s_idx:02d}_neuron_{n_idx:02d}.pt")
     if not os.path.exists(mpath):
         return None
-    m = MLP(input_size, hidden_size, num_hidden_layers, output_size).to(device)
-    m.load_state_dict(torch.load(mpath, map_location=device))
+    state_dict = torch.load(mpath, map_location=device)
+    actual_input_size = state_dict['fc.0.weight'].shape[1]
+    m = MLP(actual_input_size, hidden_size, num_hidden_layers, output_size).to(device)
+    m.load_state_dict(state_dict)
     m.eval()
     return m
 
@@ -246,6 +254,7 @@ if RUN_CHAR:
         sess_labs.append(f"S{_i+1}")
 
     fig, ax = plt.subplots(figsize=(max(10, num_sessions * 0.6), 4))
+    apply_style(fig, ax)
     ax.violinplot(ha_data, positions=range(num_sessions), showmedians=True, widths=0.7)
     ax.set_xticks(range(num_sessions))
     ax.set_xticklabels(sess_labs, fontsize=8, rotation=45)
@@ -282,6 +291,7 @@ if RUN_CHAR:
 
     # Figure 1c: correlation bar chart
     fig, ax = plt.subplots(figsize=(max(8, len(corr_vars) * 0.6), 4))
+    apply_style(fig, ax)
     _names = list(corr_vars.keys())
     _rhos  = [corr_vars[n][0] for n in _names]
     _pvals = [corr_vars[n][1] for n in _names]
@@ -309,6 +319,7 @@ if RUN_CHAR:
     _acf    = [float(np.corrcoef(_ha0[:-k], _ha0[k:])[0, 1]) if k > 0 else 1.0
                for k in range(_maxlag)]
     fig, ax = plt.subplots(figsize=(8, 3.5))
+    apply_style(fig, ax)
     ax.plot(range(_maxlag), _acf, color='steelblue', lw=1.5)
     ax.axhline(0, color='black', lw=0.7)
     ax.axhline(0.1,  color='grey', lw=0.7, linestyle='--', alpha=0.5)
@@ -325,6 +336,7 @@ if RUN_CHAR:
     _sess_ha_range = df_ha['range'].values
     _rho_r2_ha, _p_r2_ha = spearmanr(_sess_ha_range, _sess_mean_r2, nan_policy='omit')
     fig, ax = plt.subplots(figsize=(5, 4))
+    apply_style(fig, ax)
     ax.scatter(_sess_ha_range, _sess_mean_r2, alpha=0.75, color='steelblue', s=55)
     for _i, (_r, _m) in enumerate(zip(_sess_ha_range, _sess_mean_r2)):
         ax.annotate(f'S{_i+1}', (_r, _m), fontsize=7, ha='left', va='bottom')
@@ -366,6 +378,7 @@ if RUN_RANKING:
 
     # Figure 2a: grouped bar chart — head_angle attribution per ensemble
     fig, ax = plt.subplots(figsize=(max(10, num_ensembles * 0.65), 4.5))
+    apply_style(fig, ax)
     _x  = np.arange(num_ensembles)
     _w  = 0.25
     ax.bar(_x - _w, ha_gpv[order], _w, label='Global PV',  color='steelblue', alpha=0.85)
@@ -385,6 +398,7 @@ if RUN_RANKING:
     # Figure 2b: head_angle vs all-features attribution comparison (each ensemble)
     mean_all_gpv = np.nanmean(np.nanmean(gpv_m, axis=0), axis=1)  # (ensembles,) - mean over all groups
     fig, ax = plt.subplots(figsize=(max(8, num_ensembles * 0.55), 4))
+    apply_style(fig, ax)
     _x = np.arange(num_ensembles)
     order2 = np.argsort(mean_all_gpv)[::-1]
     ax.bar(_x, mean_all_gpv[order2], label='All features (mean GPV)', color='grey', alpha=0.6)
@@ -445,6 +459,7 @@ if RUN_SCATTER:
     _nr = int(np.ceil(len(top_pairs) / 3))
     _nc = min(3, len(top_pairs))
     fig, axes = plt.subplots(_nr, _nc, figsize=(_nc * 5, _nr * 4.5), squeeze=False)
+    apply_style(fig, axes.flatten() if hasattr(axes, "__iter__") else [axes])
     _af = axes.flatten()
 
     for _k, (s_i, n_i) in enumerate(top_pairs):
@@ -486,6 +501,7 @@ if RUN_SCATTER:
         _valid_sess.append(s_i + 1)
 
     fig, ax = plt.subplots(figsize=(max(8, num_sessions * 0.55), 4))
+    apply_style(fig, ax)
     _colors = ['steelblue' if not np.isnan(r) else '#bbbbbb' for r in _rhos_by_sess]
     ax.bar(range(num_sessions), _rhos_by_sess, color=_colors)
     ax.axhline(0, color='black', lw=0.8)
@@ -598,6 +614,7 @@ if RUN_ABLATION:
         _x  = np.arange(_n_pairs)
         _w  = 0.20
         fig, ax = plt.subplots(figsize=(max(8, _n_pairs * 1.2), 4.5))
+        apply_style(fig, ax)
         ax.bar(_x - 1.5*_w, df_abl['r2_full'],     _w, label='Full model',           color='#2196F3', alpha=0.85)
         ax.bar(_x - 0.5*_w, df_abl['r2_ha_only'],  _w, label='Only head_angle',      color='#FF9800', alpha=0.85)
         ax.bar(_x + 0.5*_w, df_abl['r2_ha_vel_only'], _w, label='head_angle + vel',  color='#FF5722', alpha=0.85)
@@ -732,6 +749,7 @@ if RUN_SINGLEFEAT:
 
         # Figure 5: scatter — head-angle-only R² vs full model R²
         fig, ax = plt.subplots(figsize=(5.5, 5))
+        apply_style(fig, ax)
         ax.scatter(df_sf['r2_full_seedavg'], df_sf['r2_ha_mean'],
                    s=80, color='steelblue', zorder=5, label='head_angle only')
         ax.scatter(df_sf['r2_full_seedavg'], df_sf['r2_hav_mean'],
@@ -757,6 +775,7 @@ if RUN_SINGLEFEAT:
 
         # Figure 5b: bar chart percentage explained
         fig, ax = plt.subplots(figsize=(max(7, len(df_sf) * 1.2), 4))
+        apply_style(fig, ax)
         _lbs = [f"S{r['session']} {r['ensemble']}" for _, r in df_sf.iterrows()]
         ax.bar(range(len(df_sf)), df_sf['ha_explains_pct'], color='steelblue', alpha=0.85)
         ax.axhline(100, color='coral', linestyle='--', lw=1.2, label='100% (= full model)')
@@ -832,6 +851,7 @@ if RUN_CONFOUND:
 
     # Figure 6a: raw vs partial correlation scatter
     fig, ax = plt.subplots(figsize=(5, 5))
+    apply_style(fig, ax)
     ax.scatter(df_partial['raw_spearman_ha'].abs(),
                df_partial['partial_r_ha_ctrl_me'].abs(),
                alpha=0.35, s=12, color='steelblue', rasterized=True)
@@ -857,6 +877,7 @@ if RUN_CONFOUND:
         unique_tz  = sorted(set(tz_vals_ok.astype(int)))
 
         fig, ax = plt.subplots(figsize=(max(7, len(unique_tz) * 0.8), 4))
+        apply_style(fig, ax)
         data_tz = [ha_vals_ok[tz_vals_ok.astype(int) == tz] for tz in unique_tz]
         ax.violinplot(data_tz, positions=unique_tz, showmedians=True, widths=0.7)
         # Spearman ρ between head_angle and track_zone

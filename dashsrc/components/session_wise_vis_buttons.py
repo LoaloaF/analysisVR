@@ -23,6 +23,7 @@ def render(app: Dash) -> html.Div:
     
     display_names = {
         "mPFCRepresentation": "mPFC representation",
+        "NLChat": "Ask ✨",
     }
 
     return dbc.ButtonGroup([

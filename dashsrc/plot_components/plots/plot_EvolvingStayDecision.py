@@ -56,6 +56,9 @@ def render_plot(data, mode_span, width, height):
     for i in [0,1]:
         cue, other_cue = (1, 2) if i == 0 else (2, 1)
         cue_data = data[data['cue'] == cue].copy()
+        # skip a cue with no trials (e.g. filtered out) so its band isn't drawn empty
+        if cue_data.empty:
+            continue
         # sucess case
         cue_data[f'chose_only_R{cue}'] = cue_data[f'chose_only_R{cue}'] *2
         cue_data[f'chose_only_R{other_cue}'] = cue_data[f'chose_only_R{other_cue}'] * -1

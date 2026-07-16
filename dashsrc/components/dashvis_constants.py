@@ -11,7 +11,7 @@ PARADIGMS = 800, 1100, 500, 0
 
 SESSION_WISE_VISS = ('SessionKinematics', "RawSpikes", 'SVMPredictions', 'mPFCRepresentation', 'CueCorrelation',
                      'EnsembleEncoding', 'EnsembleRidgeline', 'EnsembleTrialwise',
-                     'EnsembleChoiceEncoding')
+                     'EnsembleChoiceEncoding', 'NLChat')
 ANIMAL_WISE_VISS = ('Kinematics', 'StayPerformance', 'StayRatio', 'SessionsOverview', 
                     'EvolvingStayTime', 'EvolvingStayDecision', 'TrackFiringRate', 
                     'EvolvingPCSubspace', 'TrackwiseEnsembleProj')
@@ -33,6 +33,7 @@ DATA_LOADED_EnsembleEncoding_ID = 'EnsembleEncoding-data-loaded'
 DATA_LOADED_EnsembleRidgeline_ID = 'EnsembleRidgeline-data-loaded'
 DATA_LOADED_EnsembleTrialwise_ID = 'EnsembleTrialwise-data-loaded'
 DATA_LOADED_EnsembleChoiceEncoding_ID = 'EnsembleChoiceEncoding-data-loaded'
+DATA_LOADED_NLChat_ID = 'NLChat-data-loaded'
 
 def get_vis_name_data_loaded_id(vis_name):
     if vis_name.endswith('_L') or vis_name.endswith('_R'):
@@ -74,6 +75,8 @@ def get_vis_name_data_loaded_id(vis_name):
             data_loaded_id = DATA_LOADED_EnsembleTrialwise_ID
         case 'EnsembleChoiceEncoding':
             data_loaded_id = DATA_LOADED_EnsembleChoiceEncoding_ID
+        case 'NLChat':
+            data_loaded_id = DATA_LOADED_NLChat_ID
         case _:
             raise ValueError(f"Unknown vis_name: {vis_name} for matching "
                             "with its data_loaded_id")
@@ -133,7 +136,9 @@ def get_vis_name_req_data(vis_name):
         case 'EnsembleTrialwise':
             req_data = 'EnsembleT0Projection', "SessionMetadata"
         case 'EnsembleChoiceEncoding':
-            req_data = 'Ensemble40msProjEventAligned', "SessionMetadata" #'BehaviorTrackwise', 
+            req_data = 'Ensemble40msProjEventAligned', "SessionMetadata" #'BehaviorTrackwise',
+        case 'NLChat':
+            req_data = 'BehaviorTrialwise',
         case _:
             raise ValueError(f"Unknown vis_name: {vis_name} for matching "
                             "with its data_loaded_id")

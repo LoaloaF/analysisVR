@@ -57,9 +57,15 @@ def _parse_args(n_trials, group_by, metric, metric_max, smooth_data):
     elif group_by == 'Part of session':
         group_col = 'trial_id'
         cmap =  make_discr_trial_cmap(n_trials, TRIAL_COL_MAP)
+    elif group_by == 'R1 choice':
+        group_col, cmap = 'choice_R1', R1_CHOICE_CMAP
+    elif group_by == 'R2 choice':
+        group_col, cmap = 'choice_R2', R2_CHOICE_CMAP
     elif group_by == "None":
         group_col = "cue" # can be anything
         cmap = dict.fromkeys([1,2], "rgb(128,128,128)")
+    else:
+        raise ValueError(f"Unknown group_by value: {group_by}")
     # add transparency to the colors
     cmap_transparent = {k: v.replace("rgb","rgba")[:-1]+f', {MULTI_TRACES_ALPHA})' 
                         for k,v in cmap.items()}

@@ -1,5 +1,9 @@
 figures_thesis.ipynb
 interval_session_decoding_runs
 interval_decoding_runs
-figures*
+figures
 testing_load_speed*
+decorrelation_state_machine.ipynb
+*.bak
+figures_choice_encoding_glm
+cue_corr_ensembles.ipynb

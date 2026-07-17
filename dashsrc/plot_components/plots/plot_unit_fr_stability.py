@@ -1,7 +1,6 @@
 import plotly.graph_objects as go
 import pandas as pd
 import numpy as np
-from scipy.stats import zscore
 from scipy.cluster.hierarchy import linkage, leaves_list
 
 from analytics_processing.analytics_constants import PARADIGM_NAMES

@@ -1,10 +1,4 @@
-"""Parallel helpers for the choice-encoding negative-binomial GLM notebook.
-
-The original notebook intentionally keeps the statistical model simple and
-transparent, but the screen is embarrassingly parallel across bins and units.
-This module keeps the model equations equivalent while making the expensive
-screen stage usable on large CPU servers.
-"""
+"""Parallel helpers for the choice-encoding negative-binomial GLM screen."""
 
 from __future__ import annotations
 
@@ -29,12 +23,7 @@ _THREADPOOL_LIMITER: Any | None = None
 
 
 def configure_single_thread_blas(limits: int = 1) -> None:
-    """Limit BLAS/OpenMP threads inside the current process.
-
-    The GLM screen parallelizes across processes. Letting each process also use
-    many BLAS threads causes oversubscription on large servers, so this function
-    forcefully caps both environment variables and already-loaded thread pools.
-    """
+    """Cap BLAS/OpenMP threads per process to avoid oversubscription across workers."""
 
     limits = max(1, int(limits))
     for var in (
@@ -180,6 +169,8 @@ def fit_feature_groups(
     dev_null = 0.0
     dev_reduced = {name: 0.0 for name in groups}
     valid_reduced = {name: 0 for name in groups}
+    dev_standalone = {name: 0.0 for name in groups}
+    valid_standalone = {name: 0 for name in groups}
     fold_alphas = []
 
     for train_mask, test_mask in splits:
@@ -212,6 +203,15 @@ def fit_feature_groups(
             dev_reduced[name] += nb_deviance(y_test, mu_red, red_alpha)
             valid_reduced[name] += 1
 
+            standalone_cols = baseline + held_out_cols
+            try:
+                stand_res, stand_x, stand_alpha, _ = fit_nb(train_df, standalone_cols, test_df, settings)
+            except FIT_ERRORS:
+                continue
+            mu_stand = np.clip(stand_res.predict(stand_x, offset=test_offset), 1e-9, None)
+            dev_standalone[name] += nb_deviance(y_test, mu_stand, stand_alpha)
+            valid_standalone[name] += 1
+
     if not np.isfinite(dev_null) or dev_null <= settings["min_null_deviance"] or not np.isfinite(dev_full):
         return []
 
@@ -229,10 +229,14 @@ def fit_feature_groups(
         if valid_reduced[name] != len(splits) or not used_group or not np.isfinite(dev_reduced[name]):
             continue
         reduced_fde = 1.0 - dev_reduced[name] / dev_null
+        standalone_fde = np.nan
+        if valid_standalone[name] == len(splits) and np.isfinite(dev_standalone[name]):
+            standalone_fde = 1.0 - dev_standalone[name] / dev_null
         delta_fde = full_fde - reduced_fde
         if (
             not np.isfinite(reduced_fde)
             or not np.isfinite(delta_fde)
+            or (np.isfinite(standalone_fde) and abs(standalone_fde) > settings["max_abs_fde"])
             or abs(reduced_fde) > settings["max_abs_fde"]
             or abs(delta_fde) > settings["max_abs_fde"]
         ):
@@ -254,6 +258,7 @@ def fit_feature_groups(
                 "alpha_nb": float(alpha_full),
                 "full_fde_cv": float(full_fde),
                 "reduced_fde_cv": float(reduced_fde),
+                "standalone_fde_cv": float(standalone_fde),
                 "delta_fde": float(delta_fde),
                 "p_value": p_value,
                 "n_predictors_full": int(len(used_full)),
@@ -395,6 +400,7 @@ def run_screen_parallel(
         "alpha_nb",
         "full_fde_cv",
         "reduced_fde_cv",
+        "standalone_fde_cv",
         "delta_fde",
         "p_value",
         "n_predictors_full",

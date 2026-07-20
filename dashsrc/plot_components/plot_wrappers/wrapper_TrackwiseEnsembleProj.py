@@ -13,6 +13,8 @@ from .data_selection_components import (
     outcome_group_filter_component,
     cue_group_filter_component,
     trial_group_filter_component,
+    R1_choice_filter_component,
+    R2_choice_filter_component,
     max_metric_input_component,
     smooth_checklist_component,
     normalize_checklist_component,
@@ -29,6 +31,7 @@ import dashsrc.components.dashvis_constants as C
 def calculate_figure(selected_paradigm, selected_animal, session_range,
                     metric, metric_max, smooth_data, normalize_data,
                     outcome_filter, cue_filter, trial_filter,
+                    r1_choice_filter, r2_choice_filter,
                     colormap,
                     global_data, prim_analytic, sec_analytic):
     
@@ -73,10 +76,22 @@ def calculate_figure(selected_paradigm, selected_animal, session_range,
     n_sessions = len(session_slice)
     
     # filter the data based on the group by values
-    prim_data, _ = group_filter_data(prim_data, outcome_filter, cue_filter, 
-                                trial_filter)
-    sec_data, _ = group_filter_data(sec_data, outcome_filter, cue_filter, 
-                                trial_filter)
+    prim_data, _ = group_filter_data(
+        prim_data,
+        outcome_filter=outcome_filter,
+        cue_filter=cue_filter,
+        trial_filter=trial_filter,
+        r1_choice_filter=r1_choice_filter,
+        r2_choice_filter=r2_choice_filter,
+    )
+    sec_data, _ = group_filter_data(
+        sec_data,
+        outcome_filter=outcome_filter,
+        cue_filter=cue_filter,
+        trial_filter=trial_filter,
+        r1_choice_filter=r1_choice_filter,
+        r2_choice_filter=r2_choice_filter,
+    )
     
     # list to single value conversion
     if smooth_data and len(smooth_data) >= 1:
@@ -145,6 +160,8 @@ def create_view_instance(app, global_data, base_vis_name, suffix_id, prim_analyt
     outcome_filter, OUTCOME_FILTER_ID = outcome_group_filter_component(instance_vis_name)
     cue_filter, CUE_FILTER_ID = cue_group_filter_component(instance_vis_name)
     trial_filter, TRIAL_FILTER_ID = trial_group_filter_component(instance_vis_name)
+    r1_choice_filter, R1_CHOICE_FILTER_ID = R1_choice_filter_component(instance_vis_name)
+    r2_choice_filter, R2_CHOICE_FILTER_ID = R2_choice_filter_component(instance_vis_name)
     
     graph, GRAPH_ID = get_general_graph_component(instance_vis_name)
 
@@ -156,7 +173,21 @@ def create_view_instance(app, global_data, base_vis_name, suffix_id, prim_analyt
                 dbc.Row([html.H5(f"Data Selection", style={"marginTop": 20})]),                                
                 dbc.Row([
                     dbc.Col([*paradigm_dropd, *animal_dropd, *metrics_radioi], width=12),
-                    dbc.Col([*outcome_filter, *cue_filter, *trial_filter, html.Hr(), *maxmetric_inp, *smooth_checkl, *normalize_checkl, *colormap_dropd], width=12),
+                    dbc.Col(
+                        [
+                            *outcome_filter,
+                            *cue_filter,
+                            *trial_filter,
+                            *r1_choice_filter,
+                            *r2_choice_filter,
+                            html.Hr(),
+                            *maxmetric_inp,
+                            *smooth_checkl,
+                            *normalize_checkl,
+                            *colormap_dropd,
+                        ],
+                        width=12,
+                    ),
                 ]),
                 *session_slider
             ], width=2)
@@ -176,19 +207,24 @@ def create_view_instance(app, global_data, base_vis_name, suffix_id, prim_analyt
         Input(OUTCOME_FILTER_ID, 'value'),
         Input(CUE_FILTER_ID, 'value'),
         Input(TRIAL_FILTER_ID, 'value'),
+        Input(R1_CHOICE_FILTER_ID, 'value'),
+        Input(R2_CHOICE_FILTER_ID, 'value'),
         Input(COLORMAP_DROPD_ID, 'value'),
         # Input(WIDTH_INP_ID, 'value'),
         # Input(HEIGHT_INP_ID, 'value'),
     )
     def update_plot_wrapper(selected_paradigm, selected_animal, session_range,
                             metric, metric_max, smooth_data, normalize_data,
-                            outcome_filter, cue_filter, trial_filter, colormap):
+                            outcome_filter, cue_filter, trial_filter,
+                            r1_choice_filter, r2_choice_filter, colormap):
                             # width, height
         
         return calculate_figure(
             selected_paradigm, selected_animal, session_range,
             metric, metric_max, smooth_data, normalize_data,
-            outcome_filter, cue_filter, trial_filter, colormap,
+            outcome_filter, cue_filter, trial_filter,
+            r1_choice_filter, r2_choice_filter,
+            colormap,
             global_data, prim_analytic, sec_analytic
         )
 

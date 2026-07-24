@@ -55,6 +55,32 @@ def _resolve_trial_column(df):
     return next((c for c in trial_col_candidates if c in df.columns), None)
 
 
+def _keep_required_columns(data, ens_selection):
+    if data is None or data.empty:
+        return data
+
+    required_cols = {
+        ens_selection,
+        "animal_id",
+        "session_id",
+        "interval_name",
+        "t0_event_name",
+        "from_ephys_timestamp",
+        "t0",
+        "trial_outcome",
+        "cue",
+        "choice_R1",
+        "choice_R2",
+        "trial_id",
+        "behavior_trial_id",
+        "trial",
+        "trial_index",
+        "entry_id",
+    }
+    keep_cols = [c for c in data.columns if c in required_cols]
+    return data.loc[:, keep_cols].copy()
+
+
 def _filter_by_animal_session(data, selected_animal=None, selected_session=None):
     if data is None or len(data) == 0:
         return data.iloc[0:0] if data is not None else None
@@ -74,7 +100,7 @@ def _filter_by_animal_session(data, selected_animal=None, selected_session=None)
             if not sess_mask.any():
                 sess_mask = sess_vals.astype(str) == str(selected_session)
             mask &= sess_mask
-        return data[mask.to_numpy()].copy()
+        return data[mask].copy()
 
     out = data.copy()
     if "animal_id" in out.columns and selected_animal is not None:
@@ -156,40 +182,57 @@ def _apply_trial_range_filter(data, trial_slider):
     return tmp.set_index(idx_cols) if len(idx_cols) else tmp
 
 
-def _prepare_filtered_data(
+def _prepare_base_filtered_data(
     raw_data,
     selected_animal,
     ens_selection,
     event_selection,
+    trial_slider=None,
+):
+    if raw_data is None or len(raw_data) == 0:
+        return None
+    data = raw_data
+
+    invalid_session_ids = {"10", "24", "25"}
+
+    data = _filter_by_animal_session(data, selected_animal)
+    if data is None or data.empty:
+        return None
+
+    if isinstance(data.index, pd.MultiIndex) and "session_id" in data.index.names:
+        keep_mask = ~data.index.get_level_values("session_id").astype(str).isin(invalid_session_ids)
+        data = data[keep_mask].copy()
+    elif "session_id" in data.columns:
+        data = data[~data["session_id"].astype(str).isin(invalid_session_ids)].copy()
+    if data is None or data.empty:
+        return None
+
+    data = _keep_required_columns(data, ens_selection)
+    if data is None or data.empty:
+        return None
+
+    data = _apply_event_filter(data, event_selection)
+    if data is None or data.empty:
+        return None
+
+    data = _apply_trial_range_filter(data, trial_slider)
+    if data is None or data.empty:
+        return None
+
+    return data
+
+
+def _apply_group_filters(
+    data,
     outcome_filter,
     cue_filter,
     trial_filter,
     r1_choice_filter,
     r2_choice_filter,
     group_by="None",
-    selected_session=None,
-    trial_slider=None,
 ):
-    if raw_data is None or len(raw_data) == 0:
-        return None, None
-    data = raw_data.copy()
-
-    invalid_session_ids = {"10", "24", "25"}
-    if isinstance(data.index, pd.MultiIndex) and "session_id" in data.index.names:
-        keep_mask = ~data.index.get_level_values("session_id").astype(str).isin(invalid_session_ids)
-        data = data[keep_mask].copy()
-
-    data = _filter_by_animal_session(data, selected_animal, selected_session)
     if data is None or data.empty:
         return None, None
-
-    data = _apply_event_filter(data, event_selection)
-    if data is None or data.empty:
-        return None, None
-
-    drp_ens_cols = [c for c in data.columns if c.startswith("Assembly") and c != ens_selection]
-    if len(drp_ens_cols):
-        data = data.drop(columns=drp_ens_cols)
 
     if "trial_outcome" in data.columns:
         data.loc[:, "trial_outcome"] = data.loc[:, "trial_outcome"].astype(bool).astype(int)
@@ -208,10 +251,6 @@ def _prepare_filtered_data(
         group_by=group_by,
     )
     if data.empty:
-        return None, None
-
-    data = _apply_trial_range_filter(data, trial_slider)
-    if data is None or data.empty:
         return None, None
 
     return data, group_by_values
@@ -341,59 +380,6 @@ def render(app: Dash, global_data: dict, vis_name: str) -> html.Div:
 
     @app.callback(
         Output(SESSIONS_GRAPH_ID, "figure"),
-        Input(ANIMAL_DROPD_ID, "value"),
-        Input(SESSION_DROPD_ID, "value"),
-        Input(ENSEMBLE_DROPD_ID, "value"),
-        Input(EVENT_DROPD_ID, "value"),
-        Input(TRIAL_SLIDER_ID, "value"),
-        Input(OUTCOME_FILTER_ID, "value"),
-        Input(CUE_FILTER_ID, "value"),
-        Input(TRIAL_FILTER_ID, "value"),
-        Input(R1_CHOICE_FILTER_ID, "value"),
-        Input(R2_CHOICE_FILTER_ID, "value"),
-    )
-    def update_all_sessions_summary(
-        selected_animal,
-        selected_session,
-        ens_selection,
-        event_selection,
-        trial_slider,
-        outcome_filter,
-        cue_filter,
-        trial_filter,
-        r1_choice_filter,
-        r2_choice_filter,
-    ):
-        if not all((selected_animal, (selected_session is not None), ens_selection, event_selection, trial_slider)):
-            return {}
-        if any(v is None or len(v) == 0 for v in [outcome_filter, cue_filter, trial_filter, r1_choice_filter, r2_choice_filter]):
-            return {}
-
-        data_all, _ = _prepare_filtered_data(
-            global_data[analytic],
-            selected_animal=selected_animal,
-            ens_selection=ens_selection,
-            event_selection=event_selection,
-            outcome_filter=outcome_filter,
-            cue_filter=cue_filter,
-            trial_filter=trial_filter,
-            r1_choice_filter=r1_choice_filter,
-            r2_choice_filter=r2_choice_filter,
-            group_by="None",
-            selected_session=None,
-            trial_slider=trial_slider,
-        )
-        if data_all is None or data_all.empty:
-            return {}
-
-        return plot_EnsembleTrialwise.render_all_sessions_plot(
-            data_all,
-            ens_selection=ens_selection,
-            event_selection=event_selection,
-            selected_session=selected_session,
-        )
-
-    @app.callback(
         Output(GRAPH_ID, "figure"),
         Input(ANIMAL_DROPD_ID, "value"),
         Input(SESSION_DROPD_ID, "value"),
@@ -423,29 +409,45 @@ def render(app: Dash, global_data: dict, vis_name: str) -> html.Div:
         r2_choice_filter,
     ):
         if not all((selected_animal, (selected_session is not None), ens_selection, event_selection, trial_slider)):
-            return {}
+            return {}, {}
         if any(v is None or len(v) == 0 for v in [outcome_filter, cue_filter, trial_filter, r1_choice_filter, r2_choice_filter]):
-            return {}
+            return {}, {}
 
-        data, group_by_values = _prepare_filtered_data(
+        base_data = _prepare_base_filtered_data(
             global_data[analytic],
             selected_animal=selected_animal,
             ens_selection=ens_selection,
             event_selection=event_selection,
+            trial_slider=trial_slider,
+        )
+        if base_data is None or base_data.empty:
+            return {}, {}
+
+        data, group_by_values = _apply_group_filters(
+            base_data,
             outcome_filter=outcome_filter,
             cue_filter=cue_filter,
             trial_filter=trial_filter,
             r1_choice_filter=r1_choice_filter,
             r2_choice_filter=r2_choice_filter,
             group_by=group_by,
-            selected_session=selected_session,
-            trial_slider=trial_slider,
         )
         if data is None or data.empty:
-            return {}
+            return {}, {}
 
-        return plot_EnsembleTrialwise.render_plot(
+        sessions_fig = plot_EnsembleTrialwise.render_all_sessions_plot(
             data,
+            ens_selection=ens_selection,
+            event_selection=event_selection,
+            selected_session=selected_session,
+        )
+
+        session_data = _filter_by_animal_session(data, selected_session=selected_session)
+        if session_data is None or session_data.empty:
+            return sessions_fig, {}
+
+        return sessions_fig, plot_EnsembleTrialwise.render_plot(
+            session_data,
             ens_selection=ens_selection,
             event_selection=event_selection,
             selected_session=selected_session,

@@ -228,8 +228,8 @@ def frame_wise_ball_velocity(frames, ball_vel):
 def calc_trialwise_metrics(trials, track_kinematics, trial_variable):
     def _calc_trial_t0_times(zone_trial_frames):
         # Get trial_id and zone from the columns (include_groups=True)
-        trial_id = zone_trial_frames["trial_id"].iloc[0]
-        zone = zone_trial_frames["track_zone"].iloc[0]
+        trial_id = zone_trial_frames.name[0]
+        zone = zone_trial_frames.name[1]
 
         if trial_id == -1:
             return pd.Series(dtype='int64')        
@@ -293,7 +293,7 @@ def calc_trialwise_metrics(trials, track_kinematics, trial_variable):
     
     result = track_kinematics.groupby(["trial_id", "track_zone"], 
                                       observed=True).apply(_calc_trial_t0_times, 
-                                                           include_groups=True)
+                                                           include_groups=False)
     result.index = result.index.droplevel(1)  # drop the track_zone level
     result = result.unstack(level=1).reset_index(drop=True)
     return result
@@ -376,7 +376,7 @@ def calculate_additional_kinematic_features(raw_yaw_pitch, tstamps, r_exponent=5
             raw_yaw_pitch_smoothed[col + '_500msMedian'] = smthd_vel
             
             smthd_abs_acc = np.gradient(smthd_vel.abs().values, tstamps) # convert us to s
-            raw_yaw_pitch_acc_abs_smoothed[col + '_abs_acc_500msMedian'] = np.abs(smthd_abs_acc)
+            raw_yaw_pitch_acc_abs_smoothed[col + '_abs_acc_500msMedian'] = smthd_abs_acc
         
         sum_kinem = pd.DataFrame(index=raw_yaw_pitch.index)
         # sum over all non smoothed vel (reward threshold is based on this)
@@ -433,8 +433,8 @@ def calculate_below_vel_thr(kinematics, thresholds):
     
     def check_below_thr(trial_frames):
         below_thr_res = pd.Series(index=trial_frames.index, dtype='float')
-        # geth scaler value for this trial
-        trial_id = trial_frames['trial_id'].iloc[0]
+        # geth scaler value for this trial via the name attribute (trial_id)
+        trial_id = trial_frames.name
         r1_thr, r2_thr = thresholds.loc[trial_id, ['velocity_threshold_at_R1', 'velocity_threshold_at_R2']]
         
         # for those frames we will set a bool if < threshold, for the rest it will remain NaN
@@ -446,7 +446,7 @@ def calculate_below_vel_thr(kinematics, thresholds):
         below_thr_res[r2_zone_mask] = (trial_frames.loc[r2_zone_mask, 'frame_RawYawPitch_abs_vel_sum'] < r2_thr).astype(float)
         return below_thr_res
         
-    below_thr_frames = kinematics.groupby('trial_id').apply(check_below_thr, include_groups=True)
+    below_thr_frames = kinematics.groupby('trial_id').apply(check_below_thr, include_groups=False)
     # drop the trial_id level from the index
     below_thr_frames = below_thr_frames.reset_index(level=0, drop=True) 
     return below_thr_frames
@@ -552,9 +552,13 @@ def fix_missing_paradigm_variable_names(data):
     if all(True if c in data.columns else False for c in ['trial_id', 'stay_time', 'maximum_reward_number', 'cue', 'DR']):
         renamer['stay_time'] = 'velocity_threshold_at_R1'
         data['ST_2'] = data['stay_time']
-        
-    # if all([True if c in data.columns else False for c in ["ST_2","SR","DR","RF","NP","GF"]]) or \
-    #     renamer['stop_threshold'] = 'velocity_threshold_at_R1'
+
+    # even older, animal 5, 7 - add metadata columns so pipeline runs, but meaningless (ussed lick + staytime)
+    if all(True if c in data.columns else False for c in ['trial_id', 'stay_time', 'maximum_reward_number', 'cue', 'lick_reward']):
+        data['flip_Cue1R1_Cue2R2'] = False
+        data['both_R1_R2_rewarded'] = False
+        data['velocity_threshold_at_R1'] = .3
+        data['velocity_threshold_at_R2'] = .3
         
     Logger().logger.debug(Logger().fmtmsg(("Renaming variables with:\n", renamer)))
     data = data.rename(columns=renamer)

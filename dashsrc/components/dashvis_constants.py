@@ -6,15 +6,15 @@ from plotly.colors import convert_colors_to_same_type
 # html ids used across the app
 
 # ANIMALS = 1,2,3, 5,7, 8, 6,9, 10,11,12,13,14,15
-ANIMALS = 6,9, 10,11,12,13,15
+ANIMALS = 5,7, 6,9, 10,11,12,13,15
 PARADIGMS = 800, 1100, 500, 0
 
 SESSION_WISE_VISS = ('SessionKinematics', "RawSpikes", 'SVMPredictions', 'mPFCRepresentation', 'CueCorrelation',
-                     'EnsembleEncoding', 'EnsembleRidgeline', 'EnsembleTrialwise',
+                     'EnsembleEncoding', 'EnsembleSessionwise', 'EnsembleTrialwise',
                      'EnsembleChoiceEncoding')
 ANIMAL_WISE_VISS = ('Kinematics', 'StayPerformance', 'StayRatio', 'SessionsOverview', 
                     'EvolvingStayTime', 'EvolvingStayDecision', 'TrackFiringRate', 
-                    'EvolvingPCSubspace', 'TrackwiseEnsembleProj')
+                    'EvolvingPCSubspace', 'TrackwiseEnsembleProj', 'NeuronCorrelation')
 DATA_LOADED_SessionKinematics_ID = 'SessionKinematics-data-loaded'
 DATA_LOADED_Kinematics_ID = 'Kinematics-data-loaded'
 DATA_LOADED_StayRatio_ID = 'Staytimes-data-loaded'
@@ -25,12 +25,13 @@ DATA_LOADED_EvolvingStayDecision_ID = 'EvolvingStayDecision-data-loaded'
 DATA_LOADED_RawSpikes_ID = 'RawSpikes-data-loaded'
 DATA_LOADED_TrackFiringRate_ID = 'TrackFiringRate-data-loaded'
 DATA_LOADED_TrackwiseEnsembleProj_ID = 'TrackwiseEnsembleProj-data-loaded'
+DATA_LOADED_NeuronCorrelation_ID = 'NeuronCorrelation-data-loaded'
 DATA_LOADED_SVMPredictions_ID = 'SVMPredictions-data-loaded'
 DATA_LOADED_mPFCRepresentation_ID = 'mPFCRepresentation-data-loaded'
 DATA_LOADED_CueCorrelation_ID = 'CueCorrelation-data-loaded'
 DATA_LOADED_EvolvingPCSubspace_ID = 'EvolvingPCSubspace-data-loaded'
 DATA_LOADED_EnsembleEncoding_ID = 'EnsembleEncoding-data-loaded'
-DATA_LOADED_EnsembleRidgeline_ID = 'EnsembleRidgeline-data-loaded'
+DATA_LOADED_EnsembleSessionwise_ID = 'EnsembleSessionwise-data-loaded'
 DATA_LOADED_EnsembleTrialwise_ID = 'EnsembleTrialwise-data-loaded'
 DATA_LOADED_EnsembleChoiceEncoding_ID = 'EnsembleChoiceEncoding-data-loaded'
 
@@ -58,6 +59,8 @@ def get_vis_name_data_loaded_id(vis_name):
             data_loaded_id = DATA_LOADED_TrackFiringRate_ID
         case 'TrackwiseEnsembleProj':
             data_loaded_id = DATA_LOADED_TrackwiseEnsembleProj_ID
+        case 'NeuronCorrelation':
+            data_loaded_id = DATA_LOADED_NeuronCorrelation_ID
         case 'SVMPredictions':
             data_loaded_id = DATA_LOADED_SVMPredictions_ID
         case 'mPFCRepresentation':
@@ -68,8 +71,8 @@ def get_vis_name_data_loaded_id(vis_name):
             data_loaded_id = DATA_LOADED_EvolvingPCSubspace_ID
         case 'EnsembleEncoding':
             data_loaded_id = DATA_LOADED_EnsembleEncoding_ID
-        case 'EnsembleRidgeline':
-            data_loaded_id = DATA_LOADED_EnsembleRidgeline_ID
+        case 'EnsembleSessionwise':
+            data_loaded_id = DATA_LOADED_EnsembleSessionwise_ID
         case 'EnsembleTrialwise':
             data_loaded_id = DATA_LOADED_EnsembleTrialwise_ID
         case 'EnsembleChoiceEncoding':
@@ -106,6 +109,8 @@ def get_vis_name_req_data(vis_name):
         case 'TrackwiseEnsembleProj':
             req_data = ("SpikeClusterMetadata", 'ConcatenatedEnsambles40ms',
                        'BehaviorTrackwise', 'SessionMetadata', 'TrackwiseEnsembleProj')
+        case 'NeuronCorrelation':
+            req_data = ('FiringRateTrackwiseHz', 'ConcatenatedEnsambles40ms')
         case 'SVMPredictions':
             req_data = (
                 'SVMCueOutcomeChoicePred',
@@ -128,7 +133,7 @@ def get_vis_name_req_data(vis_name):
             req_data = "SessionPCs40msCAs", "SessionPCs40ms", 'SessionMetadata'
         case 'EnsembleEncoding':
             req_data = 'EnsembleT0Projection', "SessionMetadata" #'BehaviorTrackwise', 
-        case 'EnsembleRidgeline':
+        case 'EnsembleSessionwise':
             req_data = 'EnsembleT0Projection', "SessionMetadata"
         case 'EnsembleTrialwise':
             req_data = 'EnsembleT0Projection', "SessionMetadata"
@@ -173,12 +178,12 @@ EARLY_REWARD_LOCATION_COLOR = 'rgba(120,120,120, 1)'
 LATE_REWARD_LOCATION_COLOR = 'rgba(190,190,190, 1)'
 
 R1_CHOICE_CMAP = {
-    1: convert_colors_to_same_type('#2ceaf2')[0][0],  # stopped at R1
-    0: convert_colors_to_same_type("#92d6d7")[0][0],  # skipped R1
+    1: convert_colors_to_same_type('#0072B2')[0][0],  # stopped at R1
+    0: convert_colors_to_same_type("#D55E00")[0][0],  # skipped R1
 }
 R2_CHOICE_CMAP = {
-    1: convert_colors_to_same_type("#2c82f2")[0][0],  # stopped at R2
-    0: convert_colors_to_same_type("#7ca4d9")[0][0],  # skipped R2
+    1: convert_colors_to_same_type("#009E73")[0][0],  # stopped at R2
+    0: convert_colors_to_same_type("#CC79A7")[0][0],  # skipped R2
 }
 
 TRIAL_COL_MAP = px.colors.sequential.Viridis

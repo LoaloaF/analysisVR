@@ -39,7 +39,7 @@ Note: You might have to change data source paths depending on the machine you ar
 - `SVMPredictions` (`wrapper_SVMPredictions.py`): SVM decoding performance across sessions for cue/outcome/choice predictors (accuracy or macro-F1).
 - `CueCorrelation` (`wrapper_CueCorrelation.py`): Population-vector cue correlation (Cue1 vs Cue2) along track position.
 - `EnsembleEncoding` (`wrapper_EnsembleEncoding.py`): Ensemble activation trajectories aligned to events/intervals, summarized across sessions.
-- `EnsembleRidgeline` (`wrapper_EnsembleRidgeline.py`): Ridgeline-style view of ensemble activity distributions over intervals/events.
+- `EnsembleSessionwise` (`wrapper_EnsembleSessionwise.py`): Ridgeline-style view of ensemble activity distributions over intervals/events.
 - `EnsembleTrialwise` (`wrapper_EnsembleTrialwise.py`): Trial-resolved ensemble dynamics with interval-local temporal structure.
 - `EnsembleChoiceEncoding` (`wrapper_EnsembleChoiceEncoding.py`): Event-aligned ensemble activity focused on trial choice structure.
 

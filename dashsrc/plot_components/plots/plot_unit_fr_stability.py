@@ -1,7 +1,6 @@
 import plotly.graph_objects as go
 import pandas as pd
 import numpy as np
-from scipy.stats import zscore
 from scipy.cluster.hierarchy import linkage, leaves_list
 
 from analytics_processing.analytics_constants import PARADIGM_NAMES
@@ -100,11 +99,15 @@ def render_plot_heatmap(spike_metadata, cluster=False):
     )
     
     # Add vertical lines for every new day
-    dates = [s_id.split("_")[0] for s_id in avg_frate_matrix.columns]
+    session_labels = [str(s_id) for s_id in avg_frate_matrix.columns]
+    dates = [s_id.split("_")[0] for s_id in session_labels]
     
     # Only show dates that appear multiple times (multiple sessions per day)
     date_counts = pd.Series(dates).value_counts()
     dates_to_show = [date if date_counts[date] > 1 else "" for date in dates]
+    # Some notebooks reuse ticktext as x coordinates; keep labels unique in that case.
+    if len(set(dates_to_show)) < len(dates_to_show) or all(label == "" for label in dates_to_show):
+        dates_to_show = session_labels
     
     for i in range(1, len(dates)):
         if dates[i] != dates[i-1]:

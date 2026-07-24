@@ -21,7 +21,11 @@ def render(app: Dash) -> html.Div:
                 outputs.append(({'display': 'none'}, False))
         return outputs
     
+    display_names = {
+        "mPFCRepresentation": "mPFC representation",
+    }
+
     return dbc.ButtonGroup([
-            dbc.Button(analysis_name, id=analysis_name+'-button', color="primary", outline=True) 
+            dbc.Button(display_names.get(analysis_name, analysis_name), id=analysis_name+'-button', color="primary", outline=True)
             for analysis_name in SESSION_WISE_VISS
         ], vertical=False, style={"marginTop": "10px", "marginBottom": "5px"})

@@ -9,8 +9,8 @@ from plotly.colors import convert_colors_to_same_type
 ANIMALS = 5,7, 6,9, 10,11,12,13,15
 PARADIGMS = 800, 1100, 500, 0
 
-SESSION_WISE_VISS = ('SessionKinematics', "RawSpikes", 'SVMPredictions', 'mPFCRepresentation', 'CueCorrelation',
-                     'EnsembleEncoding', 'EnsembleSessionwise', 'EnsembleTrialwise',
+SESSION_WISE_VISS = ('SessionKinematics', "RawSpikes", 'SVMPredictions', 'CueCorrelation',
+                     'EnsembleEncoding', 'EnsembleSessionwise','mPFCRepresentation', 'EnsembleTrialwise',
                      'EnsembleChoiceEncoding')
 ANIMAL_WISE_VISS = ('Kinematics', 'StayPerformance', 'StayRatio', 'SessionsOverview', 
                     'EvolvingStayTime', 'EvolvingStayDecision', 'TrackFiringRate', 

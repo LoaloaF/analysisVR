@@ -12,3 +12,11 @@ outputs/
 
 # old split file
 test_indices_by_session.npy
+
+# PowerPoint / slide-deck generation (excluded from git; kept locally)
+eval/build_v*.py
+eval/build_ultimate_presentation.py
+eval/build_manifest_slides.py
+docs/slide_manifest.md
+docs/slide_plan_v2.md
+*.pptx

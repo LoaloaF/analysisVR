@@ -136,7 +136,7 @@ def _decompose(y_true, y_pred):
 ARMS = [
     ("MLP",           None),
     ("TempConv-Cont", "cebra"),
-    ("TempConv-Pred", "cebra_pred"),
+    ("TempConv-Pred", "cebra_pred_64d"),
 ]
 
 pair_labels = []

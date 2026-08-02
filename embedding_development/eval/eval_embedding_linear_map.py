@@ -20,7 +20,8 @@ import os, sys, pickle, warnings, time
 import numpy as np
 import torch
 from sklearn.linear_model import Ridge
-from sklearn.model_selection import cross_val_score
+from sklearn.model_selection import cross_val_score, KFold
+from sklearn.metrics import r2_score
 import matplotlib; matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 
@@ -142,15 +143,30 @@ def linear_map_r2(H_A, H_B):
     if n < CV_FOLDS * 2:
         return np.nan
     H_A, H_B = H_A[:n], H_B[:n]
-    r2s = []
-    for d in range(H_B.shape[1]):
-        y = H_B[:, d]
-        if np.std(y) < 1e-8:
-            continue
-        scores = cross_val_score(Ridge(RIDGE_ALPHA), H_A, y,
-                                 cv=CV_FOLDS, scoring='r2')
-        r2s.append(float(np.mean(np.clip(scores, 0, 1))))
-    return float(np.mean(r2s)) if r2s else np.nan
+    keep = np.std(H_B, axis=0) >= 1e-8          # drop constant target dims
+    if not keep.any():
+        return np.nan
+    Y = H_B[:, keep]
+    # Vectorized equivalent of a per-dimension 5-fold ridge R2: one multi-output
+    # ridge per fold, per-dimension R2 clipped to [0,1], averaged over folds
+    # then over dimensions. Mathematically identical to the per-dim loop but
+    # ~D times fewer solves.
+    per_dim = np.empty((CV_FOLDS, Y.shape[1]))
+    for f, (tr, te) in enumerate(KFold(n_splits=CV_FOLDS).split(H_A)):
+        model = Ridge(RIDGE_ALPHA).fit(H_A[tr], Y[tr])
+        per_dim[f] = r2_score(Y[te], model.predict(H_A[te]),
+                              multioutput='raw_values')
+    return float(np.clip(per_dim, 0, 1).mean(axis=0).mean())
+
+
+def linear_map_r2_sym(H_A, H_B):
+    """Symmetric (bidirectional) linear-map R2: mean of the A->B and B->A ridge fits.
+    Ridge R2 is directional, so we average both directions to get a
+    direction-invariant consistency score."""
+    r_ab = linear_map_r2(H_A, H_B)
+    r_ba = linear_map_r2(H_B, H_A)
+    vals = [r for r in (r_ab, r_ba) if np.isfinite(r)]
+    return float(np.mean(vals)) if vals else np.nan
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -198,7 +214,7 @@ else:
                 for k, s_i in enumerate(prior_si):
                     H_si_on_Xi = E[mk][s_i][e_idx]
                     H_sj_on_Xi = Hs[k + 1]
-                    r = linear_map_r2(H_si_on_Xi, H_sj_on_Xi)
+                    r = linear_map_r2_sym(H_si_on_Xi, H_sj_on_Xi)
                     if not np.isfinite(r):
                         continue
                     cond_i = sess_cond(s_i)
@@ -218,7 +234,7 @@ else:
                 for mk in MODEL_KEYS:
                     H_i = E[mk][s_idx].get(e_i)
                     H_j = E[mk][s_idx].get(e_j)
-                    r = linear_map_r2(H_i, H_j)
+                    r = linear_map_r2_sym(H_i, H_j)
                     if np.isfinite(r):
                         records.append(rec('cross_ensemble', mk, r,
                                            s_idx=s_idx, e_i=e_i, e_j=e_j))
@@ -235,7 +251,7 @@ else:
             for pair, H_A, H_B in [('mlp_cc', H_mlp, H_cc),
                                    ('mlp_cp', H_mlp, H_cp),
                                    ('cc_cp',  H_cc,  H_cp)]:
-                r = linear_map_r2(H_A, H_B)
+                r = linear_map_r2_sym(H_A, H_B)
                 if np.isfinite(r):
                     records.append(rec('cross_model', pair, r,
                                        s_idx=s_idx, e_idx=e_idx))
@@ -258,7 +274,7 @@ else:
                     Hs[seed] = embed_batch(mk, seed, s_idx, e_idx, [X])[0]
                 for si_idx, seed_i in enumerate(SEEDS):
                     for seed_j in SEEDS[si_idx + 1:]:
-                        r = linear_map_r2(Hs[seed_i], Hs[seed_j])
+                        r = linear_map_r2_sym(Hs[seed_i], Hs[seed_j])
                         if np.isfinite(r):
                             records.append(rec('cross_seed', mk, r,
                                                s_idx=s_idx, e_idx=e_idx,
@@ -401,9 +417,6 @@ for i, (vals, c, p) in enumerate(zip(flat_data, flat_colors, pos)):
     med = float(np.nanmedian(vals))
     ax.text(p, med + 0.03, f'{med:.2f}', ha='center', va='bottom',
             fontsize=FONT.ANNOTATION - 1, fontweight='bold')
-    ax.text(p, -0.12, f'n={len(vals)}', ha='center', va='top',
-            fontsize=FONT.TICK - 2, color='#555',
-            transform=ax.get_xaxis_transform())
 
 ax.set_xticks(pos)
 ax.set_xticklabels(flat_labels, fontsize=FONT.TICK - 2, rotation=45, ha='right')
@@ -427,7 +440,7 @@ for _, (g_label, conds) in enumerate(groups):
     x_cursor += len(conds) + gap
 
 add_footnote(fig,
-    f'Ridge regression (5-fold CV); R²≥{R2_THR}; '
+    f'Bidirectional ridge regression (5-fold CV, mean of both directions); R²≥{R2_THR}; '
     f'cross-session/ensemble: seed 42; cross-seed: common test input')
 
 OUT_DIRS = [mdir, cdir, '/mnt/c/Users/amits/Desktop']

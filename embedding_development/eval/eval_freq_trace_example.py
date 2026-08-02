@@ -139,7 +139,7 @@ for s, e in top_pairs:
         out = mlp(torch.tensor(Xte, dtype=torch.float32))
         y_mlp = (out[0] if isinstance(out, tuple) else out).cpu().numpy().ravel()
 
-    y_tcp = cebra_predict('cebra_pred', s, e, Xtr, ytr, Xte)
+    y_tcp = cebra_predict('cebra_pred_64d', s, e, Xtr, ytr, Xte)
     if y_tcp is None:
         continue
 
@@ -200,16 +200,15 @@ fig, (ax_full, ax_fast) = plt.subplots(2, 1, figsize=FIG.FULL,
                                         gridspec_kw={'height_ratios': [1.6, 1],
                                                      'hspace': 0.45})
 apply_style(fig, [ax_full, ax_fast])
-fig.subplots_adjust(bottom=0.14)
+fig.subplots_adjust(bottom=0.14, right=0.62)
 
 # Row 1 — raw signal + predictions
 ax_full.plot(t, yte_w,   color=C_ACTUAL, lw=1.2, alpha=0.90, label='Actual', zorder=3)
-ax_full.plot(t, y_mlp_w, color=C_MLP,    lw=1.0, alpha=0.80, label=f'MLP  (R²_noise={best["r2n_mlp"]:.2f})', ls='--')
-ax_full.plot(t, y_tcp_w, color=C_TCP,    lw=1.0, alpha=0.80, label=f'TC-Pred (R²_noise={best["r2n_tcp"]:.2f})')
+ax_full.plot(t, y_mlp_w, color=C_MLP,    lw=1.0, alpha=0.80, label='MLP', ls='--')
+ax_full.plot(t, y_tcp_w, color=C_TCP,    lw=1.0, alpha=0.80, label='TC-Pred')
 ax_full.set_ylabel('z-scored activity', fontsize=FONT.LABEL - 1)
-ax_full.legend(fontsize=FONT.LEGEND - 1, frameon=True, facecolor='white',
-               framealpha=0.85, edgecolor='none', loc='upper right')
-add_panel_label(ax_full, 'A')
+ax_full.legend(fontsize=FONT.LEGEND - 1, frameon=False,
+               loc='upper left', bbox_to_anchor=(1.03, 1), borderaxespad=0)
 
 # Row 2 — fast (residual) component only
 ax_fast.plot(t, fast_t,     color=C_ACTUAL, lw=1.2, alpha=0.90, label='Actual (fast)', zorder=3)
@@ -218,16 +217,8 @@ ax_fast.plot(t, fast_tcp_w, color=C_TCP,    lw=1.0, alpha=0.80, label='TC-Pred')
 ax_fast.axhline(0, color='#888', lw=0.5, ls=':')
 ax_fast.set_xlabel('Time (s)', fontsize=FONT.LABEL - 1)
 ax_fast.set_ylabel('Residual', fontsize=FONT.LABEL - 1)
-ax_fast.legend(fontsize=FONT.LEGEND - 1, frameon=True, facecolor='white',
-               framealpha=0.85, edgecolor='none', loc='upper right')
-add_panel_label(ax_fast, 'B')
-
-add_footnote(fig,
-    f'S{best["s"]+1:02d} E{best["e"]+1:02d}: '
-    f'R²_noise: MLP={best["r2n_mlp"]:.3f}, TC-Pred={best["r2n_tcp"]:.3f} '
-    f'(Δ={best["gap"]:+.3f}).  '
-    f'Fast component = signal minus 500 ms moving average.  '
-    f'Window shown: {best_start*0.04:.1f}–{(best_start+SHOW_BINS)*0.04:.1f} s of test set.')
+ax_fast.legend(fontsize=FONT.LEGEND - 1, frameon=False,
+               loc='upper left', bbox_to_anchor=(1.03, 1), borderaxespad=0)
 
 savefig_manifest(fig, 'freq_trace_example.png', OUT_DIRS)
 print('Saved freq_trace_example.png')

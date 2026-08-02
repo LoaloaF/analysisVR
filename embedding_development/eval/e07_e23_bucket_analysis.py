@@ -47,7 +47,7 @@ with open(os.path.join(mdir, 'semantic_groups.pkl'), 'rb') as f:
 group_names = [g[0] for g in sg]
 feat_idx    = {g: cols for g, cols in sg}
 
-gpv    = np.load(os.path.join(mdir, 'importance_global_pv_semantic.npy'))
+ig_all = np.load(os.path.join(mdir, 'importance_ig_semantic.npy'))
 r2_all = np.nanmean(np.load(os.path.join(mdir, 'all_r2.npy')), axis=0)
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -75,8 +75,8 @@ def eta_sq(vals, X_oh):
     return float(ss_bet / ss_tot)
 
 SHORT = FEATURE_NAMES_SHORT  # canonical display names
-D_THRESH   = 0.1    # "supervisor has a point" (Cohen's d)
-GPV_THRESH = 0.10   # "direct detection": GPV(sup_var)/R² >= 10% of ensemble's explained variance
+D_THRESH  = 0.1     # "supervisor has a point" (Cohen's d)
+IG_THRESH = 0.05    # "high IG attribution": absolute IG value per semantic group
 
 # ── Case definitions ──────────────────────────────────────────────────────────
 CASES = [
@@ -105,43 +105,38 @@ for case in CASES:
         X    = np.concatenate([sd['data'][t]              for t in sd['data']], axis=0)
         y    = np.concatenate([sd['labels'][t][:, e_idx]  for t in sd['data']])
 
-        cd       = cd_categorical(X[:, sup_cols], y)
-        r2       = float(r2_all[s_idx, e_idx])
-        gv_sup   = float(gpv[s_idx, e_idx, sup_g])
-        gv_our   = float(gpv[s_idx, e_idx, our_g])
-        frac_sup = gv_sup / r2 if r2 > 0 else 0.0
-        frac_our = gv_our / r2 if r2 > 0 else 0.0
+        r2      = float(r2_all[s_idx, e_idx])
+        cd      = cd_categorical(X[:, sup_cols], y)
+        ig_sup  = float(ig_all[s_idx, e_idx, sup_g])
+        ig_our  = float(ig_all[s_idx, e_idx, our_g])
 
         eta2s = {}
         for g_name in group_names:
             vals = X[:, feat_idx[g_name]].mean(axis=1)
             eta2s[g_name] = eta_sq(vals, X[:, sup_cols])
 
-        # GPV/R² for every feature group
-        frac_all = {g: float(gpv[s_idx, e_idx, gi]) / r2 if r2 > 0 else 0.0
-                    for gi, g in enumerate(group_names)}
+        ig_by_group = {g: float(ig_all[s_idx, e_idx, gi])
+                       for gi, g in enumerate(group_names)}
 
-        # best joint feature: argmax η²(feat, sup_cond) × GPV(feat)/R²
         joint_best_g    = max(group_names,
-                              key=lambda g: eta2s[g] * frac_all[g])
+                              key=lambda g: eta2s[g] * ig_by_group[g])
         joint_best_eta2 = eta2s[joint_best_g]
-        joint_best_frac = frac_all[joint_best_g]
+        joint_best_ig   = ig_by_group[joint_best_g]
 
-        rows.append(dict(s_idx=s_idx, cd=cd, r2=r2,
-                         gpv_sup=gv_sup, frac=frac_sup,
-                         gpv_our=gv_our, frac_our=frac_our,
-                         eta2s=eta2s, frac_all=frac_all,
+        rows.append(dict(s_idx=s_idx, r2=r2, cd=cd,
+                         ig_sup=ig_sup, ig_our=ig_our,
+                         eta2s=eta2s, ig_by_group=ig_by_group,
                          joint_best_g=joint_best_g,
                          joint_best_eta2=joint_best_eta2,
-                         joint_best_frac=joint_best_frac))
+                         joint_best_frac=joint_best_ig))
 
     case_data.append(rows)
 
     above = [r for r in rows if r['cd'] >= D_THRESH]
-    b1    = [r for r in above if r['frac'] >= GPV_THRESH]
-    b2    = [r for r in above if r['frac'] <  GPV_THRESH]
+    b1    = [r for r in above if r['ig_sup'] >= IG_THRESH]
+    b2    = [r for r in above if r['ig_sup'] <  IG_THRESH]
     print(f"{case['label']}: {len(rows)} sessions, {len(above)} d>={D_THRESH}, "
-          f"B1={len(b1)}, B2={len(b2)}")
+          f"high_ig={len(b1)}, low_ig={len(b2)}")
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -149,6 +144,9 @@ for case in CASES:
 # ══════════════════════════════════════════════════════════════════════════════
 fig1, axes1 = plt.subplots(1, 2, figsize=FIG.FULL)
 apply_style(fig1, list(axes1))
+
+_all_cds = [r['cd'] for rows in case_data for r in rows]
+shared_cd_ymax = max(_all_cds) * 1.15 if _all_cds else 1.0
 
 for case, rows, ax in zip(CASES, case_data, axes1):
     rows_s = sorted(rows, key=lambda r: -r['cd'])
@@ -163,6 +161,7 @@ for case, rows, ax in zip(CASES, case_data, axes1):
     ax.set_xticks(x)
     ax.set_xticklabels([f'S{s_idxs[i]+1:02d}' for i in range(len(rows_s))],
                        rotation=90, fontsize=max(5, FONT.TICK - 3))
+    ax.set_ylim(0, shared_cd_ymax)
     ax.set_ylabel("Cohen's d", fontsize=FONT.LABEL - 1)
     n_above = sum(1 for d in cds if d >= D_THRESH)
     sup_short = SHORT.get(case['sup_group'], case['sup_label'])
@@ -171,8 +170,6 @@ for case, rows, ax in zip(CASES, case_data, axes1):
         f"{n_above}/{len(rows_s)} ≥ {D_THRESH}",
         fontsize=FONT.LABEL - 1, pad=3)
     ax.legend(fontsize=FONT.LEGEND - 1, frameon=False)
-    ax.text(0.02, 0.97, case['panel1'], transform=ax.transAxes,
-            fontsize=FONT.PANEL, fontweight='bold', va='top', ha='left')
 
 add_footnote(fig1,
     f"Cohen's d: max pairwise effect between conditions.  "
@@ -184,117 +181,57 @@ plt.close(fig1)
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# Figure 2 — Bucket 1: direct GPV detection
+# Figure 2 — Pie chart: 3-way attribution breakdown per ensemble
+# Cat 1: GPV(sup_var)/R² ≥ GPV_THRESH  (direct IG attribution)
+# Cat 2: GPV(best co-var)/R² ≥ GPV_THRESH  AND  η²(best co-var, condition) ≥ ETA2_THRESH
+# Cat 3: low both
 # ══════════════════════════════════════════════════════════════════════════════
+ETA2_THRESH = 0.05
+
+CAT_COLORS = ['#1F77B4', '#2CA02C', '#CCCCCC', '#E08080']
+CAT_NAMES  = [
+    'High IG to\ntarget feature',
+    'High IG to\nco-varying feature',
+    'Valid model,\nunexplained',
+    'Model not valid\n(R² < 0.05)',
+]
+
 fig2, axes2 = plt.subplots(1, 2, figsize=FIG.FULL)
 apply_style(fig2, list(axes2))
 
-# Compute shared y-axis max across both cases
-_all_fracs = [r['frac'] for rows in case_data
-              for r in rows if r['cd'] >= D_THRESH]
-shared_ymax = max(_all_fracs) * 1.25 if _all_fracs else 1.0
-
 for case, rows, ax in zip(CASES, case_data, axes2):
-    above  = sorted([r for r in rows if r['cd'] >= D_THRESH], key=lambda r: -r['cd'])
-    fracs  = np.array([r['frac'] for r in above])
-    s_idxs = [r['s_idx'] for r in above]
-    n_b1   = (fracs >= GPV_THRESH).sum()
-    colors = [case['C_B1'] if f >= GPV_THRESH else '#CCCCCC' for f in fracs]
-    x      = np.arange(len(above))
+    n1 = n2 = n3 = n4 = 0
+    for r in rows:
+        if r['cd'] < D_THRESH:
+            continue
+        if r['r2'] < 0.05:
+            n4 += 1
+        elif r['ig_sup'] >= IG_THRESH:
+            n1 += 1
+        elif r['joint_best_frac'] >= IG_THRESH and r['joint_best_eta2'] >= ETA2_THRESH:
+            n2 += 1
+        else:
+            n3 += 1
 
-    ax.bar(x, fracs, color=colors, alpha=0.85, width=0.7)
-    ax.axhline(GPV_THRESH, color='#444', lw=1.0, ls='--', alpha=0.8,
-               label=f'GPV/R² = {GPV_THRESH}  (10%)')
-    ax.set_xticks(x)
-    ax.set_xticklabels([f'S{s_idxs[i]+1:02d}' for i in range(len(above))],
-                       rotation=90, fontsize=max(5, FONT.TICK - 3))
-    ax.set_ylabel(f'GPV({case["sup_label"]}) / R²', fontsize=FONT.LABEL - 1)
-    ax.set_ylim(0, shared_ymax)
+    n_above = n1 + n2 + n3 + n4
+    sizes  = [n1, n2, n3, n4]
+    labels = [f'{name}\n(n={n})' for name, n in zip(CAT_NAMES, sizes)]
+    nz     = [(s, l, c) for s, l, c in zip(sizes, labels, CAT_COLORS) if s > 0]
+    if nz:
+        sz, lb, cl = zip(*nz)
+        wedges, texts, autotexts = ax.pie(
+            sz, labels=lb, colors=cl, autopct='%1.0f%%',
+            startangle=90, textprops={'fontsize': FONT.LABEL - 2},
+            wedgeprops={'linewidth': 0.6, 'edgecolor': 'white'})
+        for at in autotexts:
+            at.set_fontsize(FONT.LABEL - 1)
+            at.set_fontweight('bold')
+
+    sup_short = SHORT.get(case['sup_group'], case['sup_label'])
     ax.set_title(
-        f"{case['label']} ({SHORT.get(case['sup_group'], case['sup_label'])}): "
-        f"{n_b1}/{len(above)} ≥ 10%",
-        fontsize=FONT.LABEL - 1, pad=3)
-    ax.legend(fontsize=FONT.LEGEND - 1, frameon=False)
-    ax.text(0.02, 0.97, case['panel2'], transform=ax.transAxes,
-            fontsize=FONT.PANEL, fontweight='bold', va='top', ha='left')
+        f"{case['label']} × {sup_short}\nn = {n_above} sessions (d ≥ {D_THRESH})",
+        fontsize=FONT.LABEL - 1, pad=8)
 
-add_footnote(fig2,
-    f"Analysis set: sessions with d ≥ {D_THRESH}, sorted by Cohen's d.  "
-    f"Blue: GPV(feature) ≥ 10% of ensemble R² (model attributes directly).  "
-    f"Grey: Bucket 2.")
-savefig_manifest(fig2, 'e07_e23_bucket_gpv.png', OUT_DIRS)
-print('Saved e07_e23_bucket_gpv.png')
+savefig_manifest(fig2, 'e07_e23_attribution_pie.png', OUT_DIRS)
+print('Saved e07_e23_attribution_pie.png')
 plt.close(fig2)
-
-
-# ══════════════════════════════════════════════════════════════════════════════
-# Figure 3 — Bucket 2: scatter η²(best feature, sup_cond) vs GPV(best feature)/R²
-# Best feature = argmax η² × GPV/R² (highest joint co-variation + attribution score)
-# ══════════════════════════════════════════════════════════════════════════════
-FEAT_COLORS = {
-    'frame_raw_500msMedian':                  '#2CA02C',
-    'frame_YawPitch_abs_vel_sum_500msMedian': '#9467BD',
-    'head_angle':                             '#1F77B4',
-    'frame_position':                         '#8C564B',
-    'head_angle_vel':                         '#E377C2',
-}
-DEFAULT_COLOR = '#888888'
-
-fig3, axes3 = plt.subplots(1, 2, figsize=FIG.FULL)
-apply_style(fig3, list(axes3))
-
-# Pre-compute shared axis limits across both panels
-all_b2 = [r for rows in case_data for r in rows
-          if r['cd'] >= D_THRESH and r['frac'] < GPV_THRESH]
-_xs = [r['joint_best_eta2'] for r in all_b2]
-_ys = [r['joint_best_frac'] for r in all_b2]
-X_MAX = max(_xs) * 1.18 if _xs else 0.35
-Y_MAX = max(_ys) * 1.12 if _ys else 2.0
-
-for case, rows, ax in zip(CASES, case_data, axes3):
-    b2 = [r for r in rows if r['cd'] >= D_THRESH and r['frac'] < GPV_THRESH]
-    if not b2:
-        ax.text(0.5, 0.5, 'No Bucket 2 sessions', ha='center', va='center',
-                transform=ax.transAxes, fontsize=FONT.LABEL)
-        ax.set_title(f"{case['label']}: Bucket 2 (none)",
-                     fontsize=FONT.LABEL - 1)
-        add_panel_label(ax, case['panel3'])
-        continue
-
-    xs      = np.array([r['joint_best_eta2'] for r in b2])
-    ys      = np.array([r['joint_best_frac'] for r in b2])
-    feat_gs = [r['joint_best_g']             for r in b2]
-    s_idxs  = [r['s_idx']                    for r in b2]
-    colors  = [FEAT_COLORS.get(g, DEFAULT_COLOR) for g in feat_gs]
-
-    ax.scatter(xs, ys, c=colors, s=65, alpha=0.85, zorder=3,
-               edgecolors='white', linewidths=0.4)
-    for xi, yi, si in zip(xs, ys, s_idxs):
-        ax.annotate(f'S{si+1:02d}', (xi, yi), fontsize=5.5,
-                    xytext=(3, 3), textcoords='offset points', color='#444')
-
-    ax.axhline(GPV_THRESH, color='#444', lw=0.9, ls='--', alpha=0.6,
-               label=f'GPV/R² = {GPV_THRESH}')
-    ax.axvline(0.05, color='#888', lw=0.9, ls=':', alpha=0.5,
-               label='η² = 0.05')
-
-    ax.set_xlim(0, X_MAX)
-    ax.set_ylim(0, Y_MAX)
-
-    ax.set_xlabel(f'η²(feature, {case["sup_label"]} condition)',
-                  fontsize=FONT.LABEL - 1)
-    ax.set_ylabel('GPV / R²  (same feature)', fontsize=FONT.LABEL - 1)
-    ax.set_title(
-        f"{case['label']}: {len(b2)} Bucket 2 sessions",
-        fontsize=FONT.LABEL - 1, pad=3)
-    ax.text(0.02, 0.97, case['panel3'], transform=ax.transAxes,
-            fontsize=FONT.PANEL, fontweight='bold', va='top', ha='left')
-
-add_footnote(fig3,
-    f'Bucket 2: GPV(feature)/R² < {GPV_THRESH} despite d ≥ {D_THRESH}.  '
-    'Feature = argmax η²(feat, condition) × GPV(feat)/R² per session.  '
-    'X: co-variation with the condition label.  Y: model attribution to that feature.  '
-    'Colours: ■ green = Fwd Speed  ■ blue = Head Angle  ■ purple = Rot. Vel.')
-savefig_manifest(fig3, 'e07_e23_bucket_covariation.png', OUT_DIRS)
-print('Saved e07_e23_bucket_covariation.png')
-plt.close(fig3)

@@ -119,10 +119,10 @@ curves      = candidate_data[best_ensemble]['curves']
 pref_angles = candidate_data[best_ensemble]['pref_angles']
 n_curves    = len(curves)
 
-fig, (ax_l, ax_r) = plt.subplots(1, 2, figsize=FIG.FULL, gridspec_kw={'width_ratios': [2, 1]})
-apply_style(fig, [ax_l, ax_r])
+fig, ax_l = plt.subplots(1, 1, figsize=FIG.FULL)
+apply_style(fig, [ax_l])
 
-# Left: overlaid curves
+# Overlaid per-session curves + mean
 all_means = np.stack([curves[s][1] for s in curves])
 mean_curve = np.mean(all_means, axis=0)
 example_centers = curves[list(curves.keys())[0]][0]
@@ -136,26 +136,6 @@ ax_l.axhline(0, color='#888', lw=0.7, linestyle='--')
 ax_l.set_xlabel(FEATURE_NAMES['head_angle'], fontsize=FONT.LABEL)
 ax_l.set_ylabel(AXIS_LABELS['activity'], fontsize=FONT.LABEL)
 ax_l.legend(fontsize=FONT.LEGEND, frameon=False)
-add_panel_label(ax_l, 'A')
-
-# Right: preferred angle bar per session
-session_indices = list(curves.keys())
-x = np.arange(len(session_indices))
-ax_r.bar(x, pref_angles, color='#4a90d9', alpha=0.85, width=0.65)
-ax_r.axhline(np.mean(pref_angles), color='#1a5fa8', lw=1.5, linestyle='--',
-             label=f'mean = {np.mean(pref_angles):.2f}')
-ax_r.set_xlabel(AXIS_LABELS['session'], fontsize=FONT.LABEL)
-ax_r.set_ylabel(FEATURE_NAMES['head_angle'], fontsize=FONT.LABEL)
-ax_r.set_xticks(x[::3])
-ax_r.set_xticklabels([f"S{s+1}" for s in session_indices[::3]],
-                     rotation=90, ha='center', fontsize=FONT.TICK - 2)
-ax_r.legend(fontsize=FONT.LEGEND, frameon=False)
-add_panel_label(ax_r, 'B')
-
-add_footnote(fig,
-    f"E{best_ensemble+1:02d}; {n_curves} sessions; "
-    f"preferred head angle std = {best_stability:.3f}; "
-    f"decile bins, mean ± SEM per bin")
 
 savefig_manifest(fig, "head_angle_stability.png", OUT_DIRS)
 print("Generated head_angle_stability.png")

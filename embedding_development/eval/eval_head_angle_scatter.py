@@ -42,16 +42,28 @@ session_ids = list(ds.keys())
 
 all_r2    = np.load(os.path.join(mdir, "all_r2.npy"))    # (5, 29, 23)
 mean_r2   = np.nanmean(all_r2, axis=0)                   # (29, 23)
+ig_all    = np.load(os.path.join(mdir, "importance_ig_semantic.npy"))  # (29, 23, 11)
+
+with open(os.path.join(mdir, "semantic_groups.pkl"), "rb") as f:
+    sg = pickle.load(f)
+group_names  = [g[0] for g in sg]
+HA_GROUP_IDX = group_names.index("head_angle")
 
 n_sessions, n_ensembles = mean_r2.shape
 
 # ─── SELECT TOP 4 PAIRS ───────────────────────────────────────────────────────
-flat_order = np.argsort(mean_r2.ravel())[::-1]
-top_pairs  = []
+# Rank by IG attribution to head_angle (R²>=0.05); max 1 pair per session.
+ig_ha = ig_all[:, :, HA_GROUP_IDX].copy()
+ig_ha[mean_r2 < 0.05] = -np.inf
+
+flat_order  = np.argsort(ig_ha.ravel())[::-1]
+seen        = set()
+top_pairs   = []
 for fi in flat_order:
     s_idx = fi // n_ensembles
     n_idx = fi % n_ensembles
-    if np.isfinite(mean_r2[s_idx, n_idx]) and mean_r2[s_idx, n_idx] > 0.01:
+    if s_idx not in seen and np.isfinite(ig_ha[s_idx, n_idx]):
+        seen.add(s_idx)
         top_pairs.append((s_idx, n_idx))
     if len(top_pairs) == 4:
         break
@@ -142,8 +154,7 @@ cbar = fig.colorbar(sc, cax=cax)
 cbar.ax.tick_params(labelsize=FONT.TICK - 1)
 cbar.set_label(AXIS_LABELS['activity'], fontsize=FONT.LABEL - 1)
 
-add_footnote(fig,
-    "Top 4 pairs by MLP R²; color = z-scored activation (5th–95th %ile clip)")
+
 
 # skip_tight_layout: layout is set explicitly above; tight_layout would fight
 # with the manually-positioned colorbar axis.

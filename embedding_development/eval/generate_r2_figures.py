@@ -31,8 +31,8 @@ root = os.path.join(base, "..")
 PATHS = {
     'Linear':        os.path.join(root, "outputs", "linear",           "ensembles_multiseed", "all_r2.npy"),
     'MLP':           os.path.join(root, "outputs", "mlps",             "ensembles_multiseed", "all_r2.npy"),
-    'TempConv-Cont': os.path.join(root, "outputs", "cebra_eval",       "ensembles",           "all_r2.npy"),
-    'TempConv-Pred': os.path.join(root, "outputs", "cebra_pred_eval",  "ensembles",           "all_r2.npy"),
+    'TempConv-Cont': os.path.join(root, "outputs", "cebra_64d_eval",      "ensembles", "all_r2.npy"),
+    'TempConv-Pred': os.path.join(root, "outputs", "cebra_pred_64d_eval", "ensembles", "all_r2.npy"),
 }
 
 OUT_DIRS = [
@@ -255,5 +255,57 @@ if len(tempconv_names) >= 1:
     add_footnote(fig, f"TempConv variants; {len(SEEDS)} seeds × {n_sessions} sessions; x-axis sorted by MLP R²")
     savefig_manifest(fig, "r2_bar_tempconv_comparison.png", OUT_DIRS)
     print("Generated r2_bar_tempconv_comparison.png")
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Combined top-10: MLP | TC-Cont | TC-Pred  (3 side-by-side panels)
+# ═══════════════════════════════════════════════════════════════════════════════
+if all(n in data for n in ['MLP', 'TempConv-Cont', 'TempConv-Pred']):
+    N_TOP = 10
+
+    mlp_mean_full = ma.array(np.clip(stats['MLP'][0], 0, 1),
+                              mask=stats['MLP'][1]).mean(axis=0).filled(np.nan)
+    # Top-N ensemble indices sorted ascending (lowest of top-N on left)
+    top_idx = np.argsort(mlp_mean_full)[-N_TOP:]   # ascending within top-N
+
+    model_specs = [
+        ('MLP',           MODEL_COLORS.get('MLP',           '#2CA02C')),
+        ('TempConv-Cont', MODEL_COLORS.get('TempConv-Cont', '#1F77B4')),
+        ('TempConv-Pred', MODEL_COLORS.get('TempConv-Pred', '#FF7F0E')),
+    ]
+
+    fig, axes = plt.subplots(1, 3, figsize=FIG.FULL,
+                              gridspec_kw={'wspace': 0.35})
+    apply_style(fig, list(axes))
+
+    # Shared y-max across all three models for the top-10 ensembles
+    all_vals = []
+    for name, _ in model_specs:
+        n_mean = ma.array(np.clip(stats[name][0], 0, 1),
+                          mask=stats[name][1]).mean(axis=0).filled(np.nan)
+        all_vals.extend(n_mean[top_idx][np.isfinite(n_mean[top_idx])].tolist())
+    ymax = max(all_vals) * 1.3 if all_vals else 0.5
+
+    xpos   = np.arange(N_TOP)
+    labels = [f'{PREFIX}{i+1:02d}' for i in top_idx]
+
+    short_names = {'MLP': 'MLP', 'TempConv-Cont': 'TC-Cont', 'TempConv-Pred': 'TC-Pred'}
+    for col, (ax, (name, color)) in enumerate(zip(axes, model_specs)):
+        n_mean = ma.array(np.clip(stats[name][0], 0, 1),
+                          mask=stats[name][1]).mean(axis=0).filled(np.nan)
+        vals = n_mean[top_idx]
+        mean_val = float(np.nanmean(vals))
+
+        ax.bar(xpos, vals, width=0.65, color=color, alpha=0.85, zorder=3)
+        ax.axhline(0, color='#888', lw=0.7, ls='--')
+        ax.set_xticks(xpos)
+        ax.set_xticklabels(labels, rotation=90, ha='center',
+                           fontsize=FONT.TICK - 1)
+        ax.set_ylim(0, ymax)
+        ax.set_ylabel(AXIS_LABELS['r2'] if col == 0 else '', fontsize=FONT.LABEL)
+        ax.set_title(f'{short_names[name]}\nmean = {mean_val:.3f}',
+                     fontsize=FONT.LABEL, fontweight='bold', color=color, pad=4)
+
+    savefig_manifest(fig, 'r2_bar_top10_combined.png', OUT_DIRS)
+    print('Generated r2_bar_top10_combined.png')
 
 print("All R² manifest figures done.")

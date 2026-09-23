@@ -16,7 +16,7 @@ loses to head_angle in the full model.
 
 figsize: 9.5" × 4.8" — fits slide content area below a 0.6" title bar.
 """
-import os, sys, pickle
+import os, sys, pickle, argparse
 import numpy as np
 import matplotlib; matplotlib.use('Agg')
 import matplotlib.pyplot as plt
@@ -34,7 +34,12 @@ S_IDX, E_IDX = 20, 7   # S21, E08
 base  = os.path.dirname(os.path.abspath(__file__))
 root  = os.path.join(base, '..')
 mdir  = os.path.join(root, 'outputs', 'mlps', 'ensembles_multiseed')
-OUT_DIRS = [mdir, '/mnt/c/Users/amits/Desktop']
+parser = argparse.ArgumentParser()
+parser.add_argument('--copy_dir', type=str, default='/mnt/c/Users/amits/Desktop',
+                    help='Extra directory to save a copy of the figure to')
+args = parser.parse_args()
+
+OUT_DIRS = [mdir, args.copy_dir]
 
 # ── Load ──────────────────────────────────────────────────────────────────────
 with open(os.path.join(root, 'outputs', 'session_dataset_ensembles.pkl'), 'rb') as f:

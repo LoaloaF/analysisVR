@@ -5,13 +5,22 @@ GLM vs MLP figure (single-unit spikes):
 
 Depends on outputs/glm_results/glm_vs_mlp_spikes.npz (from gen_glm_vs_mlp.py).
 """
-import os, sys
+import os, sys, argparse
 import numpy as np
 import pandas as pd
 from scipy.stats import spearmanr
 import matplotlib.pyplot as plt
 
-os.chdir("/home/amitsant2000/ethz/VirtualReality/analysisVR/embedding_development")
+parser = argparse.ArgumentParser()
+parser.add_argument("--root", type=str,
+                    default="/home/amitsant2000/ethz/VirtualReality/analysisVR/embedding_development",
+                    help="Path to the embedding_development/ directory")
+parser.add_argument("--copy_dir", type=str,
+                    default="/home/amitsant2000/ethz/Ensemble-Based-Action-Embeddings-using-Neural-Network-Based-Encoding-Models/images",
+                    help="Extra directory to save a copy of the figure to")
+args = parser.parse_args()
+
+os.chdir(args.root)
 sys.path.insert(0, os.path.abspath("."))
 from utils.figure_style import FIG, apply_style, savefig_manifest
 
@@ -87,6 +96,5 @@ axB.set_xticks([0, 1]); axB.set_xticklabels(['Monotone', 'Non-monotone'])
 axB.set_ylabel('mean  MLP $-$ GLM  $R^2$')
 axB.set_ylim(0, max(means) * 1.35)
 
-savefig_manifest(fig, 'glm_vs_mlp.png', ['outputs/glm_results',
-    '/home/amitsant2000/ethz/Ensemble-Based-Action-Embeddings-using-Neural-Network-Based-Encoding-Models/images'])
+savefig_manifest(fig, 'glm_vs_mlp.png', ['outputs/glm_results', args.copy_dir])
 print("saved glm_vs_mlp.png")

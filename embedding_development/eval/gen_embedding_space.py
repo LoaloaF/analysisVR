@@ -8,14 +8,20 @@ Shows that the two objectives organize the embedding space differently.
 
 Output: outputs/mlps/ensembles_multiseed/embedding_space_pred_vs_cont.png
 """
-import os, sys, pickle
+import os, sys, pickle, argparse
 import numpy as np
 import torch
 from sklearn.decomposition import PCA
 import matplotlib; matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 
-os.chdir("/home/amitsant2000/ethz/VirtualReality/analysisVR/embedding_development")
+parser = argparse.ArgumentParser()
+parser.add_argument("--root", type=str,
+                    default="/home/amitsant2000/ethz/VirtualReality/analysisVR/embedding_development",
+                    help="Path to the embedding_development/ directory")
+args = parser.parse_args()
+
+os.chdir(args.root)
 sys.path.insert(0, os.path.abspath("."))
 from utils.load_encoder import build_windows, embed_windows, load_encoder
 from utils.figure_style import FIG, apply_style, savefig_manifest

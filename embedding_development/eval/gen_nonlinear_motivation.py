@@ -18,18 +18,24 @@ Output: nonlinear_motivation.png  (no caption / footnote)
 import os
 import sys
 import pickle
+import argparse
 import numpy as np
 import matplotlib.pyplot as plt
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))
 from utils.figure_style import FIG, apply_style, savefig_manifest
 
+parser = argparse.ArgumentParser()
+parser.add_argument('--copy_dir', type=str, default='/mnt/c/Users/amits/Desktop',
+                    help='Extra directory to save a copy of the figure to')
+args = parser.parse_args()
+
 # ─── PATHS ────────────────────────────────────────────────────────────────────
 base     = os.path.dirname(os.path.abspath(__file__))
 root     = os.path.join(base, '..')
 mv_dir   = os.path.join(root, 'outputs', 'mlps', 'ml_vs_naive')
 attr_dir = os.path.join(root, 'outputs', 'mlps', 'ensembles_multiseed')
-OUT_DIRS = [mv_dir, '/mnt/c/Users/amits/Desktop']
+OUT_DIRS = [mv_dir, args.copy_dir]
 
 # ─── LOAD ─────────────────────────────────────────────────────────────────────
 eta2       = np.load(os.path.join(mv_dir, 'eta2.npy'))               # (29,23,11) η²

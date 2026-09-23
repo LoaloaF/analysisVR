@@ -16,7 +16,7 @@ Figure layout: 2 rows × 4 panels
           from binned test-set outputs (dashed)
   Row 2: per-pair R² bars — full model vs position-only vs shuffled null
 """
-import os, sys, pickle
+import os, sys, pickle, argparse
 import numpy as np
 import torch
 import torch.nn as nn
@@ -46,7 +46,12 @@ BATCH      = 512        # unused in full-batch mode
 base   = os.path.dirname(os.path.abspath(__file__))
 root   = os.path.join(base, '..')
 mdir   = os.path.join(root, 'outputs', 'mlps', 'ensembles_multiseed')
-OUT_DIRS = [mdir, '/mnt/c/Users/amits/Desktop']
+parser = argparse.ArgumentParser()
+parser.add_argument('--copy_dir', type=str, default='/mnt/c/Users/amits/Desktop',
+                    help='Extra directory to save a copy of the figure to')
+args = parser.parse_args()
+
+OUT_DIRS = [mdir, args.copy_dir]
 
 # Cache key encodes all hyperparameters that affect the results
 CACHE_KEY  = f'np{N_PAIRS}_s{"_".join(map(str,SEEDS))}_ep{N_EPOCHS}_h{"_".join(map(str,HIDDEN))}_sh{N_SHUFFLE}'

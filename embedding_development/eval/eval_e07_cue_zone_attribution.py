@@ -13,7 +13,7 @@ cue_visible or frame_position directly.
 
 Output: outputs/ablation_vs_attribution/e07_cue_zone_attribution.png
 """
-import os, sys, pickle
+import os, sys, pickle, argparse
 import numpy as np
 import torch
 import matplotlib; matplotlib.use('Agg')
@@ -26,11 +26,16 @@ from utils.figure_style import (
     apply_style, add_footnote, add_panel_label, savefig_manifest,
 )
 
+parser = argparse.ArgumentParser()
+parser.add_argument('--copy_dir', type=str, default='/mnt/c/Users/amits/Desktop',
+                    help='Extra directory to save a copy of the figure to')
+args = parser.parse_args()
+
 root   = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..')
 mdir   = os.path.join(root, 'outputs', 'mlps', 'ensembles_multiseed')
 OUT_DIRS = [
     os.path.join(root, 'outputs', 'ablation_vs_attribution'),
-    '/mnt/c/Users/amits/Desktop',
+    args.copy_dir,
 ]
 for d in OUT_DIRS:
     os.makedirs(d, exist_ok=True)

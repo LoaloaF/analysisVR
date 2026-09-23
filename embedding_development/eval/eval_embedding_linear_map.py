@@ -16,7 +16,7 @@ variable that changes is which neural population the model was trained on.
 
 Speed: each model is loaded ONCE and applied to all needed X arrays before unloading.
 """
-import os, sys, pickle, warnings, time
+import os, sys, pickle, warnings, time, argparse
 import numpy as np
 import torch
 from sklearn.linear_model import Ridge
@@ -30,6 +30,11 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'
 from utils.models import MLP
 from utils.load_encoder import build_windows, embed_windows, load_encoder
 from utils.figure_style import FIG, DPI, FONT, apply_style, add_footnote, savefig_manifest
+
+parser = argparse.ArgumentParser()
+parser.add_argument('--copy_dir', type=str, default='/mnt/c/Users/amits/Desktop',
+                    help='Extra directory to save a copy of the figure to')
+args = parser.parse_args()
 
 base = os.path.dirname(os.path.abspath(__file__))
 root = os.path.join(base, '..')
@@ -443,6 +448,6 @@ add_footnote(fig,
     f'Bidirectional ridge regression (5-fold CV, mean of both directions); R²≥{R2_THR}; '
     f'cross-session/ensemble: seed 42; cross-seed: common test input')
 
-OUT_DIRS = [mdir, cdir, '/mnt/c/Users/amits/Desktop']
+OUT_DIRS = [mdir, cdir, args.copy_dir]
 savefig_manifest(fig, 'embedding_linear_map.png', OUT_DIRS)
 print('\nDone. Generated embedding_linear_map.png')

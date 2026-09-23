@@ -11,7 +11,7 @@ head angle as the case study.
 
 Output: head_angle_attribution_summary.png  (9.5" × 3.5")
 """
-import os, sys, pickle
+import os, sys, pickle, argparse
 import numpy as np
 import matplotlib; matplotlib.use('Agg')
 import matplotlib.pyplot as plt
@@ -25,7 +25,12 @@ from utils.figure_style import (
 base = os.path.dirname(os.path.abspath(__file__))
 root = os.path.join(base, '..')
 mdir = os.path.join(root, 'outputs', 'mlps', 'ensembles_multiseed')
-OUT_DIRS = [mdir, '/mnt/c/Users/amits/Desktop/']
+parser = argparse.ArgumentParser()
+parser.add_argument('--copy_dir', type=str, default='/mnt/c/Users/amits/Desktop/',
+                    help='Extra directory to save a copy of the figure to')
+args = parser.parse_args()
+
+OUT_DIRS = [mdir, args.copy_dir]
 
 with open(os.path.join(mdir, 'semantic_groups.pkl'), 'rb') as f:
     sg = pickle.load(f)

@@ -12,7 +12,7 @@ with prominence >= 18 % of the curve range.
 
 Output: outputs/mlps/ensembles_multiseed/tuning_shape_examples.png
 """
-import os, sys, pickle
+import os, sys, pickle, argparse
 from collections import Counter
 import numpy as np
 import matplotlib; matplotlib.use('Agg')
@@ -23,7 +23,12 @@ from utils.figure_style import DPI, FONT, apply_style, savefig_manifest
 
 root     = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..')
 mdir     = os.path.join(root, 'outputs', 'mlps', 'ensembles_multiseed')
-OUT_DIRS = [mdir, '/mnt/c/Users/amits/Desktop']
+parser = argparse.ArgumentParser()
+parser.add_argument('--copy_dir', type=str, default='/mnt/c/Users/amits/Desktop',
+                    help='Extra directory to save a copy of the figure to')
+args = parser.parse_args()
+
+OUT_DIRS = [mdir, args.copy_dir]
 
 R2_THR   = 0.05
 N_BINS   = 10

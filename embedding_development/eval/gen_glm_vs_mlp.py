@@ -12,14 +12,20 @@ Outputs:
   outputs/glm_results/glm_vs_mlp_spikes.npz   (per session,unit R2 arrays)
   outputs/glm_results/glm_vs_mlp_spikes.png   (paired scatter + summary)
 """
-import os, sys, warnings
+import os, sys, warnings, argparse
 import numpy as np
 import pandas as pd
 import statsmodels.api as sm
 from sklearn.metrics import r2_score
 
+parser = argparse.ArgumentParser()
+parser.add_argument("--root", type=str,
+                    default="/home/amitsant2000/ethz/VirtualReality/analysisVR/embedding_development",
+                    help="Path to the embedding_development/ directory")
+args = parser.parse_args()
+
 warnings.simplefilter("ignore")
-os.chdir("/home/amitsant2000/ethz/VirtualReality/analysisVR/embedding_development")
+os.chdir(args.root)
 sys.path.insert(0, os.path.abspath("."))
 
 B = "outputs/glm_input_data/"

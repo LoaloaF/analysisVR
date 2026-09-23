@@ -9,7 +9,7 @@ For each case (E07 x cue_visible, E23 x upcoming_choice):
 
 Output: e07_e23_bucket_ig.png
 """
-import os, sys, pickle
+import os, sys, pickle, argparse
 import numpy as np
 import matplotlib; matplotlib.use('Agg')
 import matplotlib.pyplot as plt
@@ -20,8 +20,13 @@ sys.path.insert(0, root)
 from utils.figure_style import FIG, FONT, apply_style, add_footnote, add_panel_label, savefig_manifest
 
 mdir = os.path.join(root, 'outputs', 'mlps', 'ensembles_multiseed')
+parser = argparse.ArgumentParser()
+parser.add_argument('--copy_dir', type=str, default='/mnt/c/Users/amits/Desktop',
+                    help='Extra directory to save a copy of the figure to')
+args = parser.parse_args()
+
 OUT_DIRS = [os.path.join(root, 'outputs', 'ablation_vs_attribution'),
-            '/mnt/c/Users/amits/Desktop']
+            args.copy_dir]
 
 with open(os.path.join(root, 'outputs', 'session_dataset_ensembles.pkl'), 'rb') as f:
     ds = pickle.load(f)

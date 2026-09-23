@@ -50,6 +50,8 @@ parser.add_argument('--n_pairs',  type=int, default=15,
                     help='Max pairs per continuous group for temporal IG computation')
 parser.add_argument('--seed',     type=int, default=42)
 parser.add_argument('--ig_steps', type=int, default=50)
+parser.add_argument('--copy_dir', type=str, default='/mnt/c/Users/amits/Desktop/temporal_advantage',
+                    help='Extra directory to save a copy of the figures to')
 args = parser.parse_args()
 
 SEED     = args.seed
@@ -60,7 +62,7 @@ WIN_LEN   = 10
 WIN_OFFSETS = list(range(-5, 5))   # k=0 → t-5, k=5 → t, k=9 → t+4
 
 out_dir  = 'outputs/temporal_advantage'
-desk_dir = '/mnt/c/Users/amits/Desktop/temporal_advantage'
+desk_dir = args.copy_dir
 os.makedirs(out_dir,  exist_ok=True)
 os.makedirs(desk_dir, exist_ok=True)
 

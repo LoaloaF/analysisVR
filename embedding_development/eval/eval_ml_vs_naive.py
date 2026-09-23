@@ -14,7 +14,7 @@ Part 4  Ablation proof: for pairs where GLM says nothing, a single-feature nonli
                         still predicts — proving a functional mapping exists
 """
 
-import os, sys, shutil, pickle, warnings
+import os, sys, shutil, pickle, warnings, argparse
 warnings.filterwarnings('ignore')
 import numpy as np
 import torch
@@ -48,11 +48,17 @@ CONT_GROUPS  = list(range(7))
 # Categorical groups (indices 7-10)
 CAT_GROUPS   = list(range(7, 11))
 
+parser = argparse.ArgumentParser()
+parser.add_argument('--copy_dir', type=str, default='/mnt/c/Users/amits/Desktop/ml_vs_naive',
+                    help='Extra directory to save a copy of the figures to')
+args = parser.parse_args()
+
 output_dir  = "./outputs/mlps/ml_vs_naive"
-desktop_dir = "/mnt/c/Users/amits/Desktop/ml_vs_naive"
-for d in (output_dir, desktop_dir):
-    if os.path.exists(d): shutil.rmtree(d)
-    os.makedirs(d)
+desktop_dir = args.copy_dir
+# only wipe our own output dir; never rmtree a user-supplied path
+if os.path.exists(output_dir): shutil.rmtree(output_dir)
+os.makedirs(output_dir)
+os.makedirs(desktop_dir, exist_ok=True)
 
 device = torch.device('cpu')
 

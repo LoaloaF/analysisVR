@@ -2,7 +2,7 @@
 
 ## Mandatory: update slide manifest with every build
 
-Whenever a new `eval/build_vN.py` is created and run, immediately update
+Whenever a new `plotslop/build_vN.py` is created and run, immediately update
 `docs/slide_manifest.md` to reflect:
 - The new version number and slide count in the header
 - Any slides inserted, removed, or reordered (update all affected S-numbers and idx values)
@@ -30,7 +30,7 @@ Current latest: `ultimate_presentation_v51.pptx` (94 slides)
 | Figure outputs (MLP) | outputs/mlps/ensembles_multiseed/ |
 | Figure outputs (CEBRA comparison) | outputs/cebra_comparison/ |
 | Figure outputs (ml_vs_naive) | outputs/mlps/ml_vs_naive/ |
-| Build scripts | eval/build_vN.py |
+| Build scripts | plotslop/build_vN.py |
 | Slide manifest | docs/slide_manifest.md |
 | Slide narrative plan | docs/slide_plan_v2.md |
 | Conda environment | analysisVR |

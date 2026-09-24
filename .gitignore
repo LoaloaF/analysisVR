@@ -17,6 +17,9 @@ events.csv
 psytrack
 rasterm
 .DS_Store
+
+embedding_development/plotslop/
+
 /scripted_plotting/experimental_poster_sfn.ipynb
 /scripted_plotting/profiling*
 /scripted_plotting/playground.ipynb

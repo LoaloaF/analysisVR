@@ -15,24 +15,11 @@ logs/
 test_indices_by_session.npy
 
 # PowerPoint / slide-deck generation (excluded from git; kept locally)
-eval/build_v*.py
-eval/build_ultimate_presentation.py
-eval/build_manifest_slides.py
-eval/align_story_titles.py
-eval/check_slide_overlaps.py
-eval/convert_to_white_theme.py
-eval/fix_story_and_cebra.py
-eval/insert_consistency_slides.py
-eval/update_cleanup_slides.py
-eval/update_example_slides.py
-eval/update_pptx_slides42.py
-eval/update_presentation.py
-eval/update_stale_slides.py
-docs/slide_manifest.md
-docs/slide_plan_v2.md
+plotslop/
+docs/
 *.pptx
 
 # superseded / scratch (kept locally, not tracked)
-eval/_mlp_plots_only.py
-eval/regen_consistency_comparison.py
-eval/check_gpv_pairs.py
+
+# obsolete scripts (kept locally, not tracked); matches obsolete/ inside any folder
+obsolete/

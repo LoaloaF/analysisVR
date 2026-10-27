@@ -52,6 +52,12 @@ def _interval_mask(sample_ids, intervals):
     return (k >= 0) & (sample_ids <= b[np.clip(k, 0, None)])
 
 
+def is_logger_session(session_fullfname):
+    """Logger sessions carry their own JRClust results (<prm>_res.mat) next to the session hdf5."""
+    session_dir = os.path.dirname(session_fullfname)
+    return any(f.endswith('_res.mat') and not f.startswith('._') for f in os.listdir(session_dir))
+
+
 def extract_jrc_spikes_logger(session_fullfname, drop_cluster_types=('to_delete', '')):
     L = Logger()
     session_dir = os.path.dirname(session_fullfname)

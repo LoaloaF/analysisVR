@@ -11,11 +11,12 @@ import analytics_processing.sessions_from_nas_parsing as sp
 import analytics_processing.analytics_constants as C
 
 # analytics computations related, allowed to fail for extiernal imports that only read analytics
+import ephys_preprocessing.postproc_mea1k_ephys as ephys
+import ephys_preprocessing.postproc_logger_ephys as logger_ephys
 try:
     from pyarrow import parquet as pq
     import analytics_processing.agg_modalities2analytic as m2a
     import analytics_processing.integr_analytics as integr_analytics
-    import ephys_preprocessing.postproc_mea1k_ephys as ephys
 except ImportError as e:
     print("Warning: Failed to import packages required for analytics computation modules:", e)
 
@@ -309,7 +310,11 @@ def _compute_sess_analytic(analytic, session_fullfname):
     ### ========================= EPHYS  BASIC  ===========================
     
     elif set(analytic.split("-")) == {'SpikeClusterMetadata', 'Spikes'}:
-        sp_clust_metadata, spikes = ephys.extract_jrc_spikes(session_fullfname)
+        if logger_ephys.is_logger_session(session_fullfname):
+            # wireless logger: one JRClust run per session, sorting output sits in the session dir
+            sp_clust_metadata, spikes = logger_ephys.extract_jrc_spikes_logger(session_fullfname)
+        else:
+            sp_clust_metadata, spikes = ephys.extract_jrc_spikes(session_fullfname)
         data = spikes, sp_clust_metadata
         if data[0] is None:
             return None

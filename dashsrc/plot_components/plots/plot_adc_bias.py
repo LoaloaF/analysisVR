@@ -266,7 +266,10 @@ def calculate_rms_noise(session_dir, n_samples, ampl_ids=None, n_chunks=10,
     print("\nDone!")
     
     rms_all_chunks = np.array(rms_all_chunks)  # Shape: (n_chunks, n_channels)
-    rms_per_channel = np.mean(rms_all_chunks, axis=0)  # Average over chunks
+    # rms_per_channel = np.mean(rms_all_chunks, axis=0)  # Average over chunks
+
+    print("✅ RMS must be combined as a quadratic (power) mean")
+    rms_per_channel = np.sqrt(np.mean(rms_all_chunks**2, axis=0))
     
     return rms_per_channel, rms_all_chunks
 

@@ -161,8 +161,8 @@ EARLY_REWARD_LOCATION_COLOR = 'rgba(120,120,120, 1)'
 LATE_REWARD_LOCATION_COLOR = 'rgba(190,190,190, 1)'
 
 R1_CHOICE_CMAP = {
-    1: convert_colors_to_same_type('#2ceaf2')[0][0],  # stopped at R1
-    0: convert_colors_to_same_type("#92d6d7")[0][0],  # skipped R1
+    1: convert_colors_to_same_type('#0044ff')[0][0],  # stopped at R1
+    0: convert_colors_to_same_type("#3094db")[0][0],  # skipped R1
 }
 R2_CHOICE_CMAP = {
     1: convert_colors_to_same_type("#2c82f2")[0][0],  # stopped at R2

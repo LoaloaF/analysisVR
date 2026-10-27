@@ -183,6 +183,7 @@ def get_TrialWiseT0Events40ms(behavior):
         return zone_ts
 
     zones_boundaries = {
+        'track_start': -160,
         'cueZone_visible': -120,
         'cueZone_entry': -80,
         'cueZone_exit': 25,
@@ -190,6 +191,7 @@ def get_TrialWiseT0Events40ms(behavior):
         'enter_reward2Zone': 170,
         'exit_reward1Zone': 110,
         'exit_reward2Zone': 230,
+        'track_end': 259,
     }
     
     # kinematics
@@ -206,18 +208,19 @@ def get_TrialWiseT0Events40ms(behavior):
     # forward_acc_in1sec.index = idx
     
     interval_specifier = {
-        # for decoding before cue vs in cue, sepeartely for cue1 and cue2
-        'pre_cue_interval': {'zone_alignment': 'cueZone_visible', 'n_bins_left': 5, 'n_bins_right': 0},
-        'nextto_cue_interval': {'zone_alignment': 'cueZone_entry', 'n_bins_left': 0, 'n_bins_right': 5},
+        'track_start_interval': {'zone_alignment': 'track_start', 'n_bins_left': 5, 'n_bins_right': 20},
         # for decoding cue, outcome, choice - early in the track
-        'cue_entry_interval': {'zone_alignment': 'cueZone_visible', 'n_bins_left': 3, 'n_bins_right': 37},
-        'cue_exit_interval': {'zone_alignment': 'cueZone_exit', 'n_bins_left': 10, 'n_bins_right': 30},
-        'R1_entry_interval': {'zone_alignment': 'enter_reward1Zone', 'n_bins_left': 10, 'n_bins_right': 30},
+        'cue_entry_interval': {'zone_alignment': 'cueZone_visible', 'n_bins_left': 3, 'n_bins_right': 22},
+        'cue_exit_interval': {'zone_alignment': 'cueZone_exit', 'n_bins_left': 20, 'n_bins_right': 6},
+        'R1_entry_interval': {'zone_alignment': 'enter_reward1Zone', 'n_bins_left': 4, 'n_bins_right': 30},
         'R2_entry_interval': {'zone_alignment': 'enter_reward2Zone', 'n_bins_left': 10, 'n_bins_right': 30},
-        'R1_exit_interval': {'zone_alignment': 'exit_reward1Zone', 'n_bins_left': 10, 'n_bins_right': 30},
-        'R2_exit_interval': {'zone_alignment': 'exit_reward2Zone', 'n_bins_left': 10, 'n_bins_right': 30},
-        'reward1_sound_interval': {'zone_alignment': 'reward1_sound', 'n_bins_left': 1, 'n_bins_right': 39},
-        'reward2_sound_interval': {'zone_alignment': 'reward2_sound', 'n_bins_left': 1, 'n_bins_right': 39},
+        # 'R1_exit_interval': {'zone_alignment': 'exit_reward1Zone', 'n_bins_left': 10, 'n_bins_right': 30},
+        # 'R2_exit_interval': {'zone_alignment': 'exit_reward2Zone', 'n_bins_left': 10, 'n_bins_right': 30},
+        # reward: t0 is the tone, water follows ~500ms (12.5 bins) later. 
+        'reward1_sound_interval': {'zone_alignment': 'reward1_sound', 'n_bins_left': 4, 'n_bins_right': 46},
+        'reward2_sound_interval': {'zone_alignment': 'reward2_sound', 'n_bins_left': 4, 'n_bins_right': 46},
+        # ITI
+        'ITI_interval': {'zone_alignment': 'track_end', 'n_bins_left': 0, 'n_bins_right': 40},
     }
     
     # make a table where every row is a t0 event, keep info like cue, outcome, choice, trial_id
@@ -244,7 +247,11 @@ def get_TrialWiseT0Events40ms(behavior):
             closed='right'
         )
         
-        # Create bin array for each row that matches t0s
-        bins = pd.Series([np.arange(-n_bins_left, n_bins_right).tolist()] * len(t0s.index))
+        # Create bin array for each row that matches t0s. The explicit .index is needed:
+        # .loc[t0s.index] aligns a Series on *labels*, and t0s.index is a sparse subset of
+        # t0_events' RangeIndex (only the rows matching this zone), so a default-indexed
+        # Series would land on the wrong rows and leave most of them NaN.
+        bins = pd.Series([np.arange(-n_bins_left, n_bins_right).tolist()] * len(t0s.index),
+                         index=t0s.index)
         t0_events.loc[t0s.index, interval_name+"_bins"] = bins
     return t0_events

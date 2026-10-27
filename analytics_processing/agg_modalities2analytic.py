@@ -36,7 +36,8 @@ def get_TrackKinematics(session_fullfname):
     framedata = session_modality_from_nas(session_fullfname, "unity_frame")
     metad = session_modality_from_nas(session_fullfname, "metadata")
     
-    if metad['paradigm_id'] in (800, 1100):
+    # if metad['paradigm_id'] in (800, 1100):
+    if True:
         # track_details = json.loads(metad['track_details'])
         # track_details_json = {
         #     zone_name: (zone_info['start_pos'], zone_info['end_pos'])

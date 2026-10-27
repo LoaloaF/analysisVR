@@ -57,6 +57,11 @@ def _parse_args(n_trials, group_by, metric, metric_max, smooth_data):
     elif group_by == 'Part of session':
         group_col = 'trial_id'
         cmap =  make_discr_trial_cmap(n_trials, TRIAL_COL_MAP)
+    elif group_by == 'R1 choice':
+        group_col, cmap = 'choice_R1', R1_CHOICE_CMAP
+    elif group_by == 'R2 choice':
+        group_col, cmap = 'choice_R2', R2_CHOICE_CMAP
+        
     elif group_by == "None":
         group_col = "cue" # can be anything
         cmap = dict.fromkeys([1,2], "rgb(128,128,128)")
@@ -235,7 +240,7 @@ def render_plot(all_data, metadata, n_trials, group_by, group_by_values, metric,
         if data['both_R1_R2_rewarded'].dropna().iloc[0] == 1:
             draw_cues = []
             double_rewards = True
-        if data['flip_Cue1R1_Cue2R2'].dropna().any():# or session_id >= 27:
+        if 'flip_Cue1R1_Cue2R2' in data.columns and data['flip_Cue1R1_Cue2R2'].dropna().any():# or session_id >= 27:
             flipped = True
         
         min_track, max_track = data['from_position_bin'].min(), data['from_position_bin'].max()

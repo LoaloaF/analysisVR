@@ -239,11 +239,12 @@ def column2agg_map(columns):
     sum_cols = [c for c in columns if any(key in c for key in ['count'])]
     first = [c for c in columns if any(key in c for key in ['frame_pc_timestamp', 'frame_ephys_timestamp'])]
     last_cols = [c for c in columns if any(key in c for key in ['frame_pc_timestamp', 'frame_ephys_timestamp'])]
-    other_cols = [c for c in columns if '_detected' in c or c in ['track_zone', 'track_zone_int', 'trial_outcome', 
-                                                                  'upcoming_choice', 'reward_window', 'cue_visible',
-                                                                  'cue', 'flip_Cue1R1_Cue2R2','both_R1_R2_rewarded', 
-                                                                  'choice_R1', 'choice_R2', 'trial_id']]
-    uncategorized = set(columns) - set(kinem_cols) - set(cam_cols) - set(sum_cols) - set(first) - set(last_cols) - set(other_cols)
+    detected_cols = [c for c in columns if '_detected' in c]
+    other_cols = [c for c in columns if c in ['track_zone', 'track_zone_int', 'trial_outcome',
+                                              'upcoming_choice', 'reward_window', 'cue_visible',
+                                              'cue', 'flip_Cue1R1_Cue2R2','both_R1_R2_rewarded',
+                                              'choice_R1', 'choice_R2', 'trial_id']]
+    uncategorized = set(columns) - set(kinem_cols) - set(cam_cols) - set(sum_cols) - set(first) - set(last_cols) - set(detected_cols) - set(other_cols)
     if uncategorized:
         Logger().logger.debug(Logger().fmtmsg((f"Some columns were not categorized "
                                               "into aggregation types, they will"
@@ -254,5 +255,8 @@ def column2agg_map(columns):
             **{col: 'sum' for col in sum_cols},
             **{col: 'last' for col in last_cols},
             **{col: 'first' for col in first},
+            # boolean event spikes: keep if ANY raw frame in the bin fired,
+            # 'first' silently drops events that don't land on the bin's first frame
+            **{col: 'max' for col in detected_cols},
             **{col: 'first' for col in other_cols}
             }

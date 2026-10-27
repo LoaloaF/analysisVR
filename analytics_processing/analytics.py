@@ -19,6 +19,15 @@ try:
 except ImportError as e:
     print("Warning: Failed to import packages required for analytics computation modules:", e)
 
+# Separate block on purpose: this module depends on nothing but numpy/pandas/sklearn, so it
+# stays importable when postproc_mea1k_ephys' own heavier dependencies (cv2, ...) are
+# missing - which is the difference between SVM_TaskSubspaces being computable in a given
+# environment and not.
+try:
+    import ephys_preprocessing.svm_task_subspaces as svmts
+except ImportError as e:
+    print("Warning: Failed to import svm_task_subspaces:", e)
+
 
 def _get_sess_analytic_fname(session_dir, analytic):
     full_path = os.path.join(session_dir, "session_analytics")
@@ -277,7 +286,7 @@ def _compute_sess_analytic(analytic, session_fullfname):
         schema = None
     
     
-    elif analytic == "TrialWiseT0Events40ms":
+    elif analytic == "TrialWiseT0Events40ms2":
         behavior = get_analytics(analytic="Behavior40msAligned",
                                  session_names=[session_name],)
         if behavior is None:
@@ -376,7 +385,9 @@ def _compute_sess_analytic(analytic, session_fullfname):
     #         return None
     #     data = ephys.get_PCsSubspaceAngles(session_subspace_basis, all_subspace_basis)
     
-    elif analytic == "SVMCueOutcomeChoicePred":
+    # elif analytic == "SVML1CueOutcomeChoicePredCCGP":
+    # elif analytic == "SVML1CueOutcomeChoicePredCCGP":
+    elif analytic == "SVML1CueOutcomeChoicePred2CCGP_noNorm":
         fr_z = get_analytics('FiringRate40msZ', session_names=[session_name])
         if fr_z is None:
             return None
@@ -387,15 +398,72 @@ def _compute_sess_analytic(analytic, session_fullfname):
         if beh is None:
             return None
         
-        t0_events = get_analytics('TrialWiseT0Events40ms', session_names=[session_name],)
-
-        data = ephys.get_SVMCueOutcomeChoicePred(fr_z, beh, t0_events)
+        t0_events = get_analytics('TrialWiseT0Events40ms2', session_names=[session_name],)
+        
+        data = ephys.get_SVMCueOutcomeChoicePred(fr_z, beh, t0_events, svm_penalty='l1', 
+                                                 n_shuffles=20,
+                                                #  y_names=['choice_R1', 'cue',  'correctR1stopVScorrectR1skip'], ccgp=False,
+                                                 y_names=['choice_R1', 'cue',  ], ccgp=True,
+                                                 )
         # data_table = C.SVM_CUE_OUTCOME_CHOICE_PRED_TABLE
 
         if data is None:
             L.logger.warning("Failed to compute SVM Cue Outcome Choice Prediction")
             return None
 
+
+    elif analytic == "SVM_TaskSubspacesL1":
+        # Successor to the SVML1CueOutcomeChoicePred* family - see svm_task_subspaces.py's
+        # module docstring for what was wrong with those and what changed. Needs no
+        # behaviour table: every label it fits comes off the t0-events table itself, which
+        # also owns the interval geometry.
+        fr_z = get_analytics('FiringRate40msZ', session_names=[session_name])
+        if fr_z is None:
+            L.logger.warning("Missing lower level analytic")
+            return None
+
+        t0_events = get_analytics('TrialWiseT0Events40ms2', session_names=[session_name])
+        if t0_events is None:
+            L.logger.warning("Missing lower level analytic")
+            return None
+
+        # The two lists are independent: `which_intervals` narrows INTERVALS, `y_names`
+        # REPLACES the default target list (TRIAL_LABEL_TARGETS) rather than adding to it,
+        # and every target is fit in every visited interval. So this is the whole run -
+        # 3 intervals x 4 targets - and dropping a name from either list is how it gets
+        # cheaper. The per-target cost is very uneven, since CONDITIONERS decides separately
+        # which targets also get conditioned fits:
+        #   cue, choice_R1   -> 5 rows per point each: naive, 2 ccgp directions, and the 2
+        #                       matched controls that make the ccgp rows comparable to the
+        #                       naive one (see match_ccgp_n in svm_task_subspaces)
+        #   cueXORchoice_R1  -> 1 row per point: naive only. The nonlinearity probe - a
+        #                       derived target has no conditioner, since conditioning it on
+        #                       one of its own components is degenerate.
+        #   cueANDstopR1     -> 1 row per point: naive only, same reason. NOT a second
+        #                       nonlinearity probe - a 1-vs-3 dichotomy is separable under a
+        #                       purely additive code; it is the "R1 reward fires" readout.
+        kwargs = dict(
+            svm_penalty='l1',
+            which_intervals=['cue_entry_interval', 'cue_exit_interval',
+                             'R1_entry_interval'],
+            y_names=['cue', 'choice_R1', 'cueXORchoice_R1', 'cueANDstopR1'],
+            # 200 bootstrap iterations buys a stable majority vote and a usable 10-90 CI;
+            # affordable here only because the null is turned almost all the way down.
+            n_bootstrap=200,
+            # n_permutations=1 IS NOT A NULL. It exists so the null_*_acc columns are
+            # non-empty and the plotting code that reads them keeps working: with one draw
+            # the smallest attainable p is 1/2, so every p_point_* and every sequence_stats
+            # p in this table is uninformative by construction and must not be reported.
+            # Raise to >=20 (see N_PERMUTATIONS) for any run whose p values get read.
+            n_permutations=1)
+        # env_overrides() is the fast-iteration path (subset of intervals/targets, fewer
+        # permutations, ccgp/matched-control off) and WINS over anything set above, so a
+        # command line can narrow this without editing the file.
+        kwargs.update(svmts.env_overrides())
+        data = svmts.get_SVM_TaskSubspaces(fr_z, t0_events, **kwargs)
+        if data is None:
+            L.logger.warning("Failed to compute SVM_TaskSubspaces")
+            return None
 
     elif analytic == "EnsembleT0Projection":
         ensemble_proj = get_analytics('ConcatenatedEnsambleProj40ms', session_names=[session_name])
@@ -671,5 +739,5 @@ def get_analytics(analytic, mode="set", paradigm_ids=None, animal_ids=None,
         return aggr
     elif mode == "available":
         aggr = np.array(aggr)
-        L.logger.debug(f"Returning {analytic}:\n{aggr}")
+        L.logger.info(f"Returning {analytic}:\n{aggr}")
         return aggr

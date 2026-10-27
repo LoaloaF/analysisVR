@@ -2,7 +2,7 @@ import os
 import time
 import json
 
-from joblib import Parallel, delayed
+from joblib import Parallel, delayed, parallel_config
 import numpy as np
 import pandas as pd
 import re
@@ -22,10 +22,23 @@ from scipy import stats
 
 # slow imports requing C compilation
 from sklearn.decomposition import FastICA
-from sklearn.model_selection import GridSearchCV
-from sklearn.svm import SVC
+from sklearn.model_selection import StratifiedKFold
+from sklearn.svm import SVC, LinearSVC
 from sklearn.pipeline import Pipeline
 from sklearn.metrics import classification_report, balanced_accuracy_score
+from sklearn.exceptions import ConvergenceWarning
+
+import warnings
+# LinearSVC (L1 SVM path) frequently hits max_iter before full convergence on
+# this data; the fit is still usable, so silence the raw per-fold spam.
+# NOTE: this only covers warnings raised in *this* process. GridSearchCV's
+# internal CV folds run in separate joblib/loky worker processes (see
+# fit_SVMs_with_bootstrap, which pins that search to n_jobs=1 specifically so
+# it stays in-process and this filter actually reaches it) — PYTHONWARNINGS
+# would normally be the cross-process fix, but it's broken for dotted-module
+# categories in this environment (`sklearn.exceptions.ConvergenceWarning`
+# fails with "invalid module name" at worker startup), so don't reintroduce it.
+warnings.filterwarnings('ignore', category=ConvergenceWarning)
 
 
 from sklearn.preprocessing import StandardScaler, Normalizer
@@ -2082,72 +2095,147 @@ def get_ensembles_t0_events(
 
     return result
 
-def get_SVMCueOutcomeChoicePred(fr_z, behavior, t0_event_intervals):
-    
-    def fit_SVMs_with_bootstrap(X, Y, n_iterations=200):
-        # --- run grid search ONCE on the full data to find best C ---
-        Cs = [0.1, .5, 1, 5, 10]
-        pipeline = Pipeline([
-            ('norm', Normalizer(norm='l2')),
-            ('svc', SVC(kernel='linear', gamma='scale'))
-        ])
-        grid_search = GridSearchCV(
-            estimator=pipeline,
-            param_grid={'svc__C': Cs},
-            cv=6,
-            scoring='balanced_accuracy',
-            n_jobs=-1,
-            verbose=False,
-        )
-        grid_search.fit(X, Y)
-        best_C = grid_search.best_params_['svc__C']
-        print(f"Best C from grid search: {best_C}")
+def get_SVMCueOutcomeChoicePred(fr_z, behavior, t0_event_intervals, svm_penalty='l2',
+                                 n_shuffles=0, shuffle_n_iterations=30,
+                                 y_names=('cue', 'trial_outcome', 'choice_R1', 'choice_R2'),
+                                 ccgp=False):
+    # svm_penalty: 'l2' -> standard linear SVC (dense weights)
+    #              'l1' -> L1-regularized linear SVM (sparse weights, feature selection)
+    # n_shuffles: if >0, additionally fit this many label-shuffled null models
+    #             (reusing best_C, with shuffle_n_iterations bootstraps each) to
+    #             build a null distribution for acc_aggr/f1_aggr
+    # y_names: behavioral labels to decode. In naive mode (ccgp=False) each is fit
+    #          independently, one row per (timebin, X_modality, y_name).
+    # ccgp: if True, y_names must be exactly [a, b], and fitting is EXCLUSIVELY the
+    #       CCGP pattern below — no naive/traditional fit is run for either name.
+    #       Both pairings are fit: a decoded after training on one level of b and
+    #       testing on the other (and vice versa), and b decoded conditioned on a the
+    #       same way — to test whether each target's coding axis generalizes across
+    #       the other's contexts. The two directions of each pairing are kept as TWO
+    #       separate, fully symmetric rows (same columns as a naive fit, nothing
+    #       prefixed) - conditioner=<name>, train_stratum/test_stratum=0/1, acc_aggr/
+    #       f1_aggr/w/ci/shuffle/n_train/n_test(_pos/_neg) for that direction's own fit
+    #       sizes, plus `more_reliable` (True for whichever direction trained on the
+    #       larger stratum). An imbalanced conditioner (e.g. animal choice behaviour)
+    #       can make one direction's training stratum tiny, so `more_reliable` is what
+    #       downstream consumers use to pick the trustworthy direction per (timebin,
+    #       modality, target, conditioner) group rather than a hardcoded primary/
+    #       secondary split baked into the storage format.
+    if ccgp and len(y_names) != 2:
+        raise ValueError(f"ccgp=True requires y_names=[target, conditioner] (length 2), "
+                          f"got {y_names}")
 
-        # precompute once before loop
-        lbl_counts = pd.Series(Y).value_counts()
+    # Labels that are only DEFINED on a subset of this interval's trials (built in
+    # _process_y_values, masked in _y_trial_subset). Naive-fit-only, for the same reason
+    # the cueANDstop* conjunctions have no conditioned version: the label is derived from
+    # cue and choice_R1, so on its own subset each of those is constant within a level of
+    # the other and a conditioned fit is degenerate by construction rather than by data.
+    # Run these with ccgp=False.
+    SUBSET_Y_NAMES = ('correctR1stopVScorrectR1skip',)
+    if ccgp and set(y_names) & set(SUBSET_Y_NAMES):
+        raise ValueError(f"{sorted(set(y_names) & set(SUBSET_Y_NAMES))} is a subset label "
+                          f"and is fit naively only (ccgp=False), see SUBSET_Y_NAMES")
+
+    def _make_svc(C, penalty):
+        if penalty == 'l1':
+            return LinearSVC(penalty='l1', loss='squared_hinge', dual=False, C=C, max_iter=5000)
+        return SVC(kernel='linear', gamma='scale', C=C)
+
+    # Per-sample L2 normalization (Normalizer(norm='l2')) ahead of the SVC. Currently OFF:
+    # the raw per-sample row norms vary a lot (see the commented-out check in
+    # fit_SVMs_with_bootstrap), so it is a real modelling choice and is being A/B'd rather
+    # than assumed. One flag instead of two commented-out Pipeline steps, so what the fits
+    # actually did and what the rows record ('normalizer' below) cannot drift apart - the
+    # plotting side reads that column back to preprocess its samples the same way, see
+    # llm_plotting/plotlib/fit_samples.py. Set to 'l2_sample' to re-enable.
+    svm_normalizer = None  # None | 'l2_sample'
+
+    def _make_pipe(C, penalty):
+        steps = [('norm', Normalizer(norm='l2'))] if svm_normalizer == 'l2_sample' else []
+        return Pipeline(steps + [('svc', _make_svc(C, penalty))])
+
+    def _standard_sampler(X):
+        # default sampler: resample-all-with-replacement for train, OOB for test —
+        # the original bootstrap behaviour, kept as the default so naive fits are
+        # untouched by the sampler abstraction below.
+        def sampler(seed):
+            rng = np.random.default_rng(seed)
+            train_idx = rng.choice(len(X), size=len(X), replace=True)
+            oob_mask = np.ones(len(X), dtype=bool)
+            oob_mask[train_idx] = False
+            return train_idx, np.where(oob_mask)[0]
+        return sampler
+
+    def _bootstrap_and_aggregate(X, Y, best_C, svm_penalty, n_iterations, parallel=True,
+                                  sampler=None, guard_Y=None):
+        # guard_Y: the label array to check for class-imbalance before fitting.
+        # Defaults to Y (the naive case). CCGP passes the *training stratum's* Y here,
+        # since that's the set the classifier is actually fit on — checking the full
+        # (train+test strata) Y would miss a train stratum too small to fit.
+        lbl_counts = pd.Series(guard_Y if guard_Y is not None else Y).value_counts()
         if lbl_counts.min() < 3:
-            print(f"Not enough samples ({lbl_counts}), aborting")
+            # debug, not warning: with parallel=False this runs inside an outer worker
+            # process, where L.logger has no configured handlers — a .warning() there
+            # would still leak an unformatted line via logging's fallback handler.
+            L.logger.debug(f"Not enough samples ({lbl_counts}), aborting")
             return None
 
+        _sampler = sampler if sampler is not None else _standard_sampler(X)
+
         def _one_bootstrap(seed):
-            rng = np.random.default_rng(seed)
-            indices = rng.choice(len(X), size=len(X), replace=True)
-            X_boot, y_boot = X[indices], Y[indices]
+            train_idx, test_idx = _sampler(seed)
+            X_boot, y_boot = X[train_idx], Y[train_idx]
 
             if len(np.unique(y_boot)) < 2:
                 return None
 
-            oob_mask = np.ones(len(X), dtype=bool)
-            oob_mask[indices] = False
-            X_oob, y_oob = X[oob_mask], Y[oob_mask]
-
-            if len(y_oob) < 4 or len(np.unique(y_oob)) < 2:
+            X_test, y_test = X[test_idx], Y[test_idx]
+            if len(y_test) < 4 or len(np.unique(y_test)) < 2:
                 return None
 
-            pipe = Pipeline([
-                ('norm', Normalizer(norm='l2')),
-                ('svc', SVC(kernel='linear', gamma='scale', C=best_C))
-            ])
-            pipe.fit(X_boot, y_boot)
-            y_pred = pipe.predict(X_oob)
+            pipe = _make_pipe(best_C, svm_penalty)
+            # record locally rather than letting liblinear print straight to stderr —
+            # this runs inside the worker process either way, so it's the only place
+            # we can reliably intercept it; the tally gets logged once, back in the
+            # main process, instead of once per bootstrap iteration.
+            with warnings.catch_warnings(record=True) as caught:
+                warnings.simplefilter('always', category=ConvergenceWarning)
+                pipe.fit(X_boot, y_boot)
+            converged = not any(issubclass(rec.category, ConvergenceWarning) for rec in caught)
+            y_pred = pipe.predict(X_test)
 
-            acc = balanced_accuracy_score(y_oob, y_pred)
-            f1 = classification_report(y_oob, y_pred, output_dict=True, zero_division=0)['macro avg']['f1-score']
+            acc = balanced_accuracy_score(y_test, y_pred)
+            f1 = classification_report(y_test, y_pred, output_dict=True, zero_division=0)['macro avg']['f1-score']
             w = pipe.named_steps['svc'].coef_
             b = pipe.named_steps['svc'].intercept_
 
-            # return oob predictions as (indices, predictions) to reconstruct later
-            oob_indices = np.where(oob_mask)[0]
-            return {'acc': acc, 'f1': f1, 'w': w, 'b': b,
-                    'oob_indices': oob_indices, 'oob_preds': y_pred}
+            # return test predictions as (indices, predictions) to reconstruct later —
+            # for the standard sampler these are the OOB indices; for CCGP they're the
+            # (fixed, across all iterations) held-out stratum
+            return {'acc': acc, 'f1': f1, 'w': w, 'b': b, 'converged': converged,
+                    'test_indices': test_idx, 'test_preds': y_pred}
 
-        # parallelise over bootstrap iterations — each gets a unique seed
-        results_raw = Parallel(n_jobs=-1, backend='loky')(
-            delayed(_one_bootstrap)(seed) for seed in range(n_iterations)
-        )
+        if parallel:
+            # parallelise over bootstrap iterations — each gets a unique seed.
+            # inner_max_num_threads=1 caps BLAS (OpenBLAS etc.) to 1 thread per worker —
+            # without it, each of the up to n_cores worker processes also tries to grab
+            # n_cores BLAS threads for the tiny per-fit numpy ops, causing massive
+            # oversubscription (n_cores^2 threads fighting over n_cores cores) that shows
+            # up as flat, sub-100% CPU with no clean parallel speedup.
+            with parallel_config(backend='loky', inner_max_num_threads=1):
+                results_raw = Parallel(n_jobs=-1)(
+                    delayed(_one_bootstrap)(seed) for seed in range(n_iterations)
+                )
+        else:
+            # caller (timeline_decoding) is already parallelising across
+            # (timebin, modality, y) fits, each of which is a substantial ~150-200ms
+            # unit of work — nesting another 200-way process pool inside each of
+            # those would only add dispatch overhead, not remove it (each individual
+            # bootstrap fit here is only ~2-3ms).
+            results_raw = [_one_bootstrap(seed) for seed in range(n_iterations)]
 
         # collect results, dropping failed iterations (None)
-        accs, f1s, ws, bs = [], [], [], []
+        accs, f1s, ws, bs, non_converged = [], [], [], [], 0
         aggr_predictions = np.ones((n_iterations, len(X)), dtype=float) * np.nan
         for i, res in enumerate(results_raw):
             if res is None:
@@ -2156,29 +2244,58 @@ def get_SVMCueOutcomeChoicePred(fr_z, behavior, t0_event_intervals):
             f1s.append(res['f1'])
             ws.append(res['w'])
             bs.append(res['b'])
-            aggr_predictions[i, res['oob_indices']] = res['oob_preds']
+            non_converged += not res['converged']
+            aggr_predictions[i, res['test_indices']] = res['test_preds']
 
         if len(ws) == 0:
             return None
 
+        if non_converged:
+            # always debug (not conditionally warning): this may be running inside an
+            # outer worker process (see the docstring-ish note on the `parallel` arg
+            # above), where escalating to warning would leak an unformatted line.
+            L.logger.debug(f"{non_converged}/{len(ws)} bootstrap fits ({svm_penalty} SVM) hit max_iter "
+                            f"without converging; results are still usable but consider raising max_iter")
+
         W = np.vstack(ws)
         w_mean = W.mean(axis=0)
-        print(f"Average |w| = {np.linalg.norm(w_mean):.4f}")
-        print(f"Successful iterations: {len(f1s)} / {n_iterations}")
+        # The intercept, averaged over the same successful iterations as w. Stored (as 'b'
+        # below) rather than discarded: without it a projection onto w_mean is a direction
+        # score with an arbitrary offset, so its zero is not the decision boundary and
+        # nothing downstream can recover the boundary - this used to be collected here and
+        # then dropped from the result dict. Paired with w_mean it only means what it means
+        # under the same preprocessing the fits used, which is why 'normalizer' is recorded
+        # alongside it.
+        b_mean = float(np.mean(np.concatenate([np.ravel(b) for b in bs])))
+        L.logger.debug(f"Average |w| = {np.linalg.norm(w_mean):.4f}, b = {b_mean:.4f}, "
+                        f"successful iterations: {len(f1s)} / {n_iterations}")
 
         aggr_predictions_df = pd.DataFrame(aggr_predictions)
         pred = aggr_predictions_df.mode(axis=0).iloc[0].values
+        # rows never drawn into a test set (guaranteed for the untested stratum under
+        # CCGP's fixed test-set sampler; a rare edge case otherwise) stay NaN — exclude
+        # them rather than feeding NaN labels into sklearn's metrics
+        evaluated = ~np.isnan(pred)
 
-        f1_aggr = classification_report(Y, pred, output_dict=True, zero_division=0)['macro avg']['f1-score']
+        f1_aggr = classification_report(Y[evaluated], pred[evaluated], output_dict=True,
+                                         zero_division=0)['macro avg']['f1-score']
         aggr_err = np.mean(f1s) - f1_aggr
         ci = np.percentile(f1s, [10, 90])
-        print(f"mean F1 {f1_aggr:.3f} (±{aggr_err:.2f}), 80% CI [{ci[0]:.3f}, {ci[1]:.3f}], len: {len(f1s)}\n")
+        L.logger.debug(f"mean F1 {f1_aggr:.3f} (±{aggr_err:.2f}), 80% CI [{ci[0]:.3f}, {ci[1]:.3f}], len: {len(f1s)}")
+
+        acc_aggr = balanced_accuracy_score(Y[evaluated], pred[evaluated])
+        acc_aggr_err = np.mean(accs) - acc_aggr
+        acc_ci = np.percentile(accs, [10, 90])
+        L.logger.debug(f"mean balanced acc {acc_aggr:.3f} (±{acc_aggr_err:.2f}), "
+                        f"80% CI [{acc_ci[0]:.3f}, {acc_ci[1]:.3f}], len: {len(accs)}")
 
         return {
             'aggr_error': aggr_err,
             'n_iterations': n_iterations,
             'n_success_iterations': len(f1s),
             'w': w_mean,
+            'b': b_mean,
+            'normalizer': svm_normalizer or 'none',
             'predictions': pred,
             'y_true': Y.tolist(),
             'n_positives': int(np.sum(Y)),
@@ -2187,12 +2304,236 @@ def get_SVMCueOutcomeChoicePred(fr_z, behavior, t0_event_intervals):
             'f1_mean': float(np.mean(f1s)),
             'f1_ci_lower': float(ci[0]),
             'f1_ci_upper': float(ci[1]),
+            'acc_aggr': float(acc_aggr),
             'acc_mean': float(np.mean(accs)),
-            'acc_ci_lower': float(np.percentile(accs, 10)),
-            'acc_ci_upper': float(np.percentile(accs, 90)),
+            'acc_ci_lower': float(acc_ci[0]),
+            'acc_ci_upper': float(acc_ci[1]),
+            'svm_penalty': svm_penalty,
         }
-        
-        
+
+    def _run_shuffle_nulls(X, Y, best_C, svm_penalty, n_shuffles, shuffle_n_iterations, parallel,
+                            sampler, permute_Y, guard_fn, seed_offset):
+        # shared by the naive and CCGP shuffle-null loops: repeatedly refit on a
+        # label-shuffled Y (same sampler as the real fit) to build a null distribution
+        shuffle_acc_aggr, shuffle_f1_aggr = [], []
+        for i in range(n_shuffles):
+            rng = np.random.default_rng(seed_offset + i)
+            Y_shuff = permute_Y(rng, Y)
+            shuf_res = _bootstrap_and_aggregate(X, Y_shuff, best_C, svm_penalty, shuffle_n_iterations,
+                                                 parallel=parallel, sampler=sampler,
+                                                 guard_Y=guard_fn(Y_shuff))
+            if shuf_res is None:
+                continue
+            shuffle_acc_aggr.append(shuf_res['acc_aggr'])
+            shuffle_f1_aggr.append(shuf_res['f1_aggr'])
+        return shuffle_acc_aggr, shuffle_f1_aggr
+
+    def _attach_shuffle_results(result, n_shuffles, shuffle_acc_aggr, shuffle_f1_aggr):
+        result['n_shuffles'] = n_shuffles
+        result['n_success_shuffles'] = len(shuffle_acc_aggr)
+        result['shuffle_acc_aggr'] = shuffle_acc_aggr
+        result['shuffle_f1_aggr'] = shuffle_f1_aggr
+        if shuffle_acc_aggr:
+            # permutation-test p-value: fraction of null draws at least as extreme as the real score
+            result['shuffle_acc_mean'] = float(np.mean(shuffle_acc_aggr))
+            result['shuffle_acc_p'] = float(
+                (np.sum(np.array(shuffle_acc_aggr) >= result['acc_aggr']) + 1) / (len(shuffle_acc_aggr) + 1)
+            )
+        if shuffle_f1_aggr:
+            result['shuffle_f1_mean'] = float(np.mean(shuffle_f1_aggr))
+            result['shuffle_f1_p'] = float(
+                (np.sum(np.array(shuffle_f1_aggr) >= result['f1_aggr']) + 1) / (len(shuffle_f1_aggr) + 1)
+            )
+        L.logger.debug(f"Shuffle control: {len(shuffle_acc_aggr)}/{n_shuffles} successful, "
+                       f"null acc {result.get('shuffle_acc_mean', float('nan')):.3f}, "
+                       f"p={result.get('shuffle_acc_p', float('nan')):.3f}")
+
+    def _fit_score_fold(X, Y, C, svm_penalty, train_idx, val_idx):
+        pipe = _make_pipe(C, svm_penalty)
+        # same locally-scoped catch as _one_bootstrap: works regardless of which
+        # process this task lands in, and lets us log one summary instead of one
+        # raw warning per fold.
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter('always', category=ConvergenceWarning)
+            pipe.fit(X[train_idx], Y[train_idx])
+        converged = not any(issubclass(rec.category, ConvergenceWarning) for rec in caught)
+        score = balanced_accuracy_score(Y[val_idx], pipe.predict(X[val_idx]))
+        return {'C': C, 'score': score, 'converged': converged}
+
+    def _select_best_C(X, Y, svm_penalty, parallel):
+        # Hand-rolled instead of GridSearchCV so the (C, fold) fits go through the
+        # same parallel_config(inner_max_num_threads=1) as the bootstrap loop below
+        # (avoids BLAS-thread oversubscription) while staying reachable by our own
+        # per-fit warnings capture — GridSearchCV's internal joblib workers aren't
+        # reachable by either. This is behaviourally equivalent to
+        # GridSearchCV(cv=6, scoring='balanced_accuracy') for a classifier. Runs on
+        # whatever (X, Y) it's given, unstratified by anything else — for CCGP that's
+        # the pooled data across both conditioner strata, since StratifiedKFold(6)
+        # can't run on a stratum with only a handful of trials in the minority class.
+        Cs = [0.0005, 0.0033, 0.0066, 0.01, 0.1, .5, 1, 3, 10, 25,50]
+        # StratifiedKFold needs at least n_splits members of every class: with fewer, the
+        # fold holding out the whole minority class leaves a single-class training set and
+        # liblinear raises rather than warning. Clamp instead of crashing — a no-op for
+        # healthy targets (>=6 per class), and callers guard the genuinely-too-small cases
+        # before getting here (see fit_SVMs_with_bootstrap).
+        n_splits = min(6, int(pd.Series(Y).value_counts().min()))
+        folds = list(StratifiedKFold(n_splits=n_splits).split(X, Y))
+        fold_args = [(C, train_idx, val_idx) for C in Cs for train_idx, val_idx in folds]
+        if parallel:
+            with parallel_config(backend='loky', inner_max_num_threads=1):
+                fold_results = Parallel(n_jobs=-1)(
+                    delayed(_fit_score_fold)(X, Y, C, svm_penalty, train_idx, val_idx)
+                    for C, train_idx, val_idx in fold_args
+                )
+        else:
+            fold_results = [_fit_score_fold(X, Y, C, svm_penalty, train_idx, val_idx)
+                             for C, train_idx, val_idx in fold_args]
+
+        scores_by_C = {}
+        non_converged = 0
+        for res in fold_results:
+            scores_by_C.setdefault(res['C'], []).append(res['score'])
+            non_converged += not res['converged']
+        best_C = max(scores_by_C, key=lambda c: np.mean(scores_by_C[c]))
+
+        if non_converged:
+            # always debug — see the note in _bootstrap_and_aggregate on why this
+            # never escalates to warning here.
+            L.logger.debug(f"{non_converged}/{len(fold_results)} grid-search CV folds ({svm_penalty} SVM) "
+                            f"hit max_iter without converging")
+        L.logger.debug(f"Best C from grid search: {best_C} (mean CV balanced acc "
+                        f"{np.mean(scores_by_C[best_C]):.3f})")
+        return best_C
+
+    def _paired_trial_sampler(n_trials):
+        # For decoders whose two classes are two windows of the SAME trials (see
+        # baseline_vs_timeline_decoding): row i and row i+n_trials are one trial's
+        # negative and positive sample. Resampling rows independently (the standard
+        # sampler) would make the resampling unit the sample rather than the trial —
+        # the two are not independent, so the bootstrap CIs come out too narrow. Draw
+        # trials instead and move both of a trial's samples together.
+        def sampler(seed):
+            rng = np.random.default_rng(seed)
+            boot_trials = rng.choice(n_trials, size=n_trials, replace=True)
+            oob_trials = np.setdiff1d(np.arange(n_trials), boot_trials)
+            return (np.concatenate([boot_trials, boot_trials + n_trials]),
+                    np.concatenate([oob_trials, oob_trials + n_trials]))
+        return sampler
+
+    def fit_SVMs_with_bootstrap(X, Y, n_iterations=200, svm_penalty=svm_penalty,
+                                 n_shuffles=n_shuffles, shuffle_n_iterations=shuffle_n_iterations,
+                                 parallel=True, sampler=None):
+        # parallel=False is used by timeline_decoding, which already parallelises across
+        # (timebin, modality, y) fits — see the matching note in _bootstrap_and_aggregate.
+        # sampler=None keeps the plain resample-all/OOB behaviour; baseline_vs_timeline_decoding
+        # passes _paired_trial_sampler because its two classes share trials.
+
+        # --- curiosity check: Normalizer(norm='l2') rescales each row (sample) to unit
+        # length individually, so it matters most when raw row lengths vary a lot —
+        # print raw pre-normalization row norms so it's visible how much that is.
+        # row_norms = np.linalg.norm(X, axis=1)
+        # print(f"[Normalizer check] raw X row-norms (n={len(X)}, svm_penalty={svm_penalty}): "
+        #       f"mean={row_norms.mean():.3f} std={row_norms.std():.3f} "
+        #       f"min={row_norms.min():.3f} max={row_norms.max():.3f} "
+        #       f"(max/min ratio={row_norms.max() / max(row_norms.min(), 1e-12):.1f}x)",
+        #       flush=True)
+        # haas real large effect
+
+        # Same minimum as _bootstrap_and_aggregate's own guard, applied here because
+        # _select_best_C runs first and would otherwise be the thing that blows up (its
+        # CV needs both classes present in every training fold). Returning None is already
+        # the "this fit didn't happen" contract every caller handles.
+        lbl_counts = pd.Series(Y).value_counts()
+        if len(lbl_counts) < 2 or lbl_counts.min() < 3:
+            L.logger.debug(f"Not enough samples per class ({lbl_counts.to_dict()}), aborting")
+            return None
+
+        # --- run grid search ONCE on the full (unshuffled) data to find best C ---
+        best_C = _select_best_C(X, Y, svm_penalty, parallel)
+
+        result = _bootstrap_and_aggregate(X, Y, best_C, svm_penalty, n_iterations,
+                                          parallel=parallel, sampler=sampler)
+        if result is None:
+            return None
+        result['best_C'] = best_C
+
+        if n_shuffles > 0:
+            # offset so shuffle seeds never collide with bootstrap seeds. The permutation
+            # is over all rows even under _paired_trial_sampler — destroying which window
+            # a sample came from is exactly the null being tested; only the *resampling*
+            # unit needs to stay the trial, which `sampler` still enforces.
+            shuffle_acc_aggr, shuffle_f1_aggr = _run_shuffle_nulls(
+                X, Y, best_C, svm_penalty, n_shuffles, shuffle_n_iterations, parallel,
+                sampler=sampler, permute_Y=lambda rng, Y: rng.permutation(Y),
+                guard_fn=lambda Y_shuff: None, seed_offset=1_000_000)
+            _attach_shuffle_results(result, n_shuffles, shuffle_acc_aggr, shuffle_f1_aggr)
+
+        return result
+
+    def _ccgp_sampler(train_pool, test_idx):
+        # test_idx is fixed across all bootstrap iterations (the whole opposite
+        # stratum) — only the train side gets resampled, so this simplifies the
+        # mode-aggregation in _bootstrap_and_aggregate: every iteration predicts
+        # the same held-out columns instead of a shifting OOB set
+        def sampler(seed):
+            rng = np.random.default_rng(seed)
+            train_idx = rng.choice(train_pool, size=len(train_pool), replace=True)
+            return train_idx, test_idx
+        return sampler
+
+    def fit_CCGP_with_bootstrap(X, Y, train_idx, test_idx, best_C, n_iterations=200,
+                                 svm_penalty=svm_penalty, n_shuffles=n_shuffles,
+                                 shuffle_n_iterations=shuffle_n_iterations, parallel=False):
+        # CCGP variant of fit_SVMs_with_bootstrap: train on one stratum (e.g. trials
+        # where the conditioner==0), test on the other. best_C is passed in rather than
+        # grid-searched here — StratifiedKFold(n_splits=6) can't run on a stratum with
+        # only a handful of trials in the minority class, so the caller selects it once
+        # (via _select_best_C, on the pooled data across both strata) and reuses it for
+        # both directions of the same target — that also keeps the two directions'
+        # weight vectors on the same regularization, which matters since they're
+        # comparable (see `more_reliable` below) rather than independent.
+        sampler = _ccgp_sampler(train_idx, test_idx)
+
+        result = _bootstrap_and_aggregate(X, Y, best_C, svm_penalty, n_iterations,
+                                           parallel=parallel, sampler=sampler, guard_Y=Y[train_idx])
+        if result is None:
+            return None
+        result['best_C'] = best_C
+
+        # dataset sizes actually used for this direction's fit — the number that
+        # matters for trusting acc_aggr/w is the smaller stratum, not the pooled n
+        # (see the ccgp docstring on get_SVMCueOutcomeChoicePred): a 5-trial minority
+        # class training set produces a coarse/overfit fit regardless of how large the
+        # *other* stratum is. `more_reliable` flags whichever of the two directions for
+        # this (target, conditioner) pair trained on the larger stratum — that
+        # direction's `w` is the one worth trusting/using downstream.
+        result['n_train'] = len(train_idx)
+        result['n_test'] = len(test_idx)
+        result['n_train_pos'] = int(np.sum(Y[train_idx]))
+        result['n_train_neg'] = int(len(train_idx) - np.sum(Y[train_idx]))
+        result['n_test_pos'] = int(np.sum(Y[test_idx]))
+        result['n_test_neg'] = int(len(test_idx) - np.sum(Y[test_idx]))
+        result['more_reliable'] = len(train_idx) > len(test_idx)
+
+        if n_shuffles > 0:
+            def _permute_within_strata(rng, Y):
+                # shuffle each stratum's labels independently so the null still
+                # respects the train/test context split CCGP is testing generalization
+                # across — a pooled permutation would destroy that structure
+                Y_shuff = Y.copy()
+                Y_shuff[train_idx] = rng.permutation(Y[train_idx])
+                Y_shuff[test_idx] = rng.permutation(Y[test_idx])
+                return Y_shuff
+
+            # offset from both the naive (1_000_000+) and each other's shuffle seeds
+            shuffle_acc_aggr, shuffle_f1_aggr = _run_shuffle_nulls(
+                X, Y, best_C, svm_penalty, n_shuffles, shuffle_n_iterations, parallel,
+                sampler=sampler, permute_Y=_permute_within_strata,
+                guard_fn=lambda Y_shuff: Y_shuff[train_idx], seed_offset=2_000_000)
+            _attach_shuffle_results(result, n_shuffles, shuffle_acc_aggr, shuffle_f1_aggr)
+
+        return result
+
     def pre_vs_inside_cue_decoding(results):
         # first do seperate fits for pre vs inside cue
         for cue in [1,2]:
@@ -2210,16 +2551,16 @@ def get_SVMCueOutcomeChoicePred(fr_z, behavior, t0_event_intervals):
 
             # different X modalities
             for X_name, X_data in X_full.items():
-                print(f"Fitting SVM for cue {cue} with {X_name} data")
+                L.logger.debug(f"Fitting SVM for cue {cue} with {X_name} data")
                 # get the X data: slice to the intervals and average over entire interval
                 X_pre_cue = np.stack([X_data[m].mean() for m in X_pre_cue_data_masks])
                 X_in_cue = np.stack([X_data[m].mean() for m in X_in_cue_data_masks])
                 Y = np.concatenate((np.zeros(len(X_pre_cue)), np.ones(len(X_in_cue))))
                 X = np.concatenate((X_pre_cue, X_in_cue), axis=0)
-                print(X_name, X.shape, Y.shape, len(np.unique(Y)))
-                
+                L.logger.debug(f"{X_name} {X.shape} {Y.shape} {len(np.unique(Y))}")
+
                 if len(Y) < 10 or len(np.unique(Y)) < 2:
-                    print(f"Not enough samples for cue {cue} with {X_name} data, skipping SVM fit")
+                    L.logger.warning(f"Not enough samples for cue {cue} with {X_name} data, skipping SVM fit")
                     continue
 
                 result = fit_SVMs_with_bootstrap(X, Y)
@@ -2229,49 +2570,23 @@ def get_SVMCueOutcomeChoicePred(fr_z, behavior, t0_event_intervals):
                 results.append(result)
         return results
     
-    def timeline_decoding(results, interval_col_name):
-        svm_setup_dat = t0_event_intervals[t0_event_intervals[interval_col_name].notna()]
+    def _per_timebin_masks(svm_setup_dat, interval_col_name):
+        # Walk the sliding fit window across the interval, collecting each timebin's
+        # per-trial X masks — cheap, so sequential. Shared by timeline_decoding and
+        # baseline_vs_timeline_decoding so the two can never drift apart on the
+        # windowing convention (window width, stride, termination).
         svm_fit_intvl = [pd.Interval(left=intvl.left,
                                      right=intvl.left +timebins_per_fit*bin_length_us -bin_length_us/2, ) # - needed for overlap indexing
                          for intvl in svm_setup_dat[interval_col_name].values]
-
-        # iterate over timepoints: pre-cue and in-cue, seperating cue1 vs cue2 trials
         ith_t = 0
+        per_timebin_masks = []
         while True:
-            print(f"Fitting SVM in {interval_col_name} at timebin {ith_t}")
+            L.logger.debug(f"Precomputing masks for {interval_col_name} at timebin {ith_t}")
             X_data_masks = [X_index.overlaps(trial_intvl) for trial_intvl in svm_fit_intvl]
             # make sure each mask has the correct number of timebins
             assert (np.array([m.sum() for m in X_data_masks]) == timebins_per_fit).all()
-            
-            # different X modalities 
-            for X_name, X_data in X_full.items():
-                print(f"Fitting SVM with {X_name} data")
-                # get the X data: slice to the intervals and average over 3 bin interval
-                X = np.stack([X_data[m].mean() for m in X_data_masks])
-                
-                # different Ys to predict
-                for y_name in ['cue', 'trial_outcome', 'choice_R1', 'choice_R2']:
-                    print(f"  with Y = {y_name}")
-                    Y = svm_setup_dat[y_name].values
-                    if y_name == 'cue':
-                        Y = Y - 1  # cue1=0, cue2=1
-                        Y = Y.clip(0,1) # single trial out of thousands where cue was 0, not 1 or 2 ...
-                    elif y_name == 'trial_outcome':
-                        Y = Y.clip(0,1)  # one R=1, more R 2,3,4..., no R=0
-                    
-                    if len(Y) < 10 or len(np.unique(Y)) < 2:
-                        print(f"Not enough samples for cue1 vs cue2 with {X_name} data, skipping SVM fit")
-                        continue
-                    
-                    # only first 27 trials
-                    result = fit_SVMs_with_bootstrap(X, Y)
-                    # result = fit_SVMs_with_bootstrap(X[:27], Y[:27])
-                    result['interval_name'] = interval_col_name
-                    result['predict_y_name'] = y_name
-                    result['X_modality'] = X_name
-                    result['timebin'] = ith_t +1 # center of fit interval
-                    results.append(result)
-                
+            per_timebin_masks.append((ith_t, X_data_masks))
+
             ith_t += 1
             # shift the fit interval by one timebin
             svm_fit_intvl = [pd.Interval(left=trial_intvl.left + bin_length_us,
@@ -2280,15 +2595,328 @@ def get_SVMCueOutcomeChoicePred(fr_z, behavior, t0_event_intervals):
 
             # check if we are still within the full interval, use only first trial as reference
             if svm_fit_intvl[0].right > svm_setup_dat[interval_col_name].values[0].right:
-                print("Reached end of full interval, stopping SVM fits")
-                break   
+                L.logger.info(f"{len(per_timebin_masks)} timebins found for {interval_col_name}")
+                break
+        return per_timebin_masks
+
+    def timeline_decoding(results, interval_col_name, y_names=y_names, expect_baseline=False):
+        # expect_baseline: assert this interval really is a baseline-vs-timebin one (see
+        # Stage 1b) rather than letting a t0_events table that predates its 'baseline_bins'
+        # quietly fall through to trial-label decoding.
+        # y_names defaults to the whole set passed to get_SVMCueOutcomeChoicePred, but can
+        # be narrowed per interval - a target only worth decoding early in the track (say
+        # 'cue' in cue_entry_interval) doesn't have to be fit in every other interval too.
+        # Ignored entirely for intervals that declare a baseline window (see Stage 1b): Y
+        # there is not a trial label, so there is nothing to select.
+        svm_setup_dat = t0_event_intervals[t0_event_intervals[interval_col_name].notna()]
+
+        # this interval's t0 offset, read off the t0_events table (see
+        # get_TrialWiseT0Events40ms) and carried onto every emitted row below. NaN for
+        # t0_events tables cached before that column existed - consumers fall back.
+        n_bins_left_col = interval_col_name + '_n_bins_left'
+        n_bins_left = (int(svm_setup_dat[n_bins_left_col].iloc[0])
+                       if n_bins_left_col in svm_setup_dat.columns else np.nan)
+
+        # --- Stage 1: per-timebin trial masks (no fitting yet)
+        per_timebin_masks = _per_timebin_masks(svm_setup_dat, interval_col_name)
+
+        def _process_y_values(y_name, svm_setup_dat):
+            if y_name == 'cue':
+                values = svm_setup_dat['cue'].values
+                values = values - 1  # cue1=0, cue2=1
+                values = values.clip(0, 1)  # single trial out of thousands where cue was 0, not 1 or 2 ...
+            elif y_name == 'trial_outcome':
+                values = svm_setup_dat['trial_outcome'].values
+                values = values.clip(0, 1)  # one R=1, more R 2,3,4..., no R=0
+            elif y_name == 'cueANDstopR1':
+                # joined cue+choice_R1 label: target (Y=1) is cue==0 (cue1) and choice_R1==1
+                # (stop, before flipping) - everything else (cue2, or cue1&skip) is Y=0
+                cue = svm_setup_dat['cue'].values - 1  # cue1=0, cue2=1
+                cue = cue.clip(0, 1)
+                choice_R1_flipped = 1 - svm_setup_dat['choice_R1'].values  # flip: stop(1)->0, skip(0)->1
+                values = ((cue == 0) & (choice_R1_flipped == 0)).astype(int)
+            elif y_name == 'cueANDstopR2':
+                # R2's counterpart to cueANDstopR1. Note the cue level differs: R1 is the
+                # rewarded zone under cue1, R2 under cue2 - so Y=1 is cue==1 (cue2) and
+                # choice_R2==1 (stop). Written without the R1 branch's flip-then-check-zero
+                # double negation above, which is equivalent but harder to read.
+                cue = svm_setup_dat['cue'].values - 1  # cue1=0, cue2=1
+                cue = cue.clip(0, 1)
+                values = ((cue == 1) & (svm_setup_dat['choice_R2'].values == 1)).astype(int)
+            elif y_name == 'correctR1stopVScorrectR1skip':
+                # The R1-CORRECT DIAGONAL of the (cue, choice_R1) 2x2: Y=1 is cue1&stop
+                # (the rewarded R1 trial), Y=0 is cue2&skip (correctly passing R1 by).
+                # Different in kind from the two conjunctions above even though it is
+                # built from the same two labels: those are 1-vs-3 over every trial,
+                # this one is 1-vs-1 over a SUBSET - the two R1-incorrect cells
+                # (cue1&skip, cue2&stop) are not folded into Y=0, they are dropped from
+                # the fit entirely. The dropping lives in _y_trial_subset below, because
+                # it has to slice X as well as Y; here the label is just the cue, which
+                # on that subset is identical to choice_R1 by construction (stop <-> cue1
+                # is what makes a trial R1-correct). That identity is the caveat to
+                # read the row with - a high score cannot be attributed to cue rather
+                # than to behaviour - and it is why this label, like the conjunctions, is
+                # fit naively only (see SUBSET_Y_NAMES).
+                cue = np.clip(svm_setup_dat['cue'].values - 1, 0, 1)
+                values = (cue == 0).astype(int)
+            else:
+                values = svm_setup_dat[y_name].values
+            return values
+
+        subset_logged = set()
+
+        def _y_trial_subset(y_name, svm_setup_dat):
+            """Boolean keep-mask for a label that is only DEFINED on some trials, else None.
+
+            None means "every trial of this interval", which is what every label did
+            before this existed and still does - only SUBSET_Y_NAMES restrict the fit, and
+            they restrict X and Y together (see the naive Stage 2 below; ccgp mode rejects
+            them outright). A row fitted on a subset therefore stores a shorter
+            y_true/predictions vector than its sibling targets' rows for the same
+            (interval, timebin, modality), which is fine for its own curve but means the
+            covariate panels that split one target's predictions by another target's
+            y_true cannot use it - they compare lengths and skip
+            (plot_covariate_f1_single in llm_plotting/svm_plotting_lib.py).
+            """
+            if y_name not in SUBSET_Y_NAMES:
+                return None
+            cue = np.clip(svm_setup_dat['cue'].values - 1, 0, 1)  # cue1=0, cue2=1
+            stop_R1 = np.asarray(svm_setup_dat['choice_R1'].values, dtype=float)  # 1=stop
+            # R1-correct = the two labels disagree: stop under cue1, skip under cue2
+            keep = np.asarray(cue != stop_R1, dtype=bool)
+            if y_name not in subset_logged:  # once per interval, not per timebin/modality
+                subset_logged.add(y_name)
+                Y = np.asarray(_process_y_values(y_name, svm_setup_dat))[keep]
+                L.logger.info(f"{interval_col_name}/{y_name}: subset label, fitting "
+                              f"{int(keep.sum())}/{len(keep)} trials "
+                              f"({int((Y == 1).sum())} pos / {int((Y == 0).sum())} neg)")
+            return keep
+
+        if ccgp:
+            # --- CCGP mode: exclusively conditioned fits, no traditional/naive fit at
+            # all. Both pairings of the two y_names are fit — each name is decoded once
+            # conditioned on the other (target_a|target_b and target_b|target_a) - since
+            # they're two genuinely different classifiers (different Y), not two views
+            # of the same fit.
+            target_a, target_b = y_names
+
+            # --- Stage 2a: for every (timebin, modality, target) combination, gather
+            # what's needed for that target's own (conditioner-blind) C grid search —
+            # the search itself must run on the pooled data across both conditioner
+            # strata, since StratifiedKFold(6) can't run on a stratum with only a
+            # handful of trials in the minority class.
+            groups = []
+            for ith_t, X_data_masks in per_timebin_masks:
+                for X_name, X_data in X_full.items():
+                    X = np.stack([X_data[m].mean() for m in X_data_masks])
+                    Y_a = _process_y_values(target_a, svm_setup_dat)
+                    Y_b = _process_y_values(target_b, svm_setup_dat)
+
+                    for target_name, Y_target, conditioner_name, Y_conditioner in (
+                        (target_a, Y_a, target_b, Y_b),
+                        (target_b, Y_b, target_a, Y_a),
+                    ):
+                        if len(Y_target) < 10 or len(np.unique(Y_target)) < 2:
+                            L.logger.warning(f"Not enough samples for {target_name} with {X_name} data at "
+                                             f"timebin {ith_t}, skipping CCGP fit")
+                            continue
+                        groups.append((ith_t, X_name, target_name, conditioner_name,
+                                        X, Y_target, Y_conditioner))
+
+            L.logger.info(f"Selecting best C for {len(groups)} CCGP (timebin, modality, target) "
+                          f"groups for {interval_col_name}")
+            with parallel_config(backend='loky', inner_max_num_threads=1):
+                best_Cs = Parallel(n_jobs=-1)(
+                    delayed(_select_best_C)(X, Y_target, svm_penalty, False)
+                    for _, _, _, _, X, Y_target, _ in groups
+                )
+
+            # --- Stage 2b: with best_C fixed per (timebin, modality, target) - shared
+            # across that target's two directions so their weight vectors stay on the
+            # same regularization - build the actual per-direction fit tasks.
+            ccgp_tasks = []
+            for (ith_t, X_name, target_name, conditioner_name, X, Y_target, Y_conditioner), best_C \
+                    in zip(groups, best_Cs):
+                for train_stratum, test_stratum in [(0, 1), (1, 0)]:
+                    train_idx = np.where(Y_conditioner == train_stratum)[0]
+                    test_idx = np.where(Y_conditioner == test_stratum)[0]
+                    if len(train_idx) < 10 or len(np.unique(Y_target[train_idx])) < 2:
+                        L.logger.warning(f"Not enough samples to train CCGP "
+                                         f"{target_name}|{conditioner_name}={train_stratum} with "
+                                         f"{X_name} at timebin {ith_t}, skipping")
+                        continue
+                    if len(test_idx) < 4 or len(np.unique(Y_target[test_idx])) < 2:
+                        L.logger.warning(f"Not enough samples to test CCGP "
+                                         f"{target_name}|{conditioner_name}={test_stratum} with "
+                                         f"{X_name} at timebin {ith_t}, skipping")
+                        continue
+
+                    ccgp_tasks.append((ith_t, X_name, target_name, conditioner_name, train_stratum,
+                                        test_stratum, X, Y_target, train_idx, test_idx, best_C))
+
+            # --- Stage 3: fit all directions in parallel, same rationale as the naive
+            # path below (each task is a real unit of work; nesting another pool inside
+            # would only add overhead).
+            L.logger.info(f"Fitting {len(ccgp_tasks)} CCGP SVMs in parallel for {interval_col_name}")
+            with parallel_config(backend='loky', inner_max_num_threads=1):
+                ccgp_fit_results = Parallel(n_jobs=-1)(
+                    delayed(fit_CCGP_with_bootstrap)(X, Y_target, train_idx, test_idx, best_C, parallel=False)
+                    for _, _, _, _, _, _, X, Y_target, train_idx, test_idx, best_C in ccgp_tasks
+                )
+
+            # --- Stage 4: each (timebin, modality, target, conditioner) pair's two
+            # directions are appended as two separate, fully symmetric rows - same
+            # columns as a naive fit, no `secondary_`-prefixed duplicates. `more_reliable`
+            # (see fit_CCGP_with_bootstrap) flags whichever direction trained on the
+            # larger stratum; per-timebin plotting routines written for the naive schema
+            # (create_subplot, _plot_f1_lines, ...) group CCGP rows by (interval_name,
+            # timebin, X_modality, predict_y_name, conditioner) and pick the
+            # more_reliable row as *the* line, with the other direction still available
+            # as a lower-alpha comparison line.
+            for (ith_t, X_name, target_name, conditioner_name, train_stratum, test_stratum, *_), result \
+                    in zip(ccgp_tasks, ccgp_fit_results):
+                if result is None:
+                    continue
+                row = dict(result)
+                row['train_stratum'] = train_stratum
+                row['test_stratum'] = test_stratum
+                row['interval_name'] = interval_col_name
+                row['predict_y_name'] = target_name
+                row['X_modality'] = X_name
+                row['timebin'] = ith_t + 1
+                row['analysis'] = 'ccgp'
+                row['conditioner'] = conditioner_name
+                results.append(row)
+
+        else:
+            # --- Stage 1b: does this interval declare a baseline window? If
+            # interval_specifier gave it 'baseline_bins' (see get_TrialWiseT0Events40ms),
+            # the fits become baseline-vs-timebin rather than trial-label: the negative
+            # class is that fixed pre-event window and the positive class is the sliding
+            # window at timebin t, both drawn from the SAME trials (one sample each), so
+            # Y is not a trial label and _process_y_values is bypassed. Nothing is
+            # averaged across timebins and each timebin keeps its own `w`, so a
+            # multi-phasic response survives as structure in the accuracy curve and in
+            # the downstream w-vs-w similarity view. Only the X/Y construction differs —
+            # dispatch and row stamping below are shared, which is why this is a branch
+            # here rather than its own near-copy of Stages 2-4. Deliberately scoped to
+            # the naive path: it does not compose with ccgp's conditioned fits.
+            baseline_col = interval_col_name + '_baseline'
+            has_baseline = (baseline_col in svm_setup_dat.columns
+                            and svm_setup_dat[baseline_col].notna().all())
+            if expect_baseline and not has_baseline:
+                # Never fall back to trial-label decoding here. The reward intervals are a
+                # single cue/choice condition by construction (a *_sound t0 only exists
+                # when that zone's reward fired), so every trial label is constant or
+                # near-constant in them - a fallback fits garbage instead of failing.
+                raise ValueError(
+                    f"{interval_col_name} was requested with expect_baseline=True but its "
+                    f"t0_events table has no usable '{baseline_col}'. The cached "
+                    f"TrialWiseT0Events40ms2 predates 'baseline_bins' - recompute it "
+                    f"(mode='recompute') before running this analytic.")
+
+            baseline_masks = baseline_X = None
+            if has_baseline:
+                baseline_masks = [X_index.overlaps(iv)
+                                  for iv in svm_setup_dat[baseline_col].values]
+                n_base = np.array([m.sum() for m in baseline_masks])
+                assert (n_base == n_base[0]).all(), \
+                    f"{baseline_col} covers a different number of bins on different trials"
+                if n_base[0] != timebins_per_fit:
+                    # not fatal, but both classes should average the same number of
+                    # consecutive (hence equally autocorrelated) bins, or they differ
+                    # in noise geometry as well as in mean — see 'baseline_bins'
+                    L.logger.warning(f"{baseline_col} spans {n_base[0]} bins vs the fit "
+                                     f"window's {timebins_per_fit} — classes not noise-matched")
+                # timebin-invariant, so built once per modality rather than per timebin
+                baseline_X = {X_name: np.stack([X_data[m].mean() for m in baseline_masks])
+                              for X_name, X_data in X_full.items()}
+                L.logger.info(f"{interval_col_name}: baseline-vs-timebin decoding, "
+                              f"{n_base[0]} baseline bins over {len(baseline_masks)} trials")
+
+            # two windows of the same trial are not independent samples, so the bootstrap
+            # has to resample trials, not rows (see _paired_trial_sampler)
+            sampler = None if baseline_masks is None else _paired_trial_sampler(len(baseline_masks))
+            analysis = 'naive' if baseline_masks is None else 'baseline_vs_t'
+
+            # --- Stage 2: build the flat list of independent (timebin, modality, y)
+            # fits. Same X/Y construction and same skip condition as before, just moved
+            # out of the per-timebin loop so all of it can be dispatched together in
+            # Stage 3.
+            tasks = []
+            for ith_t, X_data_masks in per_timebin_masks:
+                if baseline_masks is not None and any((b & m).any() for b, m
+                                                      in zip(baseline_masks, X_data_masks)):
+                    # this window shares native bins with the baseline, so the two classes
+                    # would be partly the same data — drop it rather than emit a
+                    # guaranteed-chance point
+                    L.logger.debug(f"timebin {ith_t} overlaps {baseline_col}, skipping")
+                    continue
+
+                for X_name, X_data in X_full.items():
+                    X = np.stack([X_data[m].mean() for m in X_data_masks])
+
+                    if baseline_masks is not None:
+                        X_Ys = [('baseline_vs_t',
+                                 np.concatenate([baseline_X[X_name], X]),
+                                 np.concatenate([np.zeros(len(X)), np.ones(len(X))]))]
+                    else:
+                        # X is shared across y_names except where a label is only defined
+                        # on some trials (_y_trial_subset), which has to slice both
+                        X_Ys = []
+                        for y_name in y_names:
+                            Y = np.asarray(_process_y_values(y_name, svm_setup_dat))
+                            keep = _y_trial_subset(y_name, svm_setup_dat)
+                            X_Ys.append((y_name, X, Y) if keep is None
+                                        else (y_name, X[keep], Y[keep]))
+
+                    for y_name, X_fit, Y in X_Ys:
+                        if len(Y) < 10 or len(np.unique(Y)) < 2:
+                            L.logger.warning(f"Not enough samples for {y_name} with {X_name} data at "
+                                             f"timebin {ith_t}, skipping SVM fit")
+                            continue
+
+                        tasks.append((ith_t, X_name, y_name, X_fit, Y))
+
+            # --- Stage 3: fit all of them in parallel. Each task is a real ~100-200ms
+            # unit of work (grid search + bootstrap), so process-dispatch overhead here
+            # is small relative to the compute — unlike the 2-3ms bootstrap iterations,
+            # which is why those run with parallel=False (see fit_SVMs_with_bootstrap):
+            # nesting another process pool inside each of these tasks would only add
+            # overhead back.
+            L.logger.info(f"Fitting {len(tasks)} SVMs in parallel for {interval_col_name}")
+            with parallel_config(backend='loky', inner_max_num_threads=1):
+                fit_results = Parallel(n_jobs=-1)(
+                    delayed(fit_SVMs_with_bootstrap)(X, Y, parallel=False, sampler=sampler)
+                    for _, _, _, X, Y in tasks
+                )
+
+            for (ith_t, X_name, y_name, _, _), result in zip(tasks, fit_results):
+                if result is None:
+                    continue
+                result['interval_name'] = interval_col_name
+                result['predict_y_name'] = y_name
+                result['X_modality'] = X_name
+                result['timebin'] = ith_t + 1 # center of fit interval
+                # carried onto every row so downstream plotting can place this interval's
+                # t0 marker from the same geometry the fit used, instead of keeping its own
+                # copy of interval_specifier's n_bins_left (see get_TrialWiseT0Events40ms)
+                result['n_bins_left'] = n_bins_left
+                result['analysis'] = analysis
+                result['conditioner'] = None
+                result['train_stratum'] = None
+                result['test_stratum'] = None
+                result['more_reliable'] = None
+                results.append(result)
+
+        L.logger.info(f"Reached end of {interval_col_name}, {len(results)} total fits so far")
+        L.spacer()
         return results
 
 
 
-    print("---")
     L = Logger()
-                
+
     fr_z.index = pd.IntervalIndex.from_arrays(
         fr_z.pop('from_ephys_timestamp'), fr_z.pop('to_ephys_timestamp'), closed='right'
     )
@@ -2297,8 +2925,9 @@ def get_SVMCueOutcomeChoicePred(fr_z, behavior, t0_event_intervals):
 
     # silent_neurons_mask = (fr_z.isna().all())
     # print(silent_neurons_mask.sum())
+
     X_full = {
-        'HP+mPFC': fr_z.fillna(0),
+        # 'HP+mPFC': fr_z.fillna(0),
         # 'HP': fr_z.iloc[:, :20].fillna(0),
         'mPFC': fr_z.iloc[:, 20:].fillna(0),
         # 'behavior': behavior.loc[:, ['abs_frame_raw', 'frame_yaw', 'frame_yaw']],
@@ -2315,11 +2944,24 @@ def get_SVMCueOutcomeChoicePred(fr_z, behavior, t0_event_intervals):
     
     results = []
     # results = pre_vs_inside_cue_decoding(results)
+    results = timeline_decoding(results, interval_col_name='track_start_interval')
     results = timeline_decoding(results, interval_col_name='cue_entry_interval')
-    # results = timeline_decoding(results, interval_col_name='cue_exit_interval')
+    results = timeline_decoding(results, interval_col_name='cue_exit_interval')
     results = timeline_decoding(results, interval_col_name='R1_entry_interval')
     results = timeline_decoding(results, interval_col_name='R2_entry_interval')
-    
+    # pass y_names=[...] to any of the above to fit only a subset of the targets in that
+    # interval instead of all of them.
+    # these two declare 'baseline_bins', so they fit baseline-vs-timebin (predict_y_name
+    # 'baseline_vs_t') rather than the trial labels in y_names — see timeline_decoding's
+    # Stage 1b. Only trials that actually got a reward have a *_sound t0 at all.
+    # results = timeline_decoding(results, interval_col_name='reward1_sound_interval',
+    #                             expect_baseline=True)
+    # results = timeline_decoding(results, interval_col_name='reward2_sound_interval',
+    #                             expect_baseline=True)
+    results = timeline_decoding(results, interval_col_name='ITI_interval')
+
+    L.logger.info(f"Done with SVM decoding for this session — {len(results)} fits total")
+    L.spacer(spacer_length=120)
     return pd.DataFrame(results)
 
 def get_PVCueCorr(trackfr_data, track_behavior_data):

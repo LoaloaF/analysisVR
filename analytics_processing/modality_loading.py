@@ -64,8 +64,7 @@ def _handle_ephys_from_nas(session_fullfname, start, stop, columns, raw=False):
     
     substring = 'ephys_traces.dat' if not raw else '.raw.h5'
     ephys_fname = [f for f in os.listdir(session_dir) 
-                        # if f.startswith(session_name) and f.endswith(substring)]
-                        if f.endswith(substring)]
+                        if (not f.startswith('.')) and f.endswith(substring)]
     if len(ephys_fname) == 1:
         
         if not raw:

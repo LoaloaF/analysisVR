@@ -107,7 +107,8 @@ def sessionnames2fullfnames(session_names):
     sessionlist_fullfnames, s_ids = [], []
     for session_name in session_names:
         animal_id, paradigm_id, s_id = extract_id_from_sessionname(session_name)
-        session_dir = f"RUN_rYL{animal_id:03}", f"rYL{animal_id:03}_P{paradigm_id:04d}"
+        animal_prefix = session_name.split("_")[2][:-3] # rYL, rPG, ...
+        session_dir = f"RUN_{animal_prefix}{animal_id:03}", f"{animal_prefix}{animal_id:03}_P{paradigm_id:04d}"
         fullfname = os.path.join(device_paths()[0], *session_dir, session_name, f"{session_name}.hdf5")
         if not os.path.exists(fullfname):
             Logger().logger.warning(f"Session {session_name} not found in NAS")

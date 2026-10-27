@@ -157,11 +157,12 @@ def render_all_sessions_plot(data, ens_selection, event_selection, selected_sess
     if data is None or len(data) == 0 or ens_selection is None:
         return fig
 
-    df = data.copy()
-    if isinstance(df.index, pd.MultiIndex):
-        df = df.reset_index()
-    elif df.index.name is not None:
-        df = df.reset_index()
+    if isinstance(data.index, pd.MultiIndex):
+        df = data.reset_index()
+    elif data.index.name is not None:
+        df = data.reset_index()
+    else:
+        df = data.copy()
 
     if ens_selection not in df.columns:
         return fig
@@ -175,17 +176,18 @@ def render_all_sessions_plot(data, ens_selection, event_selection, selected_sess
         return fig
 
     event_col = _pick_event_column(df, event_selection)
-    if event_col is None:
-        return fig
-    df[event_col] = df[event_col].astype(str)
-    df = df[df[event_col].isin(event_selection)].copy()
-    if df.empty:
-        return fig
 
     if "interval_name" not in df.columns:
+        if event_col is None:
+            return fig
+        df = df.copy()
         df["interval_name"] = df[event_col].astype(str)
     else:
-        df["interval_name"] = df["interval_name"].fillna(df[event_col]).astype(str)
+        df = df.copy()
+        if event_col is not None and event_col in df.columns:
+            df["interval_name"] = df["interval_name"].fillna(df[event_col]).astype(str)
+        else:
+            df["interval_name"] = df["interval_name"].astype(str)
 
     df[ens_selection] = pd.to_numeric(df[ens_selection], errors="coerce")
     df = df.dropna(subset=[ens_selection]).copy()
@@ -251,7 +253,8 @@ def render_all_sessions_plot(data, ens_selection, event_selection, selected_sess
                 marker=dict(size=5, color="rgba(20,20,20,0.95)"),
                 line=dict(width=3.2, color="rgba(20,20,20,0.95)"),
                 name="Grand average",
-                hovertemplate=f"session=%{{x}}<br>grand avg {ens_selection}=%{{y:.3f}}<extra></extra>",
+                customdata=grand["session_id"].astype(str),
+                hovertemplate=f"session=%{{customdata}}<br>grand avg {ens_selection}=%{{y:.3f}}<extra></extra>",
                 showlegend=False,
             )
         )
@@ -314,11 +317,12 @@ def render_plot(
         amplitude_scale = 1.0
     amplitude_scale = max(0.25, min(3.0, amplitude_scale))
 
-    df = data.copy()
-    if isinstance(df.index, pd.MultiIndex):
-        df = df.reset_index()
-    elif df.index.name is not None:
-        df = df.reset_index()
+    if isinstance(data.index, pd.MultiIndex):
+        df = data.reset_index()
+    elif data.index.name is not None:
+        df = data.reset_index()
+    else:
+        df = data.copy()
 
     if ens_selection not in df.columns:
         return fig
@@ -330,18 +334,17 @@ def render_plot(
         return fig
 
     event_col = _pick_event_column(df, event_selection)
-    if event_col is None:
-        return fig
-
-    df[event_col] = df[event_col].astype(str)
-    df = df[df[event_col].isin(event_selection)].copy()
-    if df.empty:
-        return fig
-
     if "interval_name" not in df.columns:
+        if event_col is None:
+            return fig
+        df = df.copy()
         df["interval_name"] = df[event_col].astype(str)
     else:
-        df["interval_name"] = df["interval_name"].fillna(df[event_col]).astype(str)
+        df = df.copy()
+        if event_col is not None and event_col in df.columns:
+            df["interval_name"] = df["interval_name"].fillna(df[event_col]).astype(str)
+        else:
+            df["interval_name"] = df["interval_name"].astype(str)
 
     trial_col = _resolve_trial_column(df)
     if trial_col is None:
@@ -399,6 +402,10 @@ def render_plot(
     if len(trial_vals) == 0:
         return fig
 
+    top_panel_height = 180
+    bottom_panel_height = max(440, 30 * len(trial_vals) + 180)
+    total_plot_height = top_panel_height + bottom_panel_height
+
     act_vals = pd.to_numeric(df[ens_selection], errors="coerce").dropna()
     if len(act_vals) == 0:
         return fig
@@ -427,21 +434,22 @@ def render_plot(
     step_s = float(dt_pos.median()) if len(dt_pos) else 0.04
     gap_threshold_s = max(1.5 * step_s, 0.06)
 
-    interval_palette = pc.qualitative.Plotly + pc.qualitative.Set2 + pc.qualitative.Set3
-    interval_colormap = {
-        name: interval_palette[i % len(interval_palette)]
-        for i, name in enumerate(interval_order)
-    }
-
     group_specs = _resolve_group_specs(group_by, group_by_values)
     default_spec = group_specs[0]
+    interval_groups = {
+        interval_name: grp for interval_name, grp in df.groupby("interval_name", sort=False)
+    }
+    trial_first_rows = df.groupby("__trial_value", as_index=True, sort=False).first()
+    trial_interval_groups = {
+        key: grp.sort_values("rel_t_s")
+        for key, grp in df.groupby(["__trial_value", "interval_name"], sort=False)
+    }
     trial_group_spec = {}
     for trial_val in trial_vals:
-        t_df = df[df["__trial_value"] == trial_val]
-        if t_df.empty:
+        if trial_val not in trial_first_rows.index:
             trial_group_spec[trial_val] = default_spec
             continue
-        t_row = t_df.iloc[0]
+        t_row = trial_first_rows.loc[trial_val]
         matched = default_spec
         for spec in group_specs:
             if spec["column"] is None:
@@ -462,14 +470,14 @@ def render_plot(
         cols=1,
         shared_xaxes=True,
         vertical_spacing=0.002,
-        row_heights=[0.05, 0.95],
+        row_heights=[top_panel_height / total_plot_height, bottom_panel_height / total_plot_height],
     )
 
     # Top panel: average activation per interval over all displayed trials.
     top_default_color = "rgba(95,95,95,0.95)"
     for interval in interval_order:
-        interval_df = df[df["interval_name"] == interval]
-        if interval_df.empty:
+        interval_df = interval_groups.get(interval)
+        if interval_df is None or interval_df.empty:
             continue
 
         if group_by == "None":
@@ -559,7 +567,8 @@ def render_plot(
     cue_exit_intervals = {"cue_exit_interval"}
     reward_intervals = {"R1_entry_interval", "R2_entry_interval"}
     reward_exit_intervals = {"R1_exit_interval", "R2_exit_interval"}
-    trial_meta = df.groupby("__trial_value", as_index=True).agg(cue=("cue", "first")) if "cue" in df.columns else None
+    trial_meta = trial_first_rows[["cue"]].copy() if "cue" in trial_first_rows.columns else None
+    ridgeline_shapes = []
 
     for trial_val in trial_vals:
         base = trial_centers[trial_val]
@@ -586,99 +595,134 @@ def render_plot(
                 x1 = interval_bounds[interval][1]
             y0 = base - 0.47 * trial_stride
             y1 = base + 0.47 * trial_stride
-            fig.add_shape(
-                type="rect",
-                x0=x0,
-                x1=x1,
-                y0=y0,
-                y1=y1,
-                line=dict(width=0),
-                fillcolor=fill_col,
-                layer="below",
-                row=2,
-                col=1,
+            ridgeline_shapes.append(
+                dict(
+                    type="rect",
+                    x0=x0,
+                    x1=x1,
+                    xref="x2",
+                    y0=y0,
+                    y1=y1,
+                    yref="y2",
+                    line=dict(width=0),
+                    fillcolor=fill_col,
+                    layer="below",
+                )
             )
 
-    # Trial-wise ridgeline traces.
-    legend_shown = set()
-    for trial_val in trial_vals:
-        trial_df = df[df["__trial_value"] == trial_val]
-        if trial_df.empty:
-            continue
+    # Build a small number of aggregated traces instead of thousands of tiny traces.
+    baseline_x = []
+    baseline_y = []
+    t0_x = []
+    t0_y = []
+    ridge_payloads = {
+        spec["name"]: {
+            "color": spec["color"],
+            "x": [],
+            "y": [],
+            "customdata": [],
+        }
+        for spec in group_specs
+    }
 
+    for trial_val in trial_vals:
         base = trial_centers[trial_val]
         style = trial_group_spec.get(trial_val, default_spec)
+        payload = ridge_payloads.setdefault(
+            style["name"],
+            {"color": style["color"], "x": [], "y": [], "customdata": []},
+        )
 
         for interval in interval_order:
-            interval_df = trial_df[trial_df["interval_name"] == interval]
-            if interval_df.empty:
+            interval_df = trial_interval_groups.get((trial_val, interval))
+            if interval_df is None or interval_df.empty:
                 continue
 
-            x_shift = interval_shift[interval]
             seg_x0, seg_x1 = interval_bounds[interval]
-            fig.add_trace(
-                go.Scatter(
-                    x=[seg_x0, seg_x1],
-                    y=[base, base],
-                    mode="lines",
-                    line=dict(color="rgba(130,130,130,0.30)", width=0.6, dash="dot"),
-                    showlegend=False,
-                    hoverinfo="skip",
-                ),
-                row=2,
-                col=1,
-            )
+            baseline_x.extend([seg_x0, seg_x1, None])
+            baseline_y.extend([base, base, None])
 
-            interval_df = interval_df.sort_values("rel_t_s")
             seg_id = (interval_df["rel_t_s"].diff().fillna(0) > gap_threshold_s).cumsum()
             for _, seg in interval_df.groupby(seg_id, sort=False):
                 if len(seg) < 2:
                     continue
-                show_legend = style["name"] not in legend_shown
-                fig.add_trace(
-                    go.Scatter(
-                        x=seg["rel_t_s"] + x_shift,
-                        y=base + (seg[ens_selection].to_numpy(dtype=float) - activation_center) * ridge_scale,
-                        mode="lines",
-                        name=style["name"],
-                        legendgroup=style["name"],
-                        showlegend=show_legend,
-                        line=dict(color=style["color"], width=1.2),
-                        customdata=np.column_stack(
-                            [
-                                np.full(len(seg), str(trial_val), dtype=object),
-                                np.full(len(seg), interval, dtype=object),
-                                seg["rel_t_s"].to_numpy(dtype=float),
-                                seg[ens_selection].to_numpy(dtype=float),
-                            ]
-                        ),
-                        hovertemplate=(
-                            f"session={selected_session}<br>"
-                            "trial=%{customdata[0]}<br>"
-                            "interval=%{customdata[1]}<br>"
-                            "t_rel_interval=%{customdata[2]:.3f} s<br>"
-                            "assembly=%{customdata[3]:.3f}<extra></extra>"
-                        ),
-                    ),
-                    row=2,
-                    col=1,
+                x_vals = (seg["rel_t_s"].to_numpy(dtype=float) + interval_shift[interval]).tolist()
+                y_vals = (
+                    base + (seg[ens_selection].to_numpy(dtype=float) - activation_center) * ridge_scale
+                ).tolist()
+                payload["x"].extend(x_vals)
+                payload["x"].append(None)
+                payload["y"].extend(y_vals)
+                payload["y"].append(None)
+                payload["customdata"].extend(
+                    np.column_stack(
+                        [
+                            np.full(len(seg), str(trial_val), dtype=object),
+                            np.full(len(seg), interval, dtype=object),
+                            seg["rel_t_s"].to_numpy(dtype=float),
+                            seg[ens_selection].to_numpy(dtype=float),
+                        ]
+                    ).tolist()
                 )
-                if show_legend:
-                    legend_shown.add(style["name"])
+                payload["customdata"].append([str(trial_val), interval, np.nan, np.nan])
 
             x0 = interval_zero_x[interval]
-            fig.add_trace(
-                go.Scatter(
-                    x=[x0, x0],
-                    y=[base - t0_line_half, base + t0_line_half],
-                    mode="lines",
-                    line=dict(color="rgba(90,90,90,0.9)", width=1.0, dash="dash"),
-                    showlegend=False,
-                    hoverinfo="skip",
+            t0_x.extend([x0, x0, None])
+            t0_y.extend([base - t0_line_half, base + t0_line_half, None])
+
+    if baseline_x:
+        fig.add_trace(
+            go.Scatter(
+                x=baseline_x,
+                y=baseline_y,
+                mode="lines",
+                line=dict(color="rgba(130,130,130,0.30)", width=0.6, dash="dot"),
+                showlegend=False,
+                hoverinfo="skip",
+            ),
+            row=2,
+            col=1,
+        )
+
+    for spec in group_specs:
+        payload = ridge_payloads.get(spec["name"])
+        if payload is None or len(payload["x"]) == 0:
+            continue
+        fig.add_trace(
+            go.Scattergl(
+                x=payload["x"],
+                y=payload["y"],
+                mode="lines",
+                name=spec["name"],
+                legendgroup=spec["name"],
+                showlegend=True,
+                line=dict(color=payload["color"], width=1.2),
+                customdata=np.asarray(payload["customdata"], dtype=object),
+                hovertemplate=(
+                    f"session={selected_session}<br>"
+                    "trial=%{customdata[0]}<br>"
+                    "interval=%{customdata[1]}<br>"
+                    "t_rel_interval=%{customdata[2]:.3f} s<br>"
+                    "assembly=%{customdata[3]:.3f}<extra></extra>"
                 ),
-                row=2,
-                col=1,
-            )
+            ),
+            row=2,
+            col=1,
+        )
+
+    if t0_x:
+        fig.add_trace(
+            go.Scatter(
+                x=t0_x,
+                y=t0_y,
+                mode="lines",
+                line=dict(color="rgba(90,90,90,0.9)", width=1.0, dash="dash"),
+                showlegend=False,
+                hoverinfo="skip",
+            ),
+            row=2,
+            col=1,
+        )
 
     if len(interval_order) > 1:
         y0 = min(trial_centers.values()) - 2 * t0_line_half
@@ -687,16 +731,18 @@ def render_plot(
             _, left_end = interval_bounds[interval_order[i]]
             right_start, _ = interval_bounds[interval_order[i + 1]]
             x_sep = 0.5 * (left_end + right_start)
-            fig.add_shape(
-                type="line",
-                x0=x_sep,
-                x1=x_sep,
-                y0=y0,
-                y1=y1,
-                line=dict(color="rgba(120,120,120,0.15)", width=1),
-                layer="below",
-                row=2,
-                col=1,
+            ridgeline_shapes.append(
+                dict(
+                    type="line",
+                    x0=x_sep,
+                    x1=x_sep,
+                    xref="x2",
+                    y0=y0,
+                    y1=y1,
+                    yref="y2",
+                    line=dict(color="rgba(120,120,120,0.15)", width=1),
+                    layer="below",
+                )
             )
             fig.add_vline(
                 x=x_sep,
@@ -706,17 +752,16 @@ def render_plot(
                 col=1,
             )
 
+    if ridgeline_shapes:
+        fig.update_layout(shapes=list(fig.layout.shapes or []) + ridgeline_shapes)
+
     y_min = min(trial_centers.values()) - 2 * t0_line_half
     y_max = max(trial_centers.values()) + 2 * t0_line_half
     y_range = [y_min, y_max]
 
     trial_outcome_map = {}
-    if "trial_outcome" in df.columns:
-        trial_outcome_map = (
-            df.groupby("__trial_value", as_index=True)["trial_outcome"]
-            .first()
-            .to_dict()
-        )
+    if "trial_outcome" in trial_first_rows.columns:
+        trial_outcome_map = trial_first_rows["trial_outcome"].to_dict()
 
     def _fmt_trial_label(trial_val):
         if isinstance(trial_val, (float, np.floating)) and np.isfinite(trial_val):
@@ -741,11 +786,12 @@ def render_plot(
                 "Trial-wise ensemble ridgeline "
                 f"(session={selected_session}, ensemble={ens_selection}, group by={group_by})"
             ),
-            y=0.98,
-            yanchor="top",
+            y=1.0,
+            yref="paper",
+            yanchor="bottom",
         ),
         template="plotly_white",
-        height=max(620, 30 * len(trial_vals) + 360),
+        height=total_plot_height,
         width=1180,
         legend=dict(
             orientation="v",
@@ -755,7 +801,7 @@ def render_plot(
             x=1.01,
             bgcolor="rgba(255,255,255,0.85)",
         ),
-        margin=dict(l=140, r=220, t=85, b=62),
+        margin=dict(l=140, r=220, t=105, b=62),
         hovermode="closest",
     )
 

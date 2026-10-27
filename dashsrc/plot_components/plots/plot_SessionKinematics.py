@@ -65,6 +65,8 @@ def _parse_args(n_trials, group_by, metric, metric_max, smooth_data):
     elif group_by == "None":
         group_col = "cue" # can be anything
         cmap = dict.fromkeys([1,2], "rgb(128,128,128)")
+    else:
+        raise ValueError(f"Unknown group_by value: {group_by}")
     # add transparency to the colors
     cmap_transparent = {k: v.replace("rgb","rgba")[:-1]+f', {MULTI_TRACES_ALPHA})' 
                         for k,v in cmap.items()}

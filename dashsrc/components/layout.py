@@ -18,6 +18,7 @@ from ..plot_components.plot_wrappers import wrapper_TrackFiringRate
 from ..plot_components.plot_wrappers import wrapper_TrackwiseEnsembleProj
 from ..plot_components.plot_wrappers import wrapper_NeuronCorrelation
 from ..plot_components.plot_wrappers import wrapper_SVMPredictions
+from ..plot_components.plot_wrappers import wrapper_mPFCRepresentation
 from ..plot_components.plot_wrappers import wrapper_EvolvingPCSubspace
 from ..plot_components.plot_wrappers import wrapper_CueCorrelation
 from ..plot_components.plot_wrappers import wrapper_EnsembleEncoding
@@ -39,6 +40,9 @@ def create_sessionwise_vis_containers(app: Dash, loaded_analytics: dict, loaded_
             case "SVMPredictions":
                 analysis_div = wrapper_SVMPredictions.render(app, loaded_analytics, 
                                                              vis_name=vis_name)
+            case "mPFCRepresentation":
+                analysis_div = wrapper_mPFCRepresentation.render(app, loaded_analytics,
+                                                                 vis_name=vis_name)
             case "CueCorrelation":
                 analysis_div = wrapper_CueCorrelation.render(app, loaded_analytics, 
                                                              vis_name=vis_name)

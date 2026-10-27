@@ -1,0 +1,25 @@
+# large video files
+*.mp4
+
+# generated outputs
+*.html
+*.pdf
+
+# data directories
+splits/
+models/
+outputs/
+logs/
+
+# old split file
+test_indices_by_session.npy
+
+# PowerPoint / slide-deck generation (excluded from git; kept locally)
+plotslop/
+docs/
+*.pptx
+
+# superseded / scratch (kept locally, not tracked)
+
+# obsolete scripts (kept locally, not tracked); matches obsolete/ inside any folder
+obsolete/

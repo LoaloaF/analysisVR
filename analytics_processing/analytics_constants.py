@@ -31,6 +31,9 @@ DLC_CAMERA_FNAME = 'facecam.mp4'
 # logger arena sessions (free-moving rat + robot): own model, one camera; see general_processing/dlc_arena.py
 DLC_ARENA_MODEL_SUBDIR = os.path.join("dlc_pose_estim", "ratArenaLogger-Simon-2026-10-28")
 DLC_ARENA_CAMERA_FNAME = 'cam2.mp4'
+DLC_ARENA_SHUFFLE = 1            # model (shuffle) used to analyze arena sessions (shuffle 1: all 6 cams, 60 frames)
+DLC_ARENA_FLOOR_Y_SCALE = 0.69   # cam2 image dy / floor dy (oblique view), fitted from LED walking direction vs magnetometer heading
+DLC_ARENA_MAX_GAP = 5            # frames of low-likelihood keypoints that are interpolated
 DLC_BATCH_SIZE = 64
 DLC_MIN_LIKELIHOOD = 0.6
 DLC_MAX_ANGULAR_VELOCITY = 720.0

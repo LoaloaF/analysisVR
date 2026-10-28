@@ -15,6 +15,7 @@ from analytics_processing.modality_loading import session_modality_from_nas
 from analytics_processing.modality_loading import get_modality_summary
 from general_processing.camera_helpers import hdf5_frames2mp4_gpu
 from general_processing.pose_features import add_kinematic_features, kinematic_feature_summary
+from general_processing.arena_pose_features import add_arena_features
 from ephys_preprocessing.postproc_logger_ephys import is_logger_session
 
 try:
@@ -201,6 +202,19 @@ def get_BehaviorEvents(session_fullfname, trialwise_data):
     return eventdata    
 
 
+def get_ArenaPoseFeatures(pose_data):
+    """Logger arena sessions: rat and robot features from the BehaviorPose keypoints (cam2 image px), see
+    general_processing/arena_pose_features.py."""
+    pose_data = pose_data.reset_index(drop=True)
+    return add_arena_features(
+        df=pose_data,
+        timestamps_us=pose_data["image_ephys_timestamp"].values,
+        min_likelihood=aC.DLC_MIN_LIKELIHOOD,
+        max_gap=aC.DLC_ARENA_MAX_GAP,
+        floor_y_scale=aC.DLC_ARENA_FLOOR_Y_SCALE,
+    )
+
+
 def get_BehaviorPose(session_fullfname, ):
     L = Logger()
     nas_dir, _, _ = aC.device_paths()
@@ -247,10 +261,12 @@ def get_BehaviorPose(session_fullfname, ):
         batchsize=aC.DLC_BATCH_SIZE,
         save_as_csv=True,  # Save as intermediate CSVs for inspection
         destfolder=dlc_out_dir,
+        **({'shuffle': aC.DLC_ARENA_SHUFFLE} if logger_session else {}),
     )
     dlc_result_fname = [f for f in os.listdir(dlc_out_dir) if f.endswith('.csv')][0]
     # read the csv file and reformat
     df_pose = pd.read_csv(os.path.join(dlc_out_dir, dlc_result_fname), low_memory=False)
+    dlc_scorer = df_pose.columns[1]   # model, shuffle and snapshot, e.g. DLC_Resnet50_ratArenaLoggerOct28shuffle2_snapshot_best-150
     
     # unpack properly, first two rows are multiindex for body part and coordinate
     # combine them and drop scorer level
@@ -287,6 +303,9 @@ def get_BehaviorPose(session_fullfname, ):
         df_pose["image_id"] = timestamps.index.values
         df_pose["image_pc_timestamp"] = timestamps[f"{CAM}_image_pc_timestamp"].values
         df_pose["image_ephys_timestamp"] = timestamps[f"{CAM}_image_ephys_timestamp"].values
+        df_pose["dlc_scorer"] = dlc_scorer
+        if f"{CAM}_image_in_malfunction_window" in timestamps.columns:
+            df_pose["image_in_malfunction_window"] = timestamps[f"{CAM}_image_in_malfunction_window"].fillna(False).values.astype(bool)
         return df_pose
 
     # add kinematic features, this will also filter out low-likelihood frames and 

@@ -240,6 +240,14 @@ def _compute_sess_analytic(analytic, session_fullfname):
         
     elif analytic == "BehaviorPose":
         data = m2a.get_BehaviorPose(session_fullfname)
+
+    elif analytic == "ArenaPoseFeatures":
+        # logger arena sessions only; BehaviorPose needs the DEEPLABCUT env (GPU), this step does not
+        pose_data = get_analytics(analytic="BehaviorPose", session_names=[session_name])
+        if pose_data is None:
+            L.logger.warning("Missing lower level analytic `BehaviorPose`")
+            return None
+        data = m2a.get_ArenaPoseFeatures(pose_data)
     
     elif analytic == "BehaviorFramewise":
         # 1. track kinematics

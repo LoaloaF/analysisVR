@@ -45,11 +45,17 @@ def get_sessionlist_fullfnames(paradigm_ids, animal_ids, session_ids=None,
         # get all animals if not specified
         animal_ids_ = animal_ids if animal_ids is not None else parse_paradigm_animals_from_nas(p_id, nas_dir)
         for animal_id in animal_ids_:
-            # get all sessions for the paradigm+animal combo
-            parad_animal_subdir = os.path.join(nas_dir, f"RUN_rYL{animal_id:03}", 
-                                               f"rYL{animal_id:03}_P{p_id:04d}")
-            if not os.path.exists(parad_animal_subdir):
+            # get all sessions for the paradigm+animal combo, animal prefix can be rYL, rPG, ...
+            parad_animal_subdirs = [os.path.join(nas_dir, r_animal_name, f"{r_animal_name[4:]}_P{p_id:04d}")
+                                    for r_animal_name in sorted(os.listdir(nas_dir))
+                                    if r_animal_name.startswith("RUN_") and r_animal_name[-3:] == f"{animal_id:03}"]
+            parad_animal_subdirs = [sd for sd in parad_animal_subdirs if os.path.exists(sd)]
+            if len(parad_animal_subdirs) == 0:
                 continue # not every combination exists
+            if len(parad_animal_subdirs) > 1:
+                L.logger.warning(f"Animal id {animal_id} is ambiguous for paradigm {p_id}: "
+                                 f"{parad_animal_subdirs}, using the first one")
+            parad_animal_subdir = parad_animal_subdirs[0]
             
             # get all the session dirs in the animal+paradigm subdir, should end with min
             parad_animal_session_dirs = [sd for sd in os.listdir(parad_animal_subdir) 

@@ -1,0 +1,10 @@
+22.06.2025
+The code has been modified for batch processing of NAS server data.
+The data is copied to local temporal directyory first, processed locally,
+and then results are uploaded. So it goes faster.
+
+If several *.dat files are found in the same directory, 
+the program assumes that they are parts of one session and combines output together.
+This is not correct if data from several independent sessions are in the folder.
+Currently, one should put such files separately.
+Later, one should find a way how to handle such situation.

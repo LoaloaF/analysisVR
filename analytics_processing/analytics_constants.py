@@ -28,6 +28,9 @@ PARADIGM_NAMES = {
 DLC_MODEL_SUBDIR = os.path.join("dlc_pose_estim", "ratVRposes-Simon-2026-02-11") # modify based on the model
 DLC_CAMERA_FNAME = 'ttlcam4.mp4'
 DLC_CAMERA_FNAME = 'facecam.mp4'
+# logger arena sessions (free-moving rat + robot): own model, one camera; see general_processing/dlc_arena.py
+DLC_ARENA_MODEL_SUBDIR = os.path.join("dlc_pose_estim", "ratArenaLogger-Simon-2026-10-28")
+DLC_ARENA_CAMERA_FNAME = 'cam2.mp4'
 DLC_BATCH_SIZE = 64
 DLC_MIN_LIKELIHOOD = 0.6
 DLC_MAX_ANGULAR_VELOCITY = 720.0

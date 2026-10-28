@@ -21,8 +21,13 @@ def render_plot(ephys_traces, implant_mapping, spikes, from_smpl=0, to_smpl=10_0
     if spikes is not None:
         spikes = spikes[(spikes['sample_id'] >= from_smpl) & (spikes['sample_id'] <= to_smpl)]
     
-    implant_mapping = implant_mapping[implant_mapping['shank_id'].isin(shanks)]
-    
+    implant_mapping = implant_mapping[implant_mapping['shank_id'].isin(shanks)].copy()
+    # logger (Intan512) sessions: mapping has no MEA1K columns, .dat holds ADC units (x0.195 = uV)
+    uV_per_bit = 1 if 'mea1k_el' in implant_mapping.columns else 0.195
+    if 'shank_side' not in implant_mapping.columns:
+        shank_x_mid = implant_mapping.groupby('shank_id')['x'].transform('median')
+        implant_mapping['shank_side'] = np.where(implant_mapping['x'] < shank_x_mid, 'left', 'right')
+
     # height settings
     # um_per_px = 0.15
     yaxis_gap_px = 50
@@ -43,8 +48,8 @@ def render_plot(ephys_traces, implant_mapping, spikes, from_smpl=0, to_smpl=10_0
     
     _draw_shank_gemoetries(fig, implant_mapping, shanks, shank_depths)
     
-    _draw_traces(fig, ephys_traces, implant_mapping, um_per_uV, shanks, from_smpl, to_smpl, 
-                 trace_groups, spikes)
+    _draw_traces(fig, ephys_traces, implant_mapping, um_per_uV, shanks, from_smpl, to_smpl,
+                 trace_groups, spikes, uV_per_bit)
     
     fig.update_layout(
         height=height,
@@ -68,12 +73,12 @@ def _draw_shank_gemoetries(fig, implant_mapping, shanks, shank_depths):
     for i, shank in enumerate(shanks):
         shank_mapping = implant_mapping[implant_mapping['shank_id'] == shank]
         
-        # Draw fibers (lines connecting electrode pads)
-        shank_mapping_2metalsfiber = shank_mapping.groupby('el_pair').filter(lambda x: len(x) > 1)
-        # Prepare x and y coordinates for the lines
+        # Draw fibers (lines connecting electrode pads), MEA1K only
         x_coords = []
         y_coords = []
-        for el_pair, group in shank_mapping_2metalsfiber.groupby('el_pair'):
+        el_pair_groups = (shank_mapping.groupby('el_pair').filter(lambda x: len(x) > 1).groupby('el_pair')
+                          if 'el_pair' in shank_mapping.columns else [])
+        for el_pair, group in el_pair_groups:
             if len(group) > 1:
                 x_coords.extend(group.shank_side.map(lambda x: -1 if x == 'left' else 1).values)
                 y_coords.extend(group.depth.values)
@@ -92,22 +97,26 @@ def _draw_shank_gemoetries(fig, implant_mapping, shanks, shank_depths):
         )
         
         # Create hover text for electrodes
-        cols = ['amplifier_id', 'mea1k_el', 'pad_id', 'depth', 'shank_id', 'metal',
-       'shank_name', 'el_pair', 'shank_side', 'mea1k_connectivity', 
+        cols = ['amplifier_id', 'mea1k_el', 'pad_id', 'jrc_site', 'depth', 'shank_id', 'metal',
+       'shank_name', 'el_pair', 'shank_side', 'mea1k_connectivity',
        'connectivity_order','curated_trace']
-        shank_mapping.loc[:,"mea1k_connectivity"] = shank_mapping.mea1k_connectivity.round(2)
+        cols = [col for col in cols if col in shank_mapping.columns]
+        if 'mea1k_connectivity' in shank_mapping.columns:
+            shank_mapping.loc[:,"mea1k_connectivity"] = shank_mapping.mea1k_connectivity.round(2)
         hover_text = shank_mapping.apply(
             lambda row: "<br>".join([f"{col}: {row[col]}" for col in cols]),
             axis=1
         )
-        
+        el_color = (shank_mapping.metal.map(lambda x: 'green' if x == 1 else 'purple')
+                    if 'metal' in shank_mapping.columns else 'green')
+
         # Draw the electrodes
         fig.add_trace(
             go.Scatter(
                 x=shank_mapping.shank_side.map(lambda x: -1 if x == 'left' else 1),
                 y=shank_mapping.depth,
                 mode='markers',
-                marker=dict(size=10, symbol='square', color=shank_mapping.metal.map(lambda x: 'green' if x == 1 else 'purple')),
+                marker=dict(size=10, symbol='square', color=el_color),
                 hovertext=hover_text,  # Add hover text
                 hoverinfo='text',  # Display hover text
                 showlegend=False,
@@ -152,8 +161,8 @@ def _draw_shank_gemoetries(fig, implant_mapping, shanks, shank_depths):
             autorange='reversed',
         )
     
-def _draw_traces(fig, ephys_traces, implant_mapping, um_per_uV, shanks, from_smpl, 
-                 to_smpl, trace_groups, spikes=None, ):
+def _draw_traces(fig, ephys_traces, implant_mapping, um_per_uV, shanks, from_smpl,
+                 to_smpl, trace_groups, spikes=None, uV_per_bit=1):
     for i, shank in enumerate(shanks):
         row = i+1
         _draw_scale_indicator(fig, i+1, um_per_uV, to_smpl)
@@ -188,7 +197,7 @@ def _draw_traces(fig, ephys_traces, implant_mapping, um_per_uV, shanks, from_smp
             print(shank_traces_y)
             print(shank_traces_y.shape  )
             # rescale uV to um / pixels
-            shank_traces_y *= -1 /um_per_uV
+            shank_traces_y *= -uV_per_bit /um_per_uV
             # add el depth offset
             shank_traces_y += shank_mapping.depth.values[:, np.newaxis]
             # append a nan column at the end, for line breaks

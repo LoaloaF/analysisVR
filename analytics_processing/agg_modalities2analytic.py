@@ -1,5 +1,6 @@
 # import numpy as np
 import json
+import shutil
 import pandas as pd
 import numpy as np
 import os
@@ -14,6 +15,7 @@ from analytics_processing.modality_loading import session_modality_from_nas
 from analytics_processing.modality_loading import get_modality_summary
 from general_processing.camera_helpers import hdf5_frames2mp4_gpu
 from general_processing.pose_features import add_kinematic_features, kinematic_feature_summary
+from ephys_preprocessing.postproc_logger_ephys import is_logger_session
 
 try:
     # may fail, DLC analytic computation of pose should use differnt conda env
@@ -202,7 +204,11 @@ def get_BehaviorEvents(session_fullfname, trialwise_data):
 def get_BehaviorPose(session_fullfname, ):
     L = Logger()
     nas_dir, _, _ = aC.device_paths()
-    dlc_project_path = os.path.join(nas_dir, aC.DLC_MODEL_SUBDIR)
+    # logger arena sessions (free-moving, robot) have their own model and camera, see general_processing/dlc_arena.py
+    logger_session = is_logger_session(session_fullfname)
+    model_subdir = aC.DLC_ARENA_MODEL_SUBDIR if logger_session else aC.DLC_MODEL_SUBDIR
+    camera_fname = aC.DLC_ARENA_CAMERA_FNAME if logger_session else aC.DLC_CAMERA_FNAME
+    dlc_project_path = os.path.join(nas_dir, model_subdir)
     dlc_config_path = os.path.join(dlc_project_path, "config.yaml")
     
     # if calculted on different machine, update project base path here to mappend NAS location
@@ -218,26 +224,33 @@ def get_BehaviorPose(session_fullfname, ):
 
     session_dir = os.path.dirname(session_fullfname)
     camera_dir = os.path.join(session_dir, 'rendered_videos')
-    CAM = aC.DLC_CAMERA_FNAME.replace('.mp4','')
+    CAM = camera_fname.replace('.mp4','')
 
     # check if there is already camera file mp4 for analysis
-    if aC.DLC_CAMERA_FNAME not in [file for file in os.listdir(camera_dir) if file.endswith('.mp4')]:
-        L.logger.info(f"Generating {aC.DLC_CAMERA_FNAME} for DLC analysis...")
+    if camera_fname not in [file for file in os.listdir(camera_dir) if file.endswith('.mp4')]:
+        if logger_session:
+            L.logger.error(f"No {camera_fname} in {camera_dir}, logger sessions have no hdf5 frames to render it from")
+            return
+        L.logger.info(f"Generating {camera_fname} for DLC analysis...")
         result = hdf5_frames2mp4_gpu(session_fullfname, gpu_id=0, camera_names=[CAM], )
         if not result[CAM]:
             # failed to generate video, cannot run DLC analysis, return None
             return
-    
+
+    # DLC output goes to its own subdir, which is deleted afterwards (never delete in camera_dir itself)
+    dlc_out_dir = os.path.join(camera_dir, f'dlc_{CAM}_tmp')
+    os.makedirs(dlc_out_dir, exist_ok=True)
     deeplabcut.analyze_videos(
         config=dlc_config_path,
-        videos=os.path.join(session_dir, 'rendered_videos', aC.DLC_CAMERA_FNAME),
+        videos=os.path.join(session_dir, 'rendered_videos', camera_fname),
         videotype='mp4',  # Replace with the video file format if different
         batchsize=aC.DLC_BATCH_SIZE,
         save_as_csv=True,  # Save as intermediate CSVs for inspection
+        destfolder=dlc_out_dir,
     )
-    dlc_result_fname = [f for f in os.listdir(camera_dir) if f.endswith('.csv')][0]
+    dlc_result_fname = [f for f in os.listdir(dlc_out_dir) if f.endswith('.csv')][0]
     # read the csv file and reformat
-    df_pose = pd.read_csv(os.path.join(camera_dir, dlc_result_fname), low_memory=False)    
+    df_pose = pd.read_csv(os.path.join(dlc_out_dir, dlc_result_fname), low_memory=False)
     
     # unpack properly, first two rows are multiindex for body part and coordinate
     # combine them and drop scorer level
@@ -248,14 +261,14 @@ def get_BehaviorPose(session_fullfname, ):
     df_pose = df_pose.astype(float)
     
     # remove dlc files again
-    dlc_files = [f for f in os.listdir(camera_dir) if not f.endswith('.mp4')]
-    for f in dlc_files:
-        os.remove(os.path.join(camera_dir, f))
-    
+    shutil.rmtree(dlc_out_dir)
+
     timestamps = session_modality_from_nas(session_fullfname, f"{CAM}_packages")
     # reindex to full range of image ids, can be missing
-    timestamps = timestamps.set_index(f"{CAM}_image_id").reindex(range(timestamps.index.min(), 
-                                                                       timestamps.index.max() + 1))  
+    timestamps = timestamps.set_index(f"{CAM}_image_id").reindex(range(timestamps.index.min(),
+                                                                       timestamps.index.max() + 1))
+    if f'{CAM}_image_pc_timestamp' not in timestamps.columns:
+        timestamps[f'{CAM}_image_pc_timestamp'] = np.nan   # logger sessions: no PC clock, frames are on ephys time
     # interpolate missing timestamps linearly, if any
     timestamps[f'{CAM}_image_pc_timestamp'] = timestamps[f'{CAM}_image_pc_timestamp'].interpolate(method='linear')
     timestamps[f'{CAM}_image_ephys_timestamp'] = timestamps[f'{CAM}_image_ephys_timestamp'].interpolate(method='linear')
@@ -268,7 +281,14 @@ def get_BehaviorPose(session_fullfname, ):
     us_timestamps = timestamps[f'{CAM}_image_ephys_timestamp']
     if pd.isna(us_timestamps).all():
         us_timestamps = timestamps[f'{CAM}_image_pc_timestamp']
-    
+
+    if logger_session:
+        # free-moving arena: keypoints in image px + likelihood; add_kinematic_features is made for head-fixed animals
+        df_pose["image_id"] = timestamps.index.values
+        df_pose["image_pc_timestamp"] = timestamps[f"{CAM}_image_pc_timestamp"].values
+        df_pose["image_ephys_timestamp"] = timestamps[f"{CAM}_image_ephys_timestamp"].values
+        return df_pose
+
     # add kinematic features, this will also filter out low-likelihood frames and 
     # frames with high angular velocity (potentially tracking errors)
     df_pose = add_kinematic_features(

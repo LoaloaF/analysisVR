@@ -261,7 +261,7 @@ def get_BehaviorPose(session_fullfname, ):
         batchsize=aC.DLC_ARENA_BATCH_SIZE if logger_session else aC.DLC_BATCH_SIZE,
         save_as_csv=True,  # Save as intermediate CSVs for inspection
         destfolder=dlc_out_dir,
-        **({'shuffle': aC.DLC_ARENA_SHUFFLE} if logger_session else {}),
+        **({'shuffle': aC.DLC_ARENA_SHUFFLE, 'snapshot_index': aC.DLC_ARENA_SNAPSHOT_INDEX} if logger_session else {}),
     )
     dlc_result_fname = [f for f in os.listdir(dlc_out_dir) if f.endswith('.csv')][0]
     # read the csv file and reformat

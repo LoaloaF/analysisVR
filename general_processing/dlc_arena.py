@@ -190,6 +190,9 @@ def label(cam=None):
     """Opens one labeled-data folder in napari: the given camera's, else the first one without saved labels."""
     import deeplabcut
     import napari
+    if pd.__version__ >= '3':
+        # napari-deeplabcut (0.2.1.7) cannot read saved labels with pandas 3's default string dtype
+        pd.set_option('future.infer_string', False)
     L = Logger()
     config = os.path.join(project_dir(), 'config.yaml')
     labels_dir = os.path.join(project_dir(), 'labeled-data')

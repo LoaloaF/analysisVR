@@ -7,7 +7,7 @@ Run in the DEEPLABCUT conda env. Steps (--cam takes a camera, a comma separated 
        (one k-means over all cameras' thumbnails picks n frames in total; see add_session)
     3. label (DLC napari GUI):           python -m general_processing.dlc_arena label [--cam cam3]
        (opens one camera's frames at a time, by default the first without saved labels; run again for the next one)
-    4. train:                            python -m general_processing.dlc_arena train [--epochs 200]
+    4. train:                            python -m general_processing.dlc_arena train [--epochs 1000]
        (each run is a new shuffle, earlier models are kept; then set DLC_ARENA_SHUFFLE in analytics_constants.py)
     5. analyze sessions:                 get_analytics('BehaviorPose', ...) -> agg_modalities2analytic.get_BehaviorPose
 
@@ -217,7 +217,7 @@ def existing_shuffles():
     return sorted({int(re.search(r'shuffle(\d+)', os.path.basename(p)).group(1)) for p in paths})
 
 
-def train(shuffle=None, net_type='resnet_50', epochs=200):
+def train(shuffle=None, net_type='resnet_50', epochs=1000):
     """Creates a training dataset from all saved labels and trains it as a new shuffle (default: the next free index), so
     earlier models are kept. Set aC.DLC_ARENA_SHUFFLE to the new index to analyze sessions with it."""
     import deeplabcut
@@ -236,7 +236,11 @@ def train(shuffle=None, net_type='resnet_50', epochs=200):
         raise ValueError(f"Shuffle {shuffle} exists already (existing: {existing}), pick another one or leave --shuffle out")
     L.logger.info(f"Training shuffle {shuffle} on {len(labels)} labeled folders: {labels}")
     deeplabcut.create_training_dataset(config, Shuffles=[shuffle], net_type=net_type)
-    deeplabcut.train_network(config, shuffle=shuffle, epochs=epochs)
+    # DLC's default schedule drops the learning rate at epochs 90 and 120. With ~60 frames (8 steps per epoch at batch 8)
+    # that is only ~1000 steps at a useful learning rate, and the model never fits (train RMSE ~150 px, likelihoods < 0.6).
+    # Train longer and move the drops to 75 % and 90 % of the epochs.
+    deeplabcut.train_network(config, shuffle=shuffle, epochs=epochs, save_epochs=max(epochs // 10, 1),
+                             pytorch_cfg_updates={"runner.scheduler.params.milestones": [int(epochs * .75), int(epochs * .9)]})
     deeplabcut.evaluate_network(config, Shuffles=[shuffle], plotting=True)
     L.logger.info(f"Done. To analyze sessions with this model set DLC_ARENA_SHUFFLE = {shuffle} in analytics_constants.py")
 
@@ -258,7 +262,7 @@ if __name__ == '__main__':
     ap.add_argument('--n', type=int, default=60)
     ap.add_argument('--replace', action='store_true')
     ap.add_argument('--shuffle', type=int, default=None)
-    ap.add_argument('--epochs', type=int, default=200)
+    ap.add_argument('--epochs', type=int, default=1000)
     args = ap.parse_args()
     Logger().init_logger(None, None, 'INFO')
     if args.step == 'create':

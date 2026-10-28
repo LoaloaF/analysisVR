@@ -258,7 +258,7 @@ def get_BehaviorPose(session_fullfname, ):
         config=dlc_config_path,
         videos=os.path.join(session_dir, 'rendered_videos', camera_fname),
         videotype='mp4',  # Replace with the video file format if different
-        batchsize=aC.DLC_BATCH_SIZE,
+        batchsize=aC.DLC_ARENA_BATCH_SIZE if logger_session else aC.DLC_BATCH_SIZE,
         save_as_csv=True,  # Save as intermediate CSVs for inspection
         destfolder=dlc_out_dir,
         **({'shuffle': aC.DLC_ARENA_SHUFFLE} if logger_session else {}),

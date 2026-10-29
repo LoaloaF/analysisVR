@@ -241,13 +241,21 @@ def _compute_sess_analytic(analytic, session_fullfname):
     elif analytic == "BehaviorPose":
         data = m2a.get_BehaviorPose(session_fullfname)
 
+    elif analytic == "HeadOrientation":
+        # logger sessions only
+        data = m2a.get_HeadOrientation(session_fullfname)
+
     elif analytic == "ArenaPoseFeatures":
         # logger arena sessions only; BehaviorPose needs the DEEPLABCUT env (GPU), this step does not
         pose_data = get_analytics(analytic="BehaviorPose", session_names=[session_name])
         if pose_data is None:
             L.logger.warning("Missing lower level analytic `BehaviorPose`")
             return None
-        data = m2a.get_ArenaPoseFeatures(pose_data)
+        head_orientation = get_analytics(analytic="HeadOrientation", session_names=[session_name])
+        if head_orientation is None:
+            L.logger.warning("Missing lower level analytic `HeadOrientation`")
+            return None
+        data = m2a.get_ArenaPoseFeatures(pose_data, head_orientation)
     
     elif analytic == "BehaviorFramewise":
         # 1. track kinematics
@@ -326,6 +334,16 @@ def _compute_sess_analytic(analytic, session_fullfname):
         data = spikes, sp_clust_metadata
         if data[0] is None:
             return None
+    elif analytic == "LoggerMalfunction":
+        # logger sessions only: the malfunction window and the period around it to exclude (rate burst)
+        spikes = get_analytics('Spikes', session_names=[session_name], columns=['sample_id', 'cluster_id'])
+        cluster_metadata = get_analytics('SpikeClusterMetadata', session_names=[session_name],
+                                         columns=['cluster_id', 'cluster_type'])
+        if spikes is None or cluster_metadata is None:
+            L.logger.warning("Missing lower level analytic `Spikes-SpikeClusterMetadata`")
+            return None
+        problems = pd.read_hdf(session_fullfname, 'problem_intervals')
+        data = logger_ephys.get_logger_malfunction(problems, spikes, cluster_metadata)
     elif analytic == "FiringRate40msHz":
         spikes = get_analytics('Spikes', session_names=[session_name],
                                columns=['ephys_timestamp', 'cluster_id_str'])

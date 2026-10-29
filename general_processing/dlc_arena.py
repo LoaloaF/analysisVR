@@ -9,6 +9,10 @@ Run in the DEEPLABCUT conda env. Steps (--cam takes a camera, a comma separated 
        (opens one camera's frames at a time, by default the first without saved labels; run again for the next one)
     4. train:                            python -m general_processing.dlc_arena train [--epochs 1000]
        (each run is a new shuffle, earlier models are kept; then set DLC_ARENA_SHUFFLE in analytics_constants.py)
+    more frames later, keeping the labeled ones:
+       python -m general_processing.dlc_arena add <session.hdf5> --more 30
+       python -m general_processing.dlc_arena label                (opens the next folder with unlabeled frames)
+       python -m general_processing.dlc_arena train --init-from 4 --epochs 300   (new shuffle, starts from shuffle 4's final snapshot)
     5. analyze sessions:                 get_analytics('BehaviorPose', ...) -> agg_modalities2analytic.get_BehaviorPose
 
 Session videos are linked into <project>/videos as <session>_<cam>.mp4 with a *relative* symlink, so the link works on every
@@ -71,7 +75,7 @@ def create_project(session_fullfname, cam=None, experimenter='Simon'):
     return config
 
 
-def add_session(session_fullfname, cams=None, n_frames=60, step=10, min_gap_s=2.0, replace=False):
+def add_session(session_fullfname, cams=None, n_frames=60, step=10, min_gap_s=2.0, replace=False, more=0):
     """Links the session's camera videos into the project and writes n_frames frames to label, pooled over the cameras.
 
     Frames are picked like DLC's kmeans extraction (one frame per cluster of small grayscale thumbnails of every `step`-th
@@ -82,6 +86,8 @@ def add_session(session_fullfname, cams=None, n_frames=60, step=10, min_gap_s=2.
     <project>/thumbnails, so picking again with another n_frames is quick. Each camera's frames go to
     labeled-data/<session>_<cam>; a camera with no picks gets no folder.
     replace: move this session's existing unlabeled frame folders to <project>/unused-frames first (labeled ones are kept).
+    more: add this many frames to the existing ones (labels are kept). The k-means then has (existing + more) clusters and
+        new frames come only from clusters without an existing frame, i.e. from what the current frames do not cover.
     """
     import shutil
     import time
@@ -96,13 +102,17 @@ def add_session(session_fullfname, cams=None, n_frames=60, step=10, min_gap_s=2.
     out_dirs = {cam: os.path.join(project_dir(), 'labeled-data', f'{session_name}_{cam}') for cam in cams}
     existing = [d for d in out_dirs.values() if os.path.isdir(d) and any(f.endswith('.png') for f in os.listdir(d))]
     labeled = [d for d in existing if os.path.exists(os.path.join(d, f"CollectedData_{cfg['scorer']}.h5"))]
-    if existing and not replace:
+    if existing and not replace and not more:
         L.logger.info(f"Frames already extracted for {session_name} ({len(existing)} folders), nothing to do. "
-                      f"Use --replace to move the unlabeled ones to unused-frames/ and pick again.")
+                      f"Use --more N to add N frames, or --replace to move the unlabeled ones to unused-frames/ and pick again.")
         return None
-    if labeled:
+    if replace and more:
+        raise ValueError("Use either replace or more")
+    if replace and labeled:
         raise RuntimeError(f"Labels saved in {labeled} - not replacing labeled frames")
-    for d in existing:
+    old_picks = [(i, int(f[3:-4])) for i, cam in enumerate(cams) if os.path.isdir(out_dirs[cam])
+                 for f in os.listdir(out_dirs[cam]) if f.startswith('img') and f.endswith('.png')] if more else []
+    for d in (existing if replace else []):
         dest = os.path.join(project_dir(), 'unused-frames', f"{os.path.basename(d)}_{time.strftime('%Y%m%d-%H%M%S')}")
         L.logger.info(f"Moving {d} -> {dest}")
         shutil.move(d, dest)
@@ -159,15 +169,23 @@ def add_session(session_fullfname, cams=None, n_frames=60, step=10, min_gap_s=2.
         X.append(Xc[keep]); frame.append(ids[keep]); cam_i.append(np.full(keep.sum(), i))
     X, frame, cam_i = np.concatenate(X).astype(np.float32) / 255, np.concatenate(frame), np.concatenate(cam_i)
 
-    km = MiniBatchKMeans(n_clusters=n_frames, n_init=3, random_state=0).fit(X)
+    n_new = more or n_frames
+    km = MiniBatchKMeans(n_clusters=len(old_picks) + n_new, n_init=3, random_state=0).fit(X)
     dist = np.linalg.norm(X - km.cluster_centers_[km.labels_], axis=1)
+    row = {(c, f): j for j, (c, f) in enumerate(zip(cam_i, frame))}
+    covered = {km.labels_[row[p]] for p in old_picks if p in row}
     fps = 30
-    picks = []                                                # (cam index, frame), the member closest to each centroid
-    for c in np.argsort(-np.bincount(km.labels_, minlength=n_frames)):   # big clusters first
+    picks = list(old_picks)                                   # (cam index, frame), the member closest to each centroid
+    for c in np.argsort(-np.bincount(km.labels_, minlength=km.n_clusters)):   # big clusters first
+        if c in covered or len(picks) - len(old_picks) == n_new:
+            continue
         for j in np.flatnonzero(km.labels_ == c)[np.argsort(dist[km.labels_ == c])]:
             if all(abs(frame[j] - f) >= min_gap_s * fps for _, f in picks):
                 picks.append((cam_i[j], frame[j]))
                 break
+    picks = picks[len(old_picks):]
+    if more:
+        L.logger.info(f"{len(old_picks)} existing frames cover {len(covered)} of {km.n_clusters} clusters; adding {len(picks)}")
 
     for i, cam in enumerate(cams):
         frames = sorted(f for ci, f in picks if ci == i)
@@ -182,7 +200,7 @@ def add_session(session_fullfname, cams=None, n_frames=60, step=10, min_gap_s=2.
             if ok:
                 cv2.imwrite(os.path.join(out_dirs[cam], f'img{f:0{width}d}.png'), img)
         cap.release()
-        L.logger.info(f"Wrote {len(frames)} frames to {out_dirs[cam]}")
+        L.logger.info(f"Wrote {len(frames)} {'new ' if more else ''}frames to {out_dirs[cam]}")
     return picks
 
 
@@ -199,15 +217,25 @@ def label(cam=None):
     folders = sorted(d for d in os.listdir(labels_dir) if os.path.isdir(os.path.join(labels_dir, d)))
     if not folders:
         raise RuntimeError(f"No frames to label in {labels_dir} - run the 'add' step first (and let it finish)")
-    todo = [d for d in folders if not os.path.exists(os.path.join(labels_dir, d, f"CollectedData_{_read(config)['scorer']}.h5"))]
+    todo = [d for d in folders if _unlabeled_images(os.path.join(labels_dir, d), _read(config)['scorer'])]
     if cam is not None:
         folders = [d for d in folders if d.endswith(f'_{cam}')]
         if not folders:
             raise ValueError(f"No labeled-data folder for {cam} - run the 'add' step with --cam {cam} first")
     folder = next((d for d in folders if d in todo), folders[0])
-    L.logger.info(f"Labeling {folder}. Folders without saved labels ({len(todo)}): {todo}")
+    L.logger.info(f"Labeling {folder}. Folders with unlabeled frames ({len(todo)}): {todo}")
     deeplabcut.label_frames(config, folder)
     napari.run()                      # DLC only creates the viewer (enough in IPython); a script exits without the event loop
+
+
+def _unlabeled_images(folder, scorer):
+    """PNGs in a labeled-data folder that are not in its CollectedData file yet."""
+    pngs = {f for f in os.listdir(folder) if f.endswith('.png') and not f.startswith('._')}
+    h5 = os.path.join(folder, f"CollectedData_{scorer}.h5")
+    if not os.path.exists(h5):
+        return sorted(pngs)
+    labeled = {i[-1] if isinstance(i, tuple) else os.path.basename(i) for i in pd.read_hdf(h5).index}
+    return sorted(pngs - labeled)
 
 
 def existing_shuffles():
@@ -220,9 +248,11 @@ def existing_shuffles():
     return sorted({int(re.search(r'shuffle(\d+)', os.path.basename(p)).group(1)) for p in paths})
 
 
-def train(shuffle=None, net_type='resnet_50', epochs=1000):
+def train(shuffle=None, net_type='resnet_50', epochs=1000, init_from=None):
     """Creates a training dataset from all saved labels and trains it as a new shuffle (default: the next free index), so
-    earlier models are kept. Set aC.DLC_ARENA_SHUFFLE to the new index to analyze sessions with it."""
+    earlier models are kept. Set aC.DLC_ARENA_SHUFFLE to the new index to analyze sessions with it.
+    init_from: shuffle index whose final snapshot the new shuffle starts from (e.g. after labeling more frames); training
+        then continues at that snapshot's epoch for `epochs` more epochs."""
     import deeplabcut
     L = Logger()
     config = os.path.join(project_dir(), 'config.yaml')
@@ -237,13 +267,28 @@ def train(shuffle=None, net_type='resnet_50', epochs=1000):
         shuffle = max(existing, default=0) + 1
     elif shuffle in existing:
         raise ValueError(f"Shuffle {shuffle} exists already (existing: {existing}), pick another one or leave --shuffle out")
+    snapshot_path, start = None, 0
+    if init_from is not None:
+        import glob
+        import re
+        snaps = glob.glob(os.path.join(project_dir(), 'dlc-models-pytorch', 'iteration-*', f'*shuffle{init_from}', 'train',
+                                       'snapshot-[0-9]*.pt'))
+        if not snaps:
+            raise ValueError(f"No snapshots for shuffle {init_from}")
+        snapshot_path = max(snaps, key=lambda p: int(re.search(r'snapshot-(\d+)', p).group(1)))   # final epoch, not 'best'
+        start = int(re.search(r'snapshot-(\d+)', snapshot_path).group(1))
+        L.logger.info(f"Starting from {snapshot_path} (epoch {start})")
     L.logger.info(f"Training shuffle {shuffle} on {len(labels)} labeled folders: {labels}")
     deeplabcut.create_training_dataset(config, Shuffles=[shuffle], net_type=net_type)
     # DLC's default schedule drops the learning rate at epochs 90 and 120. With ~60 frames (8 steps per epoch at batch 8)
     # that is only ~1000 steps at a useful learning rate, and the model never fits (train RMSE ~150 px, likelihoods < 0.6).
-    # Train longer and move the drops to 75 % and 90 % of the epochs.
-    deeplabcut.train_network(config, shuffle=shuffle, epochs=epochs, save_epochs=max(epochs // 10, 1),
-                             pytorch_cfg_updates={"runner.scheduler.params.milestones": [int(epochs * .75), int(epochs * .9)]})
+    # Train longer and move the drops to 75 % and 90 % of the epochs (counted from `start` when continuing a snapshot).
+    # A snapshot stores its scheduler (already past its last drop, lr 1e-5); not loading it restarts at the base lr.
+    cfg_updates = {"runner.scheduler.params.milestones": [start + int(epochs * .75), start + int(epochs * .9)]}
+    if snapshot_path:
+        cfg_updates["runner.load_scheduler_state_dict"] = False
+    deeplabcut.train_network(config, shuffle=shuffle, epochs=epochs, save_epochs=max(epochs // 10, 1), snapshot_path=snapshot_path,
+                             pytorch_cfg_updates=cfg_updates)
     deeplabcut.evaluate_network(config, Shuffles=[shuffle], plotting=True)
     L.logger.info(f"Done. To analyze sessions with this model set DLC_ARENA_SHUFFLE = {shuffle} in analytics_constants.py")
 
@@ -266,14 +311,16 @@ if __name__ == '__main__':
     ap.add_argument('--replace', action='store_true')
     ap.add_argument('--shuffle', type=int, default=None)
     ap.add_argument('--epochs', type=int, default=1000)
+    ap.add_argument('--more', type=int, default=0)
+    ap.add_argument('--init-from', type=int, default=None)
     args = ap.parse_args()
     Logger().init_logger(None, None, 'INFO')
     if args.step == 'create':
         create_project(args.session_fullfname, args.cam)
     elif args.step == 'add':
         cams = ARENA_CAMS if args.cam in (None, 'all') else args.cam.split(',')
-        add_session(args.session_fullfname, cams, args.n, replace=args.replace)
+        add_session(args.session_fullfname, cams, args.n, replace=args.replace, more=args.more)
     elif args.step == 'label':
         label(args.cam)
     else:
-        train(args.shuffle, epochs=args.epochs)
+        train(args.shuffle, epochs=args.epochs, init_from=args.init_from)

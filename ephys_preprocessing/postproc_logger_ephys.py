@@ -11,7 +11,10 @@ Differences to extract_jrc_spikes (MEA1K):
   * JRClust sites are mapped to .dat channels via the prm siteMap (it is not the identity here).
   * spikeTimes are MATLAB 1-based -> sample_id = spikeTimes - 1 (verified on spike troughs).
   * amplitude_uV / unit_Vpp use the prm bitScaling, no /6.3 correction.
-  * spikes get the zero-pad / malfunction flags from the session's problem_intervals table.
+  * only curated `single` units are kept (MEA1K keeps every labelled cluster; here the other label is `noise`).
+  * the Spikes table has the MEA1K columns, order and dtypes, except the waveform columns (*_hpf_wf, not extracted).
+  * zero pads and the malfunction period are not flagged on the spikes; they are the LoggerMalfunction analytic
+    (`get_logger_malfunction`, select with `in_logger_malfunction`).
 """
 import os
 import re
@@ -45,9 +48,9 @@ def _parse_prm(prm_fullfname):
 
 
 def _interval_mask(sample_ids, intervals):
-    """True where sample_id lies in any [start_sample, end_sample] (inclusive) interval."""
+    """True where sample_id lies in any [start_sample, end_sample] (inclusive) interval; intervals may overlap."""
     a, b = intervals.start_sample.values, intervals.end_sample.values
-    order = np.argsort(a); a, b = a[order], b[order]
+    order = np.argsort(a); a, b = a[order], np.maximum.accumulate(b[order])
     k = np.searchsorted(a, sample_ids, side='right') - 1
     return (k >= 0) & (sample_ids <= b[np.clip(k, 0, None)])
 
@@ -58,7 +61,7 @@ def is_logger_session(session_fullfname):
     return any(f.endswith('_res.mat') and not f.startswith('._') for f in os.listdir(session_dir))
 
 
-def extract_jrc_spikes_logger(session_fullfname, drop_cluster_types=('to_delete', '')):
+def extract_jrc_spikes_logger(session_fullfname, keep_cluster_types=('single',)):
     L = Logger()
     session_dir = os.path.dirname(session_fullfname)
     prm_fnames = [f for f in os.listdir(session_dir) if f.endswith('.prm') and not f.endswith('-full.prm')
@@ -93,6 +96,7 @@ def extract_jrc_spikes_logger(session_fullfname, drop_cluster_types=('to_delete'
             "unit_L_ratio": f['unitLRatio'][:, 0],
         })
         spike_sites2 = f['spikeSites2'][0].astype(int)
+        spike_sites3 = f['spikeSites3'][0].astype(int) if f['spikeSites3'].shape != (2,) else np.zeros_like(spike_sites2)
         spikes = pd.DataFrame({
             "sample_id": f['spikeTimes'][0].astype(np.int64) - 1,          # MATLAB 1-based -> 0-based .dat row
             "cluster_id_ssbatch": f['spikeClusters'][0].astype(int),
@@ -100,9 +104,9 @@ def extract_jrc_spikes_logger(session_fullfname, drop_cluster_types=('to_delete'
             "amplitude_uV": f['spikeAmps'][0] * prm['bitScaling'],         # on the ndiff-filtered trace
         })
     spikes['ephys_timestamp'] = (spikes.sample_id.values * 50).astype(np.uint64)
-    spikes['channel'] = site2chnl[spikes.jrc_site.values - 1]
-    spikes['channel_2nd'] = np.where(spike_sites2 > 0, site2chnl[np.clip(spike_sites2, 1, None) - 1], -1)
-    spikes['channel_3rd'] = np.nan
+    spikes['channel'] = site2chnl[spikes.jrc_site.values - 1].astype(np.int32)
+    spikes['channel_2nd'] = np.where(spike_sites2 > 0, site2chnl[np.clip(spike_sites2, 1, None) - 1], -1).astype(np.int32)
+    spikes['channel_3rd'] = np.where(spike_sites3 > 0, site2chnl[np.clip(spike_sites3, 1, None) - 1], -1).astype(np.int32)
     spikes['shank'] = site2shank[spikes.jrc_site.values - 1].astype(np.float32)
     spikes['ss_batch_id'] = 0
 
@@ -114,7 +118,7 @@ def extract_jrc_spikes_logger(session_fullfname, drop_cluster_types=('to_delete'
                     'gross_brain_area', 'fine_brain_area']
     cluster_table = pd.concat([cluster_table, mapping.loc[cluster_table.cluster_channel, mapping_cols]
                                .reset_index(drop=True)], axis=1)
-    cluster_table = cluster_table[~np.isin(cluster_table.cluster_type, drop_cluster_types)].reset_index(drop=True)
+    cluster_table = cluster_table[np.isin(cluster_table.cluster_type, keep_cluster_types)].reset_index(drop=True)
     cluster_table['cluster_id'] = np.arange(1, len(cluster_table) + 1)
     cluster_table['cluster_id_str'] = [f"Unit{c_id:04d}" for c_id in cluster_table.cluster_id]
     cluster_table['cluster_color'] = cluster_table.cluster_id.map(make_discr_cluster_id_cmap(cluster_table.cluster_id))
@@ -137,19 +141,68 @@ def extract_jrc_spikes_logger(session_fullfname, drop_cluster_types=('to_delete'
     spikes = spikes.merge(cluster_table[['cluster_id', 'cluster_id_str', 'cluster_color', 'gross_brain_area',
                                          'fine_brain_area']], on='cluster_id', how='left')
 
-    # flag spikes in/near logger zero pads and in the malfunction window
-    try:
-        problems = pd.read_hdf(session_fullfname, 'problem_intervals')
-        pads = problems[problems.category.str.startswith('zero_pad')]
-        sid = spikes.sample_id.values
-        spikes['in_zero_pad'] = _interval_mask(sid, pads)
-        near = pads.assign(start_sample=pads.start_sample - 100, end_sample=pads.end_sample + 100)
-        spikes['within_5ms_of_pad'] = _interval_mask(sid, near) & ~spikes.in_zero_pad.values
-        spikes['in_malfunction_window'] = _interval_mask(sid, problems[problems.category == 'logger_malfunction_window'])
-    except (KeyError, FileNotFoundError, OSError):
-        L.logger.warning("No problem_intervals table found, spikes are not flagged")
+    # same columns, order and dtypes as the MEA1K Spikes analytic (postproc_mea1k_ephys.extract_jrc_spikes)
+    spikes = spikes[['sample_id', 'ephys_timestamp', 'cluster_id_ssbatch', 'channel', 'amplitude_uV', 'ss_batch_id',
+                     'channel_2nd', 'channel_3rd', 'shank', 'depth', 'cluster_id', 'cluster_id_str', 'cluster_color',
+                     'gross_brain_area', 'fine_brain_area']]
 
     cluster_table['session_spike_count'] = cluster_table.cluster_id.map(spikes.cluster_id.value_counts()).fillna(0).astype(int)
     L.logger.debug(f"Extracted {len(spikes):,} spikes from {len(cluster_table)} clusters, dropped "
                    f"{n_prv - len(spikes):,} ISI violations.\n{cluster_table}")
     return cluster_table, spikes
+
+
+def get_logger_malfunction(problems, spikes, cluster_metadata, pad_margin_s=.03, n_mad=5, max_gap_s=3, max_dist_s=10):
+    """LoggerMalfunction analytic: periods of a logger session where the data is not reliable, one row per period.
+
+    kind
+        zero_pad            data replaced by zeros (192 ms, problem_intervals zero_pad_*; `category` says spurious or real
+                            data loss)
+        zero_pad_margin     the pad +- pad_margin_s: spike detections pile up at the steps into and out of a pad and the rate
+                            stays raised for ~25-30 ms on both sides (filter ringing). Contains the pad. Exclude for spikes.
+        logger_window       the logger counter malfunction window (problem_intervals): most pads, timing uncertain by ~0.2 s
+        malfunction_period  the logger window grown over the population-rate burst around it: there almost every unit doubles
+                            its rate with extra low-amplitude spikes (rPG007 2026-09-09: 2256-2337 s around a 2268.7-2292.8 s
+                            window). Single-unit rate per second; seconds above median + n_mad MAD form runs (gaps <=
+                            max_gap_s), runs <= max_dist_s from the period are added until it stops growing. Contains the
+                            logger window, resolution 1 s. Exclude for everything.
+    Columns: kind, category, start_sample, end_sample (inclusive), start_ephys_timestamp, end_ephys_timestamp (us), duration_s.
+    For spikes, exclude zero_pad_margin and malfunction_period (`in_logger_malfunction`).
+    """
+    pads = problems[problems.category.str.startswith('zero_pad')]
+    margin = int(pad_margin_s * 20_000)
+    rows = [('zero_pad', p.category, int(p.start_sample), int(p.end_sample)) for p in pads.itertuples()]
+    rows += [('zero_pad_margin', p.category, int(p.start_sample) - margin, int(p.end_sample) + margin) for p in pads.itertuples()]
+
+    single = cluster_metadata.cluster_id[cluster_metadata.cluster_type == 'single']
+    t = spikes.sample_id.values[spikes.cluster_id.isin(single).values] / 20_000
+    pop = np.bincount(t.astype(int))
+    med = np.median(pop)
+    high = np.flatnonzero(pop > med + n_mad * np.median(np.abs(pop - med)))
+    runs = np.split(high, np.flatnonzero(np.diff(high) > max_gap_s) + 1) if len(high) else []
+    for w in problems[problems.category == 'logger_malfunction_window'].itertuples():
+        rows.append(('logger_window', w.category, int(w.start_sample), int(w.end_sample)))
+        period = (w.start_sample / 20_000, w.end_sample / 20_000)
+        while True:
+            touching = [r for r in runs if r[0] <= period[1] + max_dist_s and r[-1] + 1 >= period[0] - max_dist_s]
+            grown = (min([period[0]] + [float(r[0]) for r in touching]), max([period[1]] + [float(r[-1] + 1) for r in touching]))
+            if grown == period:
+                break
+            period = grown
+        rows.append(('malfunction_period', 'population_rate_burst', int(period[0] * 20_000), int(np.ceil(period[1] * 20_000)) - 1))
+
+    out = pd.DataFrame(rows, columns=['kind', 'category', 'start_sample', 'end_sample'])
+    out['start_sample'] = out.start_sample.clip(lower=0)
+    out = out.sort_values(['kind', 'start_sample'], kind='stable').reset_index(drop=True)
+    out['start_ephys_timestamp'] = (out.start_sample * 50).astype(np.uint64)
+    out['end_ephys_timestamp'] = (out.end_sample * 50).astype(np.uint64)
+    out['duration_s'] = (out.end_sample - out.start_sample + 1) / 20_000
+    return out
+
+
+def in_logger_malfunction(ephys_timestamps, malfunction, kinds=('zero_pad_margin', 'malfunction_period')):
+    """True where an ephys timestamp (us) lies in a LoggerMalfunction period of the given kinds."""
+    iv = malfunction[malfunction.kind.isin(kinds)]
+    return _interval_mask(np.asarray(ephys_timestamps, dtype=np.int64),
+                          pd.DataFrame({'start_sample': iv.start_ephys_timestamp.values.astype(np.int64),
+                                        'end_sample': iv.end_ephys_timestamp.values.astype(np.int64)}))

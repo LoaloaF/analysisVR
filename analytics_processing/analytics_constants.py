@@ -32,10 +32,12 @@ DLC_CAMERA_FNAME = 'facecam.mp4'
 DLC_ARENA_MODEL_SUBDIR = os.path.join("dlc_pose_estim", "ratArenaLogger-Simon-2026-10-28")
 DLC_ARENA_CAMERA_FNAME = 'cam2.mp4'
 DLC_ARENA_BATCH_SIZE = 8         # full 1920x1200 frames: batch 64 needs ~9 GB for the first conv layer alone (RTX 3080 has 10 GB)
-DLC_ARENA_SHUFFLE = 4            # model (shuffle) used to analyze arena sessions. 1-3: 200-epoch runs, did not converge; 4: 1000 epochs, all 6 cams, 60 frames
+DLC_ARENA_SHUFFLE = 6            # model (shuffle) used to analyze arena sessions. 1-3: 200 epochs, did not converge; 4: 1000 epochs, 60 frames; 6: +300 epochs from 4 with more frames
 DLC_ARENA_SNAPSHOT_INDEX = -2    # final-epoch snapshot; -1 would be DLC's 'best' one, picked by test mAP on only 3 frames
 DLC_ARENA_FLOOR_Y_SCALE = 0.69   # cam2 image dy / floor dy (oblique view), fitted from LED walking direction vs magnetometer heading
-DLC_ARENA_MAX_GAP = 5            # frames of low-likelihood keypoints that are interpolated
+# logger sessions: drift-corrected yaw (direction of the logger x axis = left ear, rel. to magnetic north) + this = snout direction
+# in the cam2 image frame (0 = image right, 90 = away from cam2); fitted from the rat's walking direction in cam2
+LOGGER_CAM2_HEADING_OFFSET = -45.0
 DLC_BATCH_SIZE = 64
 DLC_MIN_LIKELIHOOD = 0.6
 DLC_MAX_ANGULAR_VELOCITY = 720.0

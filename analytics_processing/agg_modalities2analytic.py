@@ -16,6 +16,7 @@ from analytics_processing.modality_loading import get_modality_summary
 from general_processing.camera_helpers import hdf5_frames2mp4_gpu
 from general_processing.pose_features import add_kinematic_features, kinematic_feature_summary
 from general_processing.arena_pose_features import add_arena_features
+from general_processing.logger_head_orientation import get_head_orientation
 from ephys_preprocessing.postproc_logger_ephys import is_logger_session
 
 try:
@@ -202,16 +203,25 @@ def get_BehaviorEvents(session_fullfname, trialwise_data):
     return eventdata    
 
 
-def get_ArenaPoseFeatures(pose_data):
-    """Logger arena sessions: rat and robot features from the BehaviorPose keypoints (cam2 image px), see
-    general_processing/arena_pose_features.py."""
+def get_HeadOrientation(session_fullfname):
+    """Logger sessions: drift-corrected, anatomical head angles from the logger IMU, see
+    general_processing/logger_head_orientation.py."""
+    ori = session_modality_from_nas(session_fullfname, "orientation")
+    mag = session_modality_from_nas(session_fullfname, "magnetometer")
+    problems = session_modality_from_nas(session_fullfname, "problem_intervals")
+    return get_head_orientation(session_fullfname, ori, mag, problems, aC.LOGGER_CAM2_HEADING_OFFSET)
+
+
+def get_ArenaPoseFeatures(pose_data, head_orientation):
+    """Logger arena sessions: rat and robot features from the BehaviorPose keypoints (cam2 image px) and the IMU head
+    orientation (HeadOrientation), see general_processing/arena_pose_features.py."""
     pose_data = pose_data.reset_index(drop=True)
     return add_arena_features(
         df=pose_data,
         timestamps_us=pose_data["image_ephys_timestamp"].values,
         min_likelihood=aC.DLC_MIN_LIKELIHOOD,
-        max_gap=aC.DLC_ARENA_MAX_GAP,
         floor_y_scale=aC.DLC_ARENA_FLOOR_Y_SCALE,
+        head_orientation=head_orientation.reset_index(drop=True),
     )
 
 
